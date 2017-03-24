@@ -26,7 +26,12 @@ class Article(
   override def toString = "Article("+title+")"
 }
 
-def url(slug: String) = Blog.baseUrl + "/" + slug + ".html"
+//def url(slug: String) = Blog.baseUrl + "/" + slug + ".html"
+def absUrl(slug: String) = Blog.baseUrl + "/" + slug + ".html"
+def relUrl(slug: String) = slug + ".html"
+def relativizeUrl(url: String) =
+  if (url.startsWith(Blog.baseUrl+"/")) url.drop(Blog.baseUrl.length+1)
+  else url
 
 
 def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
@@ -81,7 +86,7 @@ def parseArticle(ls: Vector[String]): Article = {
 
   val linkRefs = body.filter { l => l.matches("^\\[.*\\]: .*$") }
   val txtLines = body.map {
-    case l if l.matches("^\\[.*\\]: .*$") => "<span style=\"color:#999\">"+l+"</span>"
+    case l if l.matches("^\\[\\w+\\]: .*$") => "<span class=y>"+l+"</span>"
     case l => l
   }
 
@@ -119,16 +124,20 @@ def tagSlug(title: String) = "tag-"+generateSlug(title)
 def decorateText(text: String, linkMap: Map[String, String]) = {
   var txt = text
 
-  for ((r, url) <- linkMap) {
-    txt = txt.replaceFirst(s"""(?x) "([^"]+(?:\\R[^"]+)?)" : \\[ $r \\]""", s"""<span class=x>"</span><a href="${url}">$$1</a><span class=x>":[$r]</span>""")
-  }
+  txt = """(?x) " ([^"]+(?:\R[^"]+)?) " : \[ (\w+) \]""".r.replaceAllIn(txt, m => {
+    val url = relativizeUrl(linkMap(m.group(2)))
+    s"""<span class=l>"<a href="${url}">${m.group(1)}</a>":[${m.group(2)}]</span>"""
+  })
+
+  txt = """(?xm) ( (?: ^>[^\n]*\n)+ )""".r.replaceAllIn(txt, m =>
+    "<blockquote>"+m.group(1).replaceAll(">", "&gt;")+"</blockquote>"
+  )
 
   txt
-    .replaceAll("""(?xm) ^>(\ .*)$""", "<i>&gt;$1</i>")
-    .replaceAll("""(?s)\*\*(.+?)\*\*""",
-      """<b><span class=y>**</span>$1<span class=y>**</span></b>""")
-    .replaceAll("""(?s)(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)""",
-      """<i><span class=y>*</span>$1<span class=y>*</span></i>""")
+    .replaceAll("""(?xs)\*\*(.+?)\*\*""",
+      """<b>**<span>$1</span>**</b>""")
+    .replaceAll("""(?xs)(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)""",
+      """<i>*<span>$1</span>*</i>""")
 //    .replaceAll("""(?s)_(.+?)_""",
 //      """<u><span class=y>_</span>$1<span class=y>_</span></u>""")
 }
@@ -137,10 +146,10 @@ def makePage(content: String) = {
 s"""<meta charset="utf-8" />
 <title>${Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="rss.xml" />
-<style>a { color: inherit; } .y{color:#999} .x{color:#bbb} ${Blog.style}</style>
+<style>a{color:inherit} i, b, .y{color:#999} i span, b span, i a, .l a{color:black} .l{color:#bbb} blockquote {margin:0;paddig:0;font-style:italic;} ${Blog.style}</style>
 
 <pre>
-${alignSpace(Blog.title)}<a href="/">${Blog.title}</a> [<a href="rss.xml">RSS</a>]
+${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xml">RSS</a>]
 """+content+"\n</pre>"
 }
 
@@ -156,13 +165,13 @@ def generateRSS(articles: Seq[Article]): String = {
 <rss version="2.0">
 <channel>
   <title>blog feed</title>
-    {articles.map { a =>
-    <item>
-      <title>{a.title}</title>
-      <guid isPermaLink="true">{url(a.slug)}</guid>
-      <pubDate>{rssdate(a.date)}</pubDate>
-    </item>
-    }}
+  {articles.map { a =>
+  <item>
+    <title>{a.title}</title>
+    <guid isPermaLink="true">{absUrl(a.slug)}</guid>
+    <pubDate>{rssdate(a.date)}</pubDate>
+  </item>
+  }}
 </channel>
 </rss>).toString
 }
@@ -205,10 +214,10 @@ val tagMap =
 
 
 def makeLink(a: Article) =
-  makeDate(a)+s"""<i><a href="${url(a.slug)}">${a.title}</a></i>"""
+  makeDate(a)+s"""<i><a href="${relUrl(a.slug)}">${a.title}</a></i>"""
 
 def makeTagLink(t: String) =
-  s"""<span class=y>#</span><i><a href="${url(tagSlug(t))}">${t}</a></i>"""
+  s"""<span class=y>#</span><i><a href="${relUrl(tagSlug(t))}">${t}</a></i>"""
 
 def makeDate(a: Article) =
   if (a.date == null) ""
@@ -240,8 +249,8 @@ def makeNextPrevArrows(a: Article, as: List[Article]) = {
   val pos = as.indexOf(a)
   assert(pos != -1)
 
-  (if (a == as.head) "   " else s"""<a href="${url(as(pos-1).slug)}">&lt;&lt;&lt;</a>""")+" "+
-  (if (a == as.last) "   " else s"""<a href="${url(as(pos+1).slug)}">&gt;&gt;&gt;</a>""")
+  (if (a == as.head) "   " else s"""<a href="${relUrl(as(pos-1).slug)}">&lt;&lt;&lt;</a>""")+" "+
+  (if (a == as.last) "   " else s"""<a href="${relUrl(as(pos+1).slug)}">&gt;&gt;&gt;</a>""")
 }
 
 def makeTagLinks(ts: Seq[String]) =  {
