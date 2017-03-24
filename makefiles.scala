@@ -1,5 +1,9 @@
 import java.util.{ Date, GregorianCalendar, Locale }
 import java.text.SimpleDateFormat
+import java.io.File
+import java.net.URL
+import java.awt.image.{ BufferedImage, ConvolveOp, Kernel }
+import javax.imageio.ImageIO
 
 
 val cfg = io.Source.fromFile(args(0))
@@ -14,6 +18,8 @@ object Blog {
   val fullArticlesOnIndex: Int = cfg("fullArticlesOnIndex").toInt
   val pageWidth: Int =  cfg("pageWidth").toInt
   val style: String = cfg("style")
+  val thumbWidth: Int = 150
+  val thumbHeight: Int = 100
 }
 
 class Article(
@@ -21,10 +27,44 @@ class Article(
   val slug: String,
   val date: Date,
   val tags: Seq[String],
-  val text: String
+  val text: String,
+  val images: Seq[Image]
 ) {
   override def toString = "Article("+title+")"
 }
+
+case class Image(
+  val url: String,
+  val thumb: String
+)
+
+
+def resizeImage(src: BufferedImage, width: Int, height: Int) = {
+  val blur = new ConvolveOp(
+    new Kernel(5, 5, Array.fill[Float](25)(1f/25)),
+    ConvolveOp.EDGE_NO_OP, null
+  )
+
+  val zoom = math.min(1.0 * src.getWidth / width, 1.0 * src.getHeight / height)
+  val x = ((src.getWidth - width * zoom) / 2).toInt
+  val y = ((src.getHeight - height * zoom) / 2).toInt
+  val cropped = blur.filter(src.getSubimage(x, y, (width * zoom).toInt, (height * zoom).toInt), null)
+
+  val tpe = if (src.getType == 0) BufferedImage.TYPE_INT_ARGB else src.getType
+  val thumb = new BufferedImage(width, height, tpe)
+  val g = thumb.createGraphics()
+  g.drawImage(cropped, 0, 0, width, height, null)
+  g.dispose()
+
+  val antiAlias = new ConvolveOp(
+    new Kernel(3, 3, Array[Float](.0f, .08f, .0f, .08f, .68f, .08f, .0f, .08f, .0f)),
+    ConvolveOp.EDGE_NO_OP, null
+  )
+
+  //antiAlias.filter(thumb, null)
+  thumb
+}
+
 
 //def url(slug: String) = Blog.baseUrl + "/" + slug + ".html"
 def absUrl(slug: String) = Blog.baseUrl + "/" + slug + ".html"
@@ -48,9 +88,12 @@ def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
 
 
 val titleRegex   = """^(.*?)(?:\[(.*)\])?$""".r
-val linkRefRegex = """^\[(.*?)\]: (.+)$""".r
+val linkRefRegex = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
 val dateRegex    = """^(\d+)-(\d+)-(\d+)$""".r
 val tagsRegex    = """^#\[(.+)\]$""".r
+
+val imgBlockRegex = """(?xm) (?: ^\[\*\ +(\S+)\ +\*\]\ *\n)+ """.r
+val imgRegex      = """(?xm) \[\*\ +(\S+)\ +\*\]\ * """.r
 
 def parseDate(l: String): Option[Date] = l match {
   case dateRegex(y, m, d) => Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime)
@@ -70,13 +113,13 @@ def process[T](ls: Seq[String], f: String => Option[T]): (Option[T], Seq[String]
   }
 }
 
-def parseArticle(ls: Vector[String]): Article = {
-  val lines = ls.map(_.trim)
+def parseArticle(lines: Vector[String]): Article = {
+  val ls = lines.map(_.trim)
 
-  val titleLine = lines(0)
+  val titleLine = ls(0)
   val titleRegex(title, slug) = titleLine
 
-  val (meta, _body) = lines.drop(2).span(l => l.nonEmpty)
+  val (meta, _body) = ls.drop(2).span(l => l.nonEmpty)
   val body = _body.dropWhile(l => l.isEmpty).reverse.dropWhile(l => l.isEmpty).reverse
 
   val (date, _m1) = process(meta, parseDate)
@@ -84,23 +127,27 @@ def parseArticle(ls: Vector[String]): Article = {
 
   if (_m2.nonEmpty) sys.error("some metainformation was not processed: "+_m2)
 
-  val linkRefs = body.filter { l => l.matches("^\\[.*\\]: .*$") }
-  val txtLines = body.map {
-    case l if l.matches("^\\[\\w+\\]: .*$") => "<span class=y>"+l+"</span>"
-    case l => l
+  val linkMap = body.collect {
+    case linkRefRegex(r, url) => (r, url)
+  }.toMap
+
+  def hash(url: String) = {
+    val md5 = java.security.MessageDigest.getInstance("MD5")
+    md5.reset()
+    val digest = md5.digest(url.getBytes("utf-8"))
+    val bigInt = new java.math.BigInteger(1, digest)
+    bigInt.toString(16).reverse.padTo(32, '0').reverse
   }
 
-  val linkMap = linkRefs.map { l =>
-    val linkRefRegex(r, url) = l
-    (r, url)
-  }.toMap
+  val images = body.collect { case imgRegex(url) => new Image(url, hash(url)) }
 
   new Article(
     title = title.trim,
     slug = if (slug == null || slug == "") generateSlug(title) else slug,
     date = date.getOrElse(null),
     tags = tags.getOrElse(Seq()),
-    text = decorateText(txtLines.mkString("\n"), linkMap)
+    text = decorateText(body.mkString("\n"), linkMap, images),
+    images = images
   )
 }
 
@@ -121,7 +168,7 @@ def generateSlug(title: String) = {
 
 def tagSlug(title: String) = "tag-"+generateSlug(title)
 
-def decorateText(text: String, linkMap: Map[String, String]) = {
+def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image]) = {
   var txt = text
 
   txt = """(?x) " ([^"]+(?:\R[^"]+)?) " : \[ (\w+) \]""".r.replaceAllIn(txt, m => {
@@ -129,9 +176,20 @@ def decorateText(text: String, linkMap: Map[String, String]) = {
     s"""<span class=l>"<a href="${url}">${m.group(1)}</a>":[${m.group(2)}]</span>"""
   })
 
+  txt = imgBlockRegex.replaceAllIn(txt, m => {
+    val links = imgRegex.findAllMatchIn(m.group(0)).map(_.group(1)).toVector
+    val block = links.map { l =>
+      val thumbPath = "t/"+{images.find(i => i.url == l).get.thumb}
+      s"""<a href="$l"><img src="$thumbPath"/></a>"""
+    }.mkString("")
+    block
+  })
+
   txt = """(?xm) ( (?: ^>[^\n]*\n)+ )""".r.replaceAllIn(txt, m =>
     "<blockquote>"+m.group(1).replaceAll(">", "&gt;")+"</blockquote>"
   )
+
+  txt = linkRefRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
 
   txt
     .replaceAll("""(?xs)\*\*(.+?)\*\*""",
@@ -140,6 +198,7 @@ def decorateText(text: String, linkMap: Map[String, String]) = {
       """<i>*<span>$1</span>*</i>""")
 //    .replaceAll("""(?s)_(.+?)_""",
 //      """<u><span class=y>_</span>$1<span class=y>_</span></u>""")
+  txt
 }
 
 def makePage(content: String) = {
@@ -293,3 +352,16 @@ tagMap foreach { case (t, as) =>
 
 // make RSS
 saveFile("rss.xml", generateRSS(articles))
+
+
+// make thumbnails
+val images = articles.flatMap(_.images)
+new File("t").mkdir()
+for (image <- images) {
+  val thumbFile = new File("t/"+image.thumb)
+  if (!thumbFile.exists) {
+    val full = ImageIO.read(new URL(image.url))
+    val resized = resizeImage(full, Blog.thumbWidth, Blog.thumbHeight)
+    ImageIO.write(resized, "jpg", thumbFile)
+  }
+}
