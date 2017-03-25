@@ -46,22 +46,18 @@ def resizeImage(src: BufferedImage, width: Int, height: Int) = {
   )
 
   val zoom = math.min(1.0 * src.getWidth / width, 1.0 * src.getHeight / height)
-  val x = ((src.getWidth - width * zoom) / 2).toInt
-  val y = ((src.getHeight - height * zoom) / 2).toInt
-  val cropped = blur.filter(src.getSubimage(x, y, (width * zoom).toInt, (height * zoom).toInt), null)
+  val wz = (width * zoom).toInt
+  val hz = (height * zoom).toInt
+  val x = (src.getWidth - wz) / 2
+  val y = (src.getHeight - hz) / 2
+  val crop = blur.filter(src.getSubimage(x, y, wz, hz), null)
 
-  val tpe = if (src.getType == 0) BufferedImage.TYPE_INT_ARGB else src.getType
+  val tpe = if (crop.getType == BufferedImage.TYPE_CUSTOM) BufferedImage.TYPE_INT_ARGB else crop.getType
   val thumb = new BufferedImage(width, height, tpe)
   val g = thumb.createGraphics()
-  g.drawImage(cropped, 0, 0, width, height, null)
+  g.drawImage(crop, 0, 0, width, height, null)
   g.dispose()
 
-  val antiAlias = new ConvolveOp(
-    new Kernel(3, 3, Array[Float](.0f, .08f, .0f, .08f, .68f, .08f, .0f, .08f, .0f)),
-    ConvolveOp.EDGE_NO_OP, null
-  )
-
-  //antiAlias.filter(thumb, null)
   thumb
 }
 
