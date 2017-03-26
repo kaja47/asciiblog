@@ -249,16 +249,20 @@ val today = new Date
 
 while (lines.nonEmpty) {
   val (a, ls) = getArticle(lines)
-
-  val isInPast = a.date == null || a.date.before(today)
-  if (!a.title.startsWith("?") && isInPast) {
-    articles ::= a
-  }
+  articles ::= a
   lines = ls
-
 }
 
 articles = articles.reverse
+
+val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
+val (visible, rest) = rest1.span { a => !a.title.startsWith("?") }
+if (rest.nonEmpty) sys.error("hidden and visible articles are mixed up")
+
+articles = articles.filter { a =>
+  val isInPast = a.date == null || a.date.before(today)
+  !a.title.startsWith("?") && isInPast
+}
 
 val tagMap = 
   articles
