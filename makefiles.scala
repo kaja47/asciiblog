@@ -194,7 +194,6 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
       """<i>*<span>$1</span>*</i>""")
 //    .replaceAll("""(?s)_(.+?)_""",
 //      """<u><span class=y>_</span>$1<span class=y>_</span></u>""")
-  txt
 }
 
 def makePage(content: String) = {
