@@ -266,11 +266,28 @@ articles = articles.filter { a =>
   !a.title.startsWith("?") && isInPast
 }
 
+// slug duplicates
+articles.groupBy(_.slug) foreach { case (slug, as) =>
+  if (as.size > 1) {
+    sys.error("multiple articles with the same slug '"+slug+"'")
+  }
+}
+
+// ordered by date
+val ordered = articles
+  .filter(_.date != null)
+  .map(_.date)
+  .sliding(2)
+  .forall { case Seq(a, b) => a.compareTo(b) >= 0 }
+
+if (!ordered) sys.error("articles are not ordered by date")
+
 val tagMap = 
   articles
     .flatMap { a => a.tags.map { t => (t, a) } }
     .groupBy(_._1)
     .map { case (t, tas) => (t, tas.map { _._2 }) }
+
 
 
 def makeLink(a: Article) =
@@ -325,13 +342,6 @@ def makeTagPage(t: String, as: Seq[Article]) = {
 }
 
 
-// slug duplicates
-articles.groupBy(_.slug) foreach { case (slug, as) =>
-  if (as.size > 1) {
-    println("multiple articles with the same slug '"+slug+"'")
-    sys.exit()
-  }
-}
 
 // make index
 val indexContent =  {
