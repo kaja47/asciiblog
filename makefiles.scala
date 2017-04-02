@@ -187,6 +187,8 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
 
   txt = linkRefRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
 
+  txt = """(?xs) \[\|.+?\|\] """.r.replaceAllIn(txt, m => "█"*m.group(0).length)
+
   txt
     .replaceAll("""(?xs)\*\*(.+?)\*\*""",
       """<b>**<span>$1</span>**</b>""")
