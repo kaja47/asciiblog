@@ -187,7 +187,7 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
 
   txt = linkRefRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
 
-  txt = """(?xs) \[\|.+?\|\] """.r.replaceAllIn(txt, m => "█"*m.group(0).length)
+  txt = """(?xs) \[\|.+?\|\] """.r.replaceAllIn(txt, m => m.group(0).replaceAll("[^\n]", "█"))
 
   txt
     .replaceAll("""(?xs)\*\*(.+?)\*\*""",
@@ -196,6 +196,25 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
       """<i>*<span>$1</span>*</i>""")
 //    .replaceAll("""(?s)_(.+?)_""",
 //      """<u><span class=y>_</span>$1<span class=y>_</span></u>""")
+}
+
+def reformatText(text: String, width: Int) = {
+  def getLine(words: Seq[String], width: Int): (String, Seq[String]) = {
+    var l = -1
+    val lineWords = words.takeWhile { w => val ok = l < width ; l += w.length+1 ; ok }
+    val restWords = words.drop(lineWords.length)
+    val line = lineWords.mkString(" ")
+    (line, restWords)
+  }
+
+  def getLines(words: Seq[String], width: Int): Seq[String] =
+    Iterator.iterate(("", words)) { case (l, ws) => getLine(ws, width) }.drop(1).takeWhile(_._1.nonEmpty).map(_._1).toVector
+
+  text.split("\n\n+").map { para =>
+    getLines(para.split("\\s+").toSeq, width).mkString("\n")
+  }.mkString("\n\n")
+
+  sys.exit()
 }
 
 def makePage(content: String) = {
