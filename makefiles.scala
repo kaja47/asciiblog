@@ -22,13 +22,15 @@ object Blog {
   val thumbHeight: Int = 100
 }
 
-class Article(
+case class Article(
   val title: String,
   val slug: String,
   val date: Date,
   val tags: Seq[String],
   val text: String,
-  val images: Seq[Image]
+  val images: Seq[Image],
+  val links: Seq[String],
+  val backlinks: Seq[Article] = Seq()
 ) {
   override def toString = "Article("+title+")"
 }
@@ -65,9 +67,10 @@ def resizeImage(src: BufferedImage, width: Int, height: Int) = {
 //def url(slug: String) = Blog.baseUrl + "/" + slug + ".html"
 def absUrl(slug: String) = Blog.baseUrl + "/" + slug + ".html"
 def relUrl(slug: String) = slug + ".html"
-def relativizeUrl(url: String) =
-  if (url.startsWith(Blog.baseUrl+"/")) url.drop(Blog.baseUrl.length+1)
-  else url
+def relativizeUrl(url: String) = if (localLink(url)) dropLocalPrefix(url) else url
+def localLink(url: String) = url.startsWith(Blog.baseUrl+"/")
+def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
+def extractSlug(url: String) = if (localLink(url)) dropLocalPrefix(url).dropRight(5) else sys.error("not local url")
 
 
 def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
@@ -90,6 +93,8 @@ val tagsRegex    = """^#\[(.+)\]$""".r
 
 val imgBlockRegex = """(?xm) (?: ^\[\*\ +(\S+)\ +\*\]\ *\n)+ """.r
 val imgRegex      = """(?xm) \[\*\ +(\S+)\ +\*\]\ * """.r
+
+val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
 
 def parseDate(l: String): Option[Date] = l match {
   case dateRegex(y, m, d) => Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime)
@@ -138,12 +143,13 @@ def parseArticle(lines: Vector[String]): Article = {
   val images = body.collect { case imgRegex(url) => new Image(url, hash(url)) }
 
   new Article(
-    title = title.trim,
+    title = blackout(title.trim),
     slug = if (slug == null || slug == "") generateSlug(title) else slug,
     date = date.getOrElse(null),
     tags = tags.getOrElse(Seq()),
     text = decorateText(body.mkString("\n"), linkMap, images),
-    images = images
+    images = images,
+    links = linkMap.values.toVector
   )
 }
 
@@ -163,6 +169,9 @@ def generateSlug(title: String) = {
 }
 
 def tagSlug(title: String) = "tag-"+generateSlug(title)
+
+def blackout(txt: String) =
+  blackoutRegex.replaceAllIn(txt, m => m.group(0).replaceAll("[^\n]", "█"))
 
 def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image]) = {
   var txt = text
@@ -186,9 +195,7 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
   )
 
   txt = linkRefRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
-
-  txt = """(?xs) \[\|.+?\|\] """.r.replaceAllIn(txt, m => m.group(0).replaceAll("[^\n]", "█"))
-
+  txt = blackout(txt)
   txt
     .replaceAll("""(?xs)\*\*(.+?)\*\*""",
       """<b>**<span>$1</span>**</b>""")
@@ -213,8 +220,6 @@ def reformatText(text: String, width: Int) = {
   text.split("\n\n+").map { para =>
     getLines(para.split("\\s+").toSeq, width).mkString("\n")
   }.mkString("\n\n")
-
-  sys.exit()
 }
 
 def makePage(content: String) = {
@@ -308,12 +313,31 @@ val tagMap =
     .map { case (t, tas) => (t, tas.map { _._2 }) }
 
 
+val backlinks: Map[String, Seq[Article]] =
+  (for {
+    a <- articles
+    l <- a.links
+    if localLink(l)
+  } yield (extractSlug(l), a))
+    .groupBy(_._1)
+    .map { case (slug, as) => (slug, as.map { _._2 }) }
+
+articles = articles map { a =>
+  backlinks.get(a.slug) match {
+    case Some(as) => a.copy(backlinks = as)
+    case None => a
+  }
+}
+
 
 def makeLink(a: Article) =
   makeDate(a)+s"""<i><a href="${relUrl(a.slug)}">${a.title}</a></i>"""
 
 def makeTagLink(t: String) =
   s"""<span class=y>#</span><i><a href="${relUrl(tagSlug(t))}">${t}</a></i>"""
+
+def makeRelLink(a: Article, ord: Int) =
+  s"""<i><a href="${relUrl(a.slug)}">#${ord}</a></i>"""
 
 def makeDate(a: Article) =
   if (a.date == null) ""
@@ -329,7 +353,8 @@ def makeFullArticle(a: Article, as: List[Article], prevNextNavigation: Boolean, 
   "\n\n"+
   a.text+"\n\n\n"+
   (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+
-  (if (tags) makeTagLinks(a.tags) else "")
+  (if (tags && a.tags.nonEmpty) makeTagLinks(a.tags)+"\n" else "")+
+  (if (tags && a.backlinks.nonEmpty) makeRelLinks(a.backlinks)+"\n" else "")
 
 }
 
@@ -352,6 +377,11 @@ def makeNextPrevArrows(a: Article, as: List[Article]) = {
 def makeTagLinks(ts: Seq[String]) =  {
   val len = ts.map(t => t.length + 2).sum - 1
   alignSpace("", len)+ts.map(makeTagLink).mkString(" ")
+}
+
+def makeRelLinks(as: Seq[Article]) =  {
+  val len = as.map(t => 3).sum - 1
+  alignSpace("", len)+as.zipWithIndex.map { case (a, i) => makeRelLink(a, i+1) }.mkString(" ")
 }
   
 
