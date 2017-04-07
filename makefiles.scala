@@ -86,7 +86,7 @@ def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
 }
 
 
-val titleRegex   = """^(.*?)(?:\[(.*)\])?$""".r
+val titleRegex   = """^(.+?)(?:\[([^ ]+)\])?$""".r
 val linkRefRegex = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
 val dateRegex    = """^(\d+)-(\d+)-(\d+)$""".r
 val tagsRegex    = """^#\[(.+)\]$""".r
@@ -176,6 +176,8 @@ def blackout(txt: String) =
 def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image]) = {
   var txt = text
 
+  txt = blackout(txt)
+
   txt = """(?x) " ([^"]+(?:\R[^"]+)?) " : \[ (\w+) \]""".r.replaceAllIn(txt, m => {
     val url = relativizeUrl(linkMap(m.group(2)))
     s"""<span class=l>"<a href="${url}">${m.group(1)}</a>":[${m.group(2)}]</span>"""
@@ -195,7 +197,6 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
   )
 
   txt = linkRefRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
-  txt = blackout(txt)
   txt
     .replaceAll("""(?xs)\*\*(.+?)\*\*""",
       """<b>**<span>$1</span>**</b>""")
