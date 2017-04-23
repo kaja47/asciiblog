@@ -274,7 +274,10 @@ def saveFile(f: String, content: String): (String, String) = {
 }
 
 
-var lines = io.Source.fromFile(args(1)).getLines.toVector
+var lines: Vector[String] = args.tail.flatMap { f =>
+  io.Source.fromFile(f).getLines ++ Seq("\n","\n")
+}.toVector
+
 var articlesList = List[Article]()
 val today = new Date
 
