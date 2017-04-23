@@ -117,6 +117,14 @@ def process[T](ls: Seq[String], f: String => Option[T]): (Option[T], Seq[String]
   }
 }
 
+def hash(txt: String) = {
+  val md5 = java.security.MessageDigest.getInstance("MD5")
+  md5.reset()
+  val digest = md5.digest(txt.getBytes("utf-8"))
+  val bigInt = new java.math.BigInteger(1, digest)
+  bigInt.toString(16).reverse.padTo(32, '0').reverse
+}
+
 def parseArticle(lines: Vector[String]): Article = {
   val ls = lines.map(_.trim)
 
@@ -134,14 +142,6 @@ def parseArticle(lines: Vector[String]): Article = {
   val linkMap = body.collect {
     case linkRefRegex(r, url) => (r, url)
   }.toMap
-
-  def hash(url: String) = {
-    val md5 = java.security.MessageDigest.getInstance("MD5")
-    md5.reset()
-    val digest = md5.digest(url.getBytes("utf-8"))
-    val bigInt = new java.math.BigInteger(1, digest)
-    bigInt.toString(16).reverse.padTo(32, '0').reverse
-  }
 
   val images = body.collect { case imgRegex(url) => new Image(url, hash(url)) }
 
@@ -263,14 +263,14 @@ def generateRSS(articles: Seq[Article]): String = {
 
 
 
-def saveHtml(f: String, content: String): Unit = {
+def saveHtml(f: String, content: String): (String, String) =
   saveFile(f+".html", content)
-}
 
-def saveFile(f: String, content: String): Unit = {
+def saveFile(f: String, content: String): (String, String) = {
   val fw = new java.io.FileWriter(f)
   fw.write(content)
   fw.close()
+  (f, hash(content))
 }
 
 
@@ -403,20 +403,23 @@ val indexContent =  {
   (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("\n")
 }
 
-saveFile("index.html", makePage(indexContent))
+
+val fileIndex = mutable.ArrayBuffer[(String, String)]()
+
+fileIndex += saveFile("index.html", makePage(indexContent))
 
 // make articles
 articles foreach { a =>
-  saveHtml(a.slug, makePage(makeFullArticle(a, articles, true, true)))
+  fileIndex += saveHtml(a.slug, makePage(makeFullArticle(a, articles, true, true)))
 }
 
 // make tag pages
 tagMap foreach { case (t, as) =>
-  saveHtml(tagSlug(t), makePage(makeTagPage(t, as)))
+  fileIndex += saveHtml(tagSlug(t), makePage(makeTagPage(t, as)))
 }
 
 // make RSS
-saveFile("rss.xml", generateRSS(articles))
+fileIndex += saveFile("rss.xml", generateRSS(articles))
 
 
 // make thumbnails
@@ -430,3 +433,6 @@ for (image <- images) {
     ImageIO.write(resized, "jpg", thumbFile)
   }
 }
+
+// make file index
+saveFile(".files", fileIndex.map { case (file, hash) => file+" "+hash }.mkString("\n"))
