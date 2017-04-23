@@ -4,6 +4,7 @@ import java.io.File
 import java.net.URL
 import java.awt.image.{ BufferedImage, ConvolveOp, Kernel }
 import javax.imageio.ImageIO
+import scala.collection.mutable
 
 
 val cfg = io.Source.fromFile(args(0))
@@ -27,6 +28,7 @@ case class Article(
   val slug: String,
   val date: Date,
   val tags: Seq[String],
+  val rawText: String,
   val text: String,
   val images: Seq[Image],
   val links: Seq[String],
@@ -91,6 +93,7 @@ val linkRefRegex = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
 val dateRegex    = """^(\d+)-(\d+)-(\d+)$""".r
 val tagsRegex    = """^#\[(.+)\]$""".r
 
+val linkRegex     = """(?x) " ([^"]+(?:\R[^"]+)?) " : \[ (\w+) \]""".r
 val imgBlockRegex = """(?xm) (?: ^\[\*\ +(\S+)\ +\*\]\ *\n)+ """.r
 val imgRegex      = """(?xm) \[\*\ +(\S+)\ +\*\]\ * """.r
 
@@ -143,13 +146,14 @@ def parseArticle(lines: Vector[String]): Article = {
   val images = body.collect { case imgRegex(url) => new Image(url, hash(url)) }
 
   new Article(
-    title = blackout(title.trim),
-    slug = if (slug == null || slug == "") generateSlug(title) else slug,
-    date = date.getOrElse(null),
-    tags = tags.getOrElse(Seq()),
-    text = decorateText(body.mkString("\n"), linkMap, images),
-    images = images,
-    links = linkMap.values.toVector
+    title   = blackout(title.trim),
+    slug    = if (slug == null || slug == "") generateSlug(title) else slug,
+    date    = date.getOrElse(null),
+    tags    = tags.getOrElse(Seq()),
+    rawText = body.mkString("\n"),
+    text    = decorateText(body.mkString("\n"), linkMap, images),
+    images  = images,
+    links   = linkMap.values.toVector
   )
 }
 
@@ -178,7 +182,7 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
 
   txt = blackout(txt)
 
-  txt = """(?x) " ([^"]+(?:\R[^"]+)?) " : \[ (\w+) \]""".r.replaceAllIn(txt, m => {
+  txt = linkRegex.replaceAllIn(txt, m => {
     val url = relativizeUrl(linkMap(m.group(2)))
     s"""<span class=l>"<a href="${url}">${m.group(1)}</a>":[${m.group(2)}]</span>"""
   })
@@ -188,7 +192,7 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
     val block = links.map { l =>
       val thumbPath = "t/"+{images.find(i => i.url == l).get.thumb}
       s"""<a href="$l"><img src="$thumbPath"/></a>"""
-    }.mkString("")
+    }.mkString(" ")
     block
   })
 
@@ -271,16 +275,16 @@ def saveFile(f: String, content: String): Unit = {
 
 
 var lines = io.Source.fromFile(args(1)).getLines.toVector
-var articles = List[Article]()
+var articlesList = List[Article]()
 val today = new Date
 
 while (lines.nonEmpty) {
   val (a, ls) = getArticle(lines)
-  articles ::= a
+  articlesList ::= a
   lines = ls
 }
 
-articles = articles.reverse
+var articles = articlesList.reverse.toVector
 
 val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
 val (visible, rest) = rest1.span { a => !a.title.startsWith("?") }
@@ -344,7 +348,7 @@ def makeDate(a: Article) =
   if (a.date == null) ""
   else new SimpleDateFormat("d. M.").format(a.date)+" "
 
-def makeFullArticle(a: Article, as: List[Article], prevNextNavigation: Boolean, tags: Boolean) = {
+def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean) = {
   val titleLength = makeDate(a).length + a.title.length
 
   makeLink(a)+
@@ -359,7 +363,7 @@ def makeFullArticle(a: Article, as: List[Article], prevNextNavigation: Boolean, 
 
 }
 
-def makeNextPrevLinks(a: Article, as: List[Article]) = {
+def makeNextPrevLinks(a: Article, as: Seq[Article]) = {
   val pos = as.indexOf(a)
   assert(pos != -1)
 
@@ -367,7 +371,7 @@ def makeNextPrevLinks(a: Article, as: List[Article]) = {
   (if (a == as.last) "" else "&gt;&gt;&gt; "+makeLink(as(pos+1))+"\n")
 }
 
-def makeNextPrevArrows(a: Article, as: List[Article]) = {
+def makeNextPrevArrows(a: Article, as: Seq[Article]) = {
   val pos = as.indexOf(a)
   assert(pos != -1)
 
