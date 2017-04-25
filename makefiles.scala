@@ -27,7 +27,7 @@ case class Article(
   val title: String,
   val slug: String,
   val date: Date,
-  val tags: Seq[String],
+  val tags: Tags,
   val rawText: String,
   val text: String,
   val images: Seq[Image],
@@ -36,6 +36,8 @@ case class Article(
 ) {
   override def toString = "Article("+title+")"
 }
+
+case class Tags(visible: Seq[String] = Seq(), hidden: Seq[String] = Seq())
 
 case class Image(
   val url: String,
@@ -104,8 +106,10 @@ def parseDate(l: String): Option[Date] = l match {
   case _ => None
 }
 
-def parseTags(l: String): Option[Seq[String]] = l match {
-  case tagsRegex(ts) => Some(ts.split(",").map(_.trim))
+def parseTags(l: String): Option[Tags] = l match {
+  case tagsRegex(ts) =>
+    val (hidden, visible) = (ts.split(",").map(_.trim).partition(t => t.startsWith("(") && t.endsWith(")")))
+    Some(Tags(visible, hidden.map(_.drop(1).dropRight(1))))
   case _ => None
 }
 
@@ -149,7 +153,7 @@ def parseArticle(lines: Vector[String]): Article = {
     title   = blackout(title.trim),
     slug    = if (slug == null || slug == "") generateSlug(title) else slug,
     date    = date.getOrElse(null),
-    tags    = tags.getOrElse(Seq()),
+    tags    = tags.getOrElse(Tags()),
     rawText = body.mkString("\n"),
     text    = decorateText(body.mkString("\n"), linkMap, images),
     images  = images,
@@ -316,7 +320,7 @@ if (!ordered) sys.error("articles are not ordered by date")
 
 val tagMap = 
   articles
-    .flatMap { a => a.tags.map { t => (t, a) } }
+    .flatMap { a => a.tags.visible.map { t => (t, a) } }
     .groupBy(_._1)
     .map { case (t, tas) => (t, tas.map { _._2 }) }
 
@@ -361,7 +365,7 @@ def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, t
   "\n\n"+
   a.text+"\n\n\n"+
   (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+
-  (if (tags && a.tags.nonEmpty) makeTagLinks(a.tags)+"\n" else "")+
+  (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"\n" else "")+
   (if (tags && a.backlinks.nonEmpty) makeRelLinks(a.backlinks)+"\n" else "")
 
 }
@@ -437,14 +441,14 @@ for (image <- images) {
   }
 }
 
-// make file index
-saveFile(".files", fileIndex.map { case (file, hash) => file+" "+hash }.mkString("\n"))
-
 // make robots.txt
-saveFile("robots.txt", "User-agent: *\nAllow: /")
+fileIndex += saveFile("robots.txt", "User-agent: *\nAllow: /")
 
-saveFile("sitemap.xml", "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+fileIndex += saveFile("sitemap.xml", "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
   <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   { articles map { a => <url><loc>{absUrl(a.slug)}</loc></url> } }
   </urlset>
 )
+
+// make file index
+saveFile(".files", fileIndex.map { case (file, hash) => file+" "+hash }.mkString("\n"))
