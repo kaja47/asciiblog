@@ -26,7 +26,7 @@ def readFileIndex(f: File): Map[String, String] =
 val sourceFileIndex = readFileIndex(new File(source, ".files"))
 val targetFileIndex = readFileIndex(new File(target, ".files"))
 
-for (s <- source.listFiles if s.getName.matches("""(?x) ( .*\.html | .*\.xml | \.files )""")) {
+for (s <- source.listFiles if s.getName.matches("""(?x) ( .*\.html | .*\.xml | robots.txt | \.files )""")) {
   val fn = s.getName
   val t = new File(target, fn)
 

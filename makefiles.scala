@@ -91,7 +91,7 @@ def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
 
 
 val titleRegex   = """^(.+?)(?:\[([^ ]+)\])?$""".r
-val linkRefBlockRegex = """(?xm) (?:  ^\[(.*?)\]:\ (.+)\n  )+  ^\[(.*?)\]:\ (.+) """.r
+val linkRefBlockRegex = """(?xm) (?:  ^\[(.*?)\]:\ (.+)\n  )*  ^\[(.*?)\]:\ (.+) """.r
 val linkRefRegex = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
 val dateRegex    = """^(\d+)-(\d+)-(\d+)$""".r
 val tagsRegex    = """^#\[(.+)\]$""".r
@@ -233,6 +233,19 @@ def reformatText(text: String, width: Int) = {
   }.mkString("\n\n")
 }
 
+def similarViaTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Article] = {
+  (a.tags.visible ++ a.tags.hidden)
+    .flatMap(t => tagMap.getOrElse(t, Seq()))
+    .filter(_.slug != a.slug)
+    .groupBy(identity)
+    .mapValues(_.size)
+    .toSeq
+    .sortBy(_._2)
+    .map(_._1)
+}
+
+
+
 def makePage(content: String) = {
 s"""<meta charset="utf-8" />
 <title>${Blog.title}</title>
@@ -320,9 +333,15 @@ val ordered = articles
 
 if (!ordered) sys.error("articles are not ordered by date")
 
-val tagMap = 
+val tagMap: Map[String, Seq[Article]] =
   articles
     .flatMap { a => a.tags.visible.map { t => (t, a) } }
+    .groupBy(_._1)
+    .map { case (t, tas) => (t, tas.map { _._2 }) }
+
+val allTagMap: Map[String, Seq[Article]] =
+  articles
+    .flatMap { a => (a.tags.visible ++ a.tags.hidden).map { t => (t, a) } }
     .groupBy(_._1)
     .map { case (t, tas) => (t, tas.map { _._2 }) }
 
@@ -360,6 +379,9 @@ def makeDate(a: Article) =
 def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean) = {
   val titleLength = makeDate(a).length + a.title.length
 
+  val bl = a.backlinks.toSet
+  val sims = similarViaTags(a, allTagMap).filter(a => !bl.contains(a)).take(5)
+
   makeLink(a)+
   (if (prevNextNavigation) alignSpace("<<< >>>", titleLength)+makeNextPrevArrows(a, as) else "")+
   "\n"+
@@ -368,8 +390,7 @@ def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, t
   a.text+"\n\n\n"+
   (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+
   (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"\n" else "")+
-  (if (tags && a.backlinks.nonEmpty) makeRelLinks(a.backlinks)+"\n" else "")
-
+  (if (tags && (a.backlinks.nonEmpty || sims.nonEmpty)) makeRelLinks(Seq(sims, a.backlinks))+"\n" else "")
 }
 
 def makeNextPrevLinks(a: Article, as: Seq[Article]) = {
@@ -393,11 +414,15 @@ def makeTagLinks(ts: Seq[String]) =  {
   alignSpace("", len)+ts.map(makeTagLink).mkString(" ")
 }
 
-def makeRelLinks(as: Seq[Article]) =  {
-  val len = as.map(t => 3).sum - 1
-  alignSpace("", len)+as.zipWithIndex.map { case (a, i) => makeRelLink(a, i+1) }.mkString(" ")
+def makeRelLinks(ass: Seq[Seq[Article]]) =  {
+  val len = ass.flatten.map(t => 3).sum - 1
+  val rels = ass.map { as =>
+    as.zipWithIndex.map { case (a, i) => makeRelLink(a, i+1) }.mkString(" ")
+  }.mkString(" ")
+
+  alignSpace("", len)+rels
 }
-  
+
 
 def makeTagPage(t: String, as: Seq[Article]) = {
   makeTagLink(t)+"\n\n"+
