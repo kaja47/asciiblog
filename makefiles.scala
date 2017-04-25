@@ -439,3 +439,12 @@ for (image <- images) {
 
 // make file index
 saveFile(".files", fileIndex.map { case (file, hash) => file+" "+hash }.mkString("\n"))
+
+// make robots.txt
+saveFile("robots.txt", "User-agent: *\nAllow: /")
+
+saveFile("sitemap.xml", "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+  <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  { articles map { a => <url><loc>{absUrl(a.slug)}</loc></url> } }
+  </urlset>
+)
