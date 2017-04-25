@@ -91,6 +91,7 @@ def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
 
 
 val titleRegex   = """^(.+?)(?:\[([^ ]+)\])?$""".r
+val linkRefBlockRegex = """(?xm) (?:  ^\[(.*?)\]:\ (.+)\n  )+  ^\[(.*?)\]:\ (.+) """.r
 val linkRefRegex = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
 val dateRegex    = """^(\d+)-(\d+)-(\d+)$""".r
 val tagsRegex    = """^#\[(.+)\]$""".r
@@ -204,7 +205,8 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
     "<blockquote>"+m.group(1).replaceAll(">", "&gt;")+"</blockquote>"
   )
 
-  txt = linkRefRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
+  txt = linkRefBlockRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
+
   txt
     .replaceAll("""(?xs)\*\*(.+?)\*\*""",
       """<b>**<span>$1</span>**</b>""")
