@@ -1,0 +1,30 @@
+title [slug-that-will-show-in-a-post-url]
+=====
+2017-01-01
+#[tag 1, tag 2, (hidden tag 1), (hidden tag 2)]
+
+Body of the post after one empty line.
+
+Everything except title is optional.
+
+In a post body you can use:
+*italics*
+**bold text**
+"links":[l] 
+[|blacked out text|]
+
+> blockquotes
+
+image galleries:
+
+[* image1.jpg *]
+[* image2.jpg *]
+[* image3.jpg *]
+
+[l]: https://example.com/
+
+
+??? hidden post
+=====
+
+Post with titles starting with a ? won't be published
