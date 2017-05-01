@@ -18,9 +18,11 @@ object Blog {
   val baseUrl: String = cfg("baseUrl")
   val fullArticlesOnIndex: Int = cfg("fullArticlesOnIndex").toInt
   val pageWidth: Int =  cfg("pageWidth").toInt
-  val style: String = cfg("style")
-  val thumbWidth: Int = 150
-  val thumbHeight: Int = 100
+  val style: String = cfg.getOrElse("style", "")
+  val thumbWidth: Int = cfg.getOrElse("thumbnailWidth", "150").toInt
+  val thumbHeight: Int = cfg.getOrElse("thumbnailHeight", "100").toInt
+  val limitRss: Int = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
+  val fullTextInRss: Boolean = cfg.getOrElse("fullTextInRss", false.toString).toBoolean // ???
 }
 
 case class Article(
@@ -268,14 +270,10 @@ def generateRSS(articles: Seq[Article]): String = {
   "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" + (
 <rss version="2.0">
 <channel>
-  <title>blog feed</title>
-  {articles.map { a =>
-  <item>
-    <title>{a.title}</title>
-    <guid isPermaLink="true">{absUrl(a.slug)}</guid>
-    <pubDate>{rssdate(a.date)}</pubDate>
-  </item>
-  }}
+<title>{Blog.title}</title>
+{articles.take(Blog.limitRss).map { a =>
+<item><title>{a.title}</title><guid isPermaLink="true">{absUrl(a.slug)}</guid><pubDate>{rssdate(a.date)}</pubDate></item>
+}}
 </channel>
 </rss>).toString
 }
