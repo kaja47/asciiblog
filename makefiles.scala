@@ -199,7 +199,7 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
     val block = links.map { l =>
       val thumbPath = "t/"+{images.find(i => i.url == l).get.thumb}
       s"""<a href="$l"><img src="$thumbPath"/></a>"""
-    }.mkString(" ")
+    }.grouped(3).map(_.mkString(" ")).mkString("\n")
     block
   })
 
