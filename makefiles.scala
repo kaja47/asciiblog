@@ -251,8 +251,8 @@ def similarViaTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Article] 
 def makePage(content: String) = {
 s"""<meta charset="utf-8" />
 <title>${Blog.title}</title>
-<link rel="alternate" type="application/rss+xml" href="rss.xml" />
-<style>a{color:inherit} i, b, .y{color:#999} i span, b span, i a, .l a{color:black} .l{color:#bbb} blockquote {margin:0;paddig:0;font-style:italic;} ${Blog.style}</style>
+<link rel="alternate" type="application/rss+xml" href="rss.xml"/>
+<style>a{color:inherit} i,b,.y{color:#999} i span,b span,i a,.l a{color:black} .l{color:#bbb} blockquote{margin:0;paddig:0;font-style:italic;} ${Blog.style}</style>
 
 <pre>
 ${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xml">RSS</a>]
