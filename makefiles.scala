@@ -52,7 +52,7 @@ case class Image(
 case class Sim(article: Article, commonTags: Int)
 
 
-def resizeImage(src: BufferedImage, width: Int, height: Int) = {
+def resizeImage(src: BufferedImage, width: Int, height: Int): BufferedImage = {
   val blur = new ConvolveOp(
     new Kernel(5, 5, Array.fill[Float](25)(1f/25)),
     ConvolveOp.EDGE_NO_OP, null
@@ -82,6 +82,11 @@ def relativizeUrl(url: String) = if (localLink(url)) dropLocalPrefix(url) else u
 def localLink(url: String) = url.startsWith(Blog.baseUrl+"/")
 def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
 def extractSlug(url: String) = if (localLink(url)) dropLocalPrefix(url).dropRight(5) else sys.error("not local url")
+
+def thumbnailUrl(img: Image) = {
+  val (w, h) = (Blog.thumbWidth, Blog.thumbHeight)
+  s"t/${img.thumb}-${w}x${h}"
+}
 
 
 def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
@@ -202,7 +207,7 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
   txt = imgBlockRegex.replaceAllIn(txt, m => {
     val links = imgRegex.findAllMatchIn(m.group(0)).map(_.group(1)).toVector
     val block = links.map { l =>
-      val thumbPath = "t/"+{images.find(i => i.url == l).get.thumb}
+      val thumbPath = thumbnailUrl(images.find(i => i.url == l).get)
       s"""<a href="$l"><img src="$thumbPath"/></a>"""
     }.grouped(3).map(_.mkString(" ")).mkString("\n")
     block
@@ -463,10 +468,12 @@ fileIndex += saveFile("rss.xml", generateRSS(articles))
 val images = articles.flatMap(_.images)
 new File("t").mkdir()
 for (image <- images) {
-  val thumbFile = new File("t/"+image.thumb)
+  val (w, h) = (Blog.thumbWidth, Blog.thumbHeight)
+  val thumbFile = new File(thumbnailUrl(image))
   if (!thumbFile.exists) {
+    println(s"resizing image ${image.url} -> $thumbFile")
     val full = ImageIO.read(new URL(image.url))
-    val resized = resizeImage(full, Blog.thumbWidth, Blog.thumbHeight)
+    val resized = resizeImage(full, w, h)
     ImageIO.write(resized, "jpg", thumbFile)
   }
 }
