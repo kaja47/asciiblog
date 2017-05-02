@@ -36,7 +36,10 @@ case class Article(
   val links: Seq[String],
   val backlinks: Seq[Article] = Seq()
 ) {
-  override def toString = "Article("+title+")"
+  override def toString = {
+    val f = new SimpleDateFormat("MM-dd-yyyy")
+    s"Article(${f.format(date)} $title)"
+  }
 }
 
 case class Tags(visible: Seq[String] = Seq(), hidden: Seq[String] = Seq())
@@ -45,6 +48,8 @@ case class Image(
   val url: String,
   val thumb: String
 )
+
+case class Sim(article: Article, commonTags: Int)
 
 
 def resizeImage(src: BufferedImage, width: Int, height: Int) = {
@@ -235,15 +240,14 @@ def reformatText(text: String, width: Int) = {
   }.mkString("\n\n")
 }
 
-def similarViaTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Article] = {
+def similarViaTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
   (a.tags.visible ++ a.tags.hidden)
     .flatMap(t => tagMap.getOrElse(t, Seq()))
     .filter(_.slug != a.slug)
     .groupBy(identity)
-    .mapValues(_.size)
-    .toSeq
-    .sortBy(_._2)
-    .map(_._1)
+    .map { case (a, ts) => Sim(a, ts.size) }
+    .toVector
+    .sortBy { s => (s.commonTags, s.article.date) }.reverse
 }
 
 
@@ -378,7 +382,8 @@ def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, t
   val titleLength = makeDate(a).length + a.title.length
 
   val bl = a.backlinks.toSet
-  val sims = similarViaTags(a, allTagMap).filter(a => !bl.contains(a)).take(5)
+  val _sims = similarViaTags(a, allTagMap).filter(s => !bl.contains(s.article)).take(5)
+  val sims = _sims.map(_.article)
 
   makeLink(a)+
   (if (prevNextNavigation) alignSpace("<<< >>>", titleLength)+makeNextPrevArrows(a, as) else "")+
