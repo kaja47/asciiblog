@@ -194,7 +194,7 @@ def tagSlug(title: String) = "tag-"+generateSlug(title)
 def blackout(txt: String) =
   blackoutRegex.replaceAllIn(txt, m => m.group(0).replaceAll("[^\n]", "█"))
 
-def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image]) = {
+def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image]): String = {
   var txt = text
 
   txt = blackout(txt)
@@ -228,22 +228,6 @@ def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image])
 //      """<u><span class=y>_</span>$1<span class=y>_</span></u>""")
 }
 
-def reformatText(text: String, width: Int) = {
-  def getLine(words: Seq[String], width: Int): (String, Seq[String]) = {
-    var l = -1
-    val lineWords = words.takeWhile { w => val ok = l < width ; l += w.length+1 ; ok }
-    val restWords = words.drop(lineWords.length)
-    val line = lineWords.mkString(" ")
-    (line, restWords)
-  }
-
-  def getLines(words: Seq[String], width: Int): Seq[String] =
-    Iterator.iterate(("", words)) { case (l, ws) => getLine(ws, width) }.drop(1).takeWhile(_._1.nonEmpty).map(_._1).toVector
-
-  text.split("\n\n+").map { para =>
-    getLines(para.split("\\s+").toSeq, width).mkString("\n")
-  }.mkString("\n\n")
-}
 
 def similarViaTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
   (a.tags.visible ++ a.tags.hidden)
