@@ -26,15 +26,15 @@ object Blog {
 }
 
 case class Article(
-  val title: String,
-  val slug: String,
-  val date: Date,
-  val tags: Tags,
-  val rawText: String,
-  val text: String,
-  val images: Seq[Image],
-  val links: Seq[String],
-  val backlinks: Seq[Article] = Seq()
+  title: String,
+  slug: String,
+  date: Date,
+  tags: Tags,
+  rawText: String,
+  images: Seq[Image],
+  links: Seq[String],
+  linkMap: Map[String, String],
+  backlinks: Seq[Article] = Seq()
 ) {
   override def toString = {
     val f = new SimpleDateFormat("MM-dd-yyyy")
@@ -108,9 +108,12 @@ val linkRefRegex = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
 val dateRegex    = """^(\d+)-(\d+)-(\d+)$""".r
 val tagsRegex    = """^#\[(.+)\]$""".r
 
+val boldRegex     = """(?xs)\*\*(.+?)\*\*""".r
+val italicRegex   = """(?xs)(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)""".r
 val linkRegex     = """(?x) " ([^"]+(?:\R[^"]+)?) " : \[ (\w+) \]""".r
 val imgBlockRegex = """(?xm) (?: ^\[\*\ +(\S+)\ +\*\]\ *\n)+ """.r
 val imgRegex      = """(?xm) \[\*\ +(\S+)\ +\*\]\ * """.r
+val blockquoteRegex = """(?xm) ( (?: ^>[^\n]*\n)+ )""".r
 
 val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
 
@@ -163,13 +166,13 @@ def parseArticle(lines: Vector[String]): Article = {
   val images = body.collect { case imgRegex(url) => new Image(url, hash(url)) }
 
   new Article(
-    title   = blackout(title.trim),
+    title   = title.trim,
     slug    = if (slug == null || slug == "") generateSlug(title) else slug,
     date    = date.getOrElse(null),
     tags    = tags.getOrElse(Tags()),
     rawText = body.mkString("\n"),
-    text    = decorateText(body.mkString("\n"), linkMap, images),
     images  = images,
+    linkMap = linkMap,
     links   = linkMap.values.toVector
   )
 }
@@ -191,45 +194,138 @@ def generateSlug(title: String) = {
 
 def tagSlug(title: String) = "tag-"+generateSlug(title)
 
-def blackout(txt: String) =
-  blackoutRegex.replaceAllIn(txt, m => m.group(0).replaceAll("[^\n]", "█"))
 
-def decorateText(text: String, linkMap: Map[String, String], images: Seq[Image]): String = {
-  var txt = text
 
-  txt = blackout(txt)
+trait Layout {
+  def makePage(content: String): String
+  def makeIndex(articles: Seq[Article]): String
+  def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean): String
+  def makeTagPage(t: String, as: Seq[Article]): String
+}
 
-  txt = linkRegex.replaceAllIn(txt, m => {
-    val url = relativizeUrl(linkMap(m.group(2)))
-    s"""<span class=l>"<a href="${url}">${m.group(1)}</a>":[${m.group(2)}]</span>"""
-  })
+object FixedLayout extends Layout {
+  def blackout(txt: String) =
+    blackoutRegex.replaceAllIn(txt, m => m.group(0).replaceAll("[^\n]", "█"))
 
-  txt = imgBlockRegex.replaceAllIn(txt, m => {
-    val links = imgRegex.findAllMatchIn(m.group(0)).map(_.group(1)).toVector
-    val block = links.map { l =>
-      val thumbPath = thumbnailUrl(images.find(i => i.url == l).get)
-      s"""<a href="$l"><img src="$thumbPath"/></a>"""
-    }.grouped(3).map(_.mkString(" ")).mkString("\n")
-    block
-  })
+  def decorateText(a: Article): String = {
+    var txt = a.rawText
 
-  txt = """(?xm) ( (?: ^>[^\n]*\n)+ )""".r.replaceAllIn(txt, m =>
-    "<blockquote>"+m.group(1).replaceAll(">", "&gt;")+"</blockquote>"
-  )
+    txt = blackout(txt)
 
-  txt = linkRefBlockRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
+    txt = linkRegex.replaceAllIn(txt, m => {
+      val url = relativizeUrl(a.linkMap(m.group(2)))
+      s"""<span class=l>"<a href="${url}">${m.group(1)}</a>":[${m.group(2)}]</span>"""
+    })
 
-  txt
-    .replaceAll("""(?xs)\*\*(.+?)\*\*""",
-      """<b>**<span>$1</span>**</b>""")
-    .replaceAll("""(?xs)(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)""",
-      """<i>*<span>$1</span>*</i>""")
-//    .replaceAll("""(?s)_(.+?)_""",
-//      """<u><span class=y>_</span>$1<span class=y>_</span></u>""")
+    txt = imgBlockRegex.replaceAllIn(txt, m => {
+      val links = imgRegex.findAllMatchIn(m.group(0)).map(_.group(1)).toVector
+      val block = links.map { l =>
+        val thumbPath = thumbnailUrl(a.images.find(i => i.url == l).get)
+        s"""<a href="$l"><img src="$thumbPath"/></a>"""
+      }.grouped(3).map(_.mkString(" ")).mkString("\n")
+      block
+    })
+
+    txt = blockquoteRegex.replaceAllIn(txt, m =>
+      "<blockquote>"+m.group(1).replaceAll(">", "&gt;")+"</blockquote>"
+    )
+
+    txt = linkRefBlockRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
+    txt = boldRegex.replaceAllIn(txt, """<b>**<span>$1</span>**</b>""")
+    txt = italicRegex.replaceAllIn(txt, """<i>*<span>$1</span>*</i>""")
+    txt
+  }
+
+  def makePage(content: String) = {
+s"""<meta charset="utf-8" />
+<title>${Blog.title}</title>
+<link rel="alternate" type="application/rss+xml" href="rss.xml"/>
+<style>a{color:inherit} i,b,.y{color:#999} i span,b span,i a,.l a{color:black} .l{color:#bbb} blockquote{margin:0;paddig:0;font-style:italic;} ${Blog.style}</style>
+
+<pre>
+${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xml">RSS</a>]
+"""+content+"\n</pre>"
+  }
+
+  def alignSpace(str: String, skip: Int = 0) = " "*(Blog.pageWidth-str.length-skip)
+
+  def makeLink(a: Article) =
+    makeDate(a)+s"""<i><a href="${relUrl(a.slug)}">${a.title}</a></i>"""
+
+  def makeTagLink(t: String) =
+    s"""<span class=y>#</span><i><a href="${relUrl(tagSlug(t))}">${t}</a></i>"""
+
+  def makeRelLink(a: Article, ord: Int) =
+    s"""<i><a href="${relUrl(a.slug)}">#${ord}</a></i>"""
+
+  def makeDate(a: Article) =
+    if (a.date == null) ""
+    else new SimpleDateFormat("d. M.").format(a.date)+" "
+
+  def makeIndex(articles: Seq[Article]) = {
+    val (fulls, links) = articles.splitAt(Blog.fullArticlesOnIndex)
+    (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("\n")
+  }
+
+  def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean) = {
+    val titleLength = makeDate(a).length + a.title.length
+
+    val bl = a.backlinks.toSet
+    val _sims = similarByTags(a, allTagMap).filter(s => !bl.contains(s.article)).take(5)
+    val sims = _sims.map(_.article)
+
+    makeLink(a)+
+    (if (prevNextNavigation) alignSpace("<<< >>>", titleLength)+makeNextPrevArrows(a, as) else "")+
+    "\n"+
+    //"="*a.title.length+"\n"+
+    "\n\n"+
+    decorateText(a)+"\n\n\n"+
+    (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+
+    (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"\n" else "")+
+    (if (tags && (a.backlinks.nonEmpty || sims.nonEmpty)) makeRelLinks(Seq(sims, a.backlinks))+"\n" else "")
+  }
+
+  def makeNextPrevLinks(a: Article, as: Seq[Article]) = {
+    val pos = as.indexOf(a)
+    assert(pos != -1)
+
+    (if (a == as.head) "" else "&lt;&lt;&lt; "+makeLink(as(pos-1))+"\n") +
+    (if (a == as.last) "" else "&gt;&gt;&gt; "+makeLink(as(pos+1))+"\n")
+  }
+
+  def makeNextPrevArrows(a: Article, as: Seq[Article]) = {
+    val pos = as.indexOf(a)
+    assert(pos != -1)
+
+    (if (a == as.head) "   " else s"""<a href="${relUrl(as(pos-1).slug)}">&lt;&lt;&lt;</a>""")+" "+
+    (if (a == as.last) "   " else s"""<a href="${relUrl(as(pos+1).slug)}">&gt;&gt;&gt;</a>""")
+  }
+
+  def makeTagLinks(ts: Seq[String]) =  {
+    val len = ts.map(t => t.length + 2).sum - 1
+    alignSpace("", len)+ts.map(makeTagLink).mkString(" ")
+  }
+
+  def makeRelLinks(ass: Seq[Seq[Article]]) =  {
+    val len = ass.flatten.map(t => 3).sum - 1
+    val rels = ass.map { as =>
+      as.zipWithIndex.map { case (a, i) => makeRelLink(a, i+1) }.mkString(" ")
+    }.mkString(" ")
+
+    alignSpace("", len)+rels
+  }
+
+
+  def makeTagPage(t: String, as: Seq[Article]) = {
+    makeTagLink(t)+"\n\n"+
+    as.map(makeLink).mkString("\n")
+  }
 }
 
 
-def similarViaTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
+
+
+def similarByTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
   (a.tags.visible ++ a.tags.hidden)
     .flatMap(t => tagMap.getOrElse(t, Seq()))
     .filter(_.slug != a.slug)
@@ -241,18 +337,6 @@ def similarViaTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
 
 
 
-def makePage(content: String) = {
-s"""<meta charset="utf-8" />
-<title>${Blog.title}</title>
-<link rel="alternate" type="application/rss+xml" href="rss.xml"/>
-<style>a{color:inherit} i,b,.y{color:#999} i span,b span,i a,.l a{color:black} .l{color:#bbb} blockquote{margin:0;paddig:0;font-style:italic;} ${Blog.style}</style>
-
-<pre>
-${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xml">RSS</a>]
-"""+content+"\n</pre>"
-}
-
-def alignSpace(str: String, skip: Int = 0) = " "*(Blog.pageWidth-str.length-skip)
 
 
 
@@ -270,6 +354,11 @@ def generateRSS(articles: Seq[Article]): String = {
 </channel>
 </rss>).toString
 }
+
+
+
+val layout: Layout = FixedLayout
+import layout._
 
 
 
@@ -354,85 +443,16 @@ articles = articles map { a =>
 }
 
 
-def makeLink(a: Article) =
-  makeDate(a)+s"""<i><a href="${relUrl(a.slug)}">${a.title}</a></i>"""
-
-def makeTagLink(t: String) =
-  s"""<span class=y>#</span><i><a href="${relUrl(tagSlug(t))}">${t}</a></i>"""
-
-def makeRelLink(a: Article, ord: Int) =
-  s"""<i><a href="${relUrl(a.slug)}">#${ord}</a></i>"""
-
-def makeDate(a: Article) =
-  if (a.date == null) ""
-  else new SimpleDateFormat("d. M.").format(a.date)+" "
-
-def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean) = {
-  val titleLength = makeDate(a).length + a.title.length
-
-  val bl = a.backlinks.toSet
-  val _sims = similarViaTags(a, allTagMap).filter(s => !bl.contains(s.article)).take(5)
-  val sims = _sims.map(_.article)
-
-  makeLink(a)+
-  (if (prevNextNavigation) alignSpace("<<< >>>", titleLength)+makeNextPrevArrows(a, as) else "")+
-  "\n"+
-  //"="*a.title.length+"\n"+
-  "\n\n"+
-  a.text+"\n\n\n"+
-  (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+
-  (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"\n" else "")+
-  (if (tags && (a.backlinks.nonEmpty || sims.nonEmpty)) makeRelLinks(Seq(sims, a.backlinks))+"\n" else "")
-}
-
-def makeNextPrevLinks(a: Article, as: Seq[Article]) = {
-  val pos = as.indexOf(a)
-  assert(pos != -1)
-
-  (if (a == as.head) "" else "&lt;&lt;&lt; "+makeLink(as(pos-1))+"\n") +
-  (if (a == as.last) "" else "&gt;&gt;&gt; "+makeLink(as(pos+1))+"\n")
-}
-
-def makeNextPrevArrows(a: Article, as: Seq[Article]) = {
-  val pos = as.indexOf(a)
-  assert(pos != -1)
-
-  (if (a == as.head) "   " else s"""<a href="${relUrl(as(pos-1).slug)}">&lt;&lt;&lt;</a>""")+" "+
-  (if (a == as.last) "   " else s"""<a href="${relUrl(as(pos+1).slug)}">&gt;&gt;&gt;</a>""")
-}
-
-def makeTagLinks(ts: Seq[String]) =  {
-  val len = ts.map(t => t.length + 2).sum - 1
-  alignSpace("", len)+ts.map(makeTagLink).mkString(" ")
-}
-
-def makeRelLinks(ass: Seq[Seq[Article]]) =  {
-  val len = ass.flatten.map(t => 3).sum - 1
-  val rels = ass.map { as =>
-    as.zipWithIndex.map { case (a, i) => makeRelLink(a, i+1) }.mkString(" ")
-  }.mkString(" ")
-
-  alignSpace("", len)+rels
-}
-
-
-def makeTagPage(t: String, as: Seq[Article]) = {
-  makeTagLink(t)+"\n\n"+
-  as.map(makeLink).mkString("\n")
-}
 
 
 
-// make index
-val indexContent =  {
-  val (fulls, links) = articles.splitAt(Blog.fullArticlesOnIndex)
-  (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("\n")
-}
+
 
 
 val fileIndex = mutable.ArrayBuffer[(String, String)]()
 
-fileIndex += saveFile("index.html", makePage(indexContent))
+// make index
+fileIndex += saveFile("index.html", makePage(makeIndex(articles)))
 
 // make articles
 articles foreach { a =>
