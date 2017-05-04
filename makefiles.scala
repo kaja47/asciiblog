@@ -216,6 +216,12 @@ def similarByTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
     .sortBy { s => (s.commonTags, s.article.date) }.reverse
 }
 
+def similarByTags(a: Article, tagMap: Map[String, Seq[Article]], without: Seq[Article]): Seq[Article] = {
+  val bl = a.backlinks.toSet
+  val _sims = similarByTags(a, allTagMap).filter(s => !bl.contains(s.article)).take(5)
+  _sims.map(_.article)
+}
+
 
 
 trait Layout {
@@ -229,6 +235,8 @@ trait LayoutUtil {
   def makeDate(a: Article) =
     if (a.date == null) ""
     else new SimpleDateFormat("d. M.").format(a.date)+" "
+
+  def script = """<script>function k(e){ var p={37:"prev",39:"next"}; window.location = document.getElementById(p[e.keyCode]).href;}</script>"""
 }
 
 trait FlowLayout extends Layout with LayoutUtil {
@@ -249,7 +257,7 @@ trait FlowLayout extends Layout with LayoutUtil {
     txt = blockquoteRegex.replaceAllIn(txt, m =>
       "<blockquote>"+m.group(1).replaceAll("(?mx) ^\\>\\ +", "")+"</blockquote><br/>"
     )
-    txt = txt.replaceAll("\n\n+", "<br/>\n<br/>\n")
+    txt = txt.replaceAll("\n\n+|$", "<br/>\n<br/>\n")
     txt = linkRefBlockRegex.replaceAllIn(txt, "")
     txt = boldRegex.replaceAllIn(txt, """<b>$1</b>""")
     txt = italicRegex.replaceAllIn(txt, """<i>$1</i>""")
@@ -260,10 +268,12 @@ trait FlowLayout extends Layout with LayoutUtil {
 s"""<meta charset="utf-8" />
 <title>${Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="rss.xml"/>
-<style>a{color:inherit}blockquote{margin:0;paddig:0;font-style:italic;}.r{text-align:right}.f{float:right} ${Blog.style}</style>
-<div style="max-width:46em;font-family:monospace">
-<div class=r><a href="index.html">${Blog.title}</a> [<a href="rss.xml">RSS</a>]</div>
-"""+content+"\n</div>"
+<style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace} ${Blog.style}</style>
+$script
+<body onLoad="document.onkeypress=k">
+<div class=b>
+<div class=r><b><a href="index.html">${Blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>
+"""+content+"\n</div></body>"
   }
 
   def makeIndex(articles: Seq[Article]): String = {
@@ -271,19 +281,19 @@ s"""<meta charset="utf-8" />
     (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("<br/>") + "<br/>"
   }
   def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean): String = {
-    val bl = a.backlinks.toSet
-    val _sims = similarByTags(a, allTagMap).filter(s => !bl.contains(s.article)).take(5)
-    val sims = _sims.map(_.article)
+    val sims = similarByTags(a, allTagMap, without = a.backlinks).take(5)
 
     makeLink(a)+
     (if (prevNextNavigation) "<span class=f>"+fixed.makeNextPrevArrows(a, as)+"</span>" else "")+
-    "<br/><br/><br/>"+
+    "<br/><br/><br/>\n"+
     decorateText(a)+"<br/>"+
-    (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+
-    "<div class=r>"+
-    (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"<br/>" else "")+
-    (if (tags && (a.backlinks.nonEmpty || sims.nonEmpty)) makeRelLinks(Seq(sims, a.backlinks))+"<br/>" else "")+
-    "</div>"
+    (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+{
+      val rel =
+        (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"<br/>" else "")+
+        (if (tags && (a.backlinks.nonEmpty || sims.nonEmpty)) makeRelLinks(Seq(sims, a.backlinks))+"<br/>" else "")
+
+      if (rel.nonEmpty) "<div class=r>"+rel+"</div>" else ""
+    }
   }
 
   def makeTagPage(t: String, as: Seq[Article]) = fixed.makeTagPage(t, as)
@@ -326,8 +336,8 @@ trait FixedLayout extends Layout with LayoutUtil {
 s"""<meta charset="utf-8" />
 <title>${Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="rss.xml"/>
-<style>a{color:inherit} i,b,.y{color:#999} i span,b span,i a,.l a{color:black} .l{color:#bbb} blockquote{margin:0;paddig:0;font-style:italic;} ${Blog.style}</style>
-
+<style>a{color:inherit} i,b,.y{color:#999} i span,b span,i a,.l a{color:black} .l{color:#bbb} blockquote{margin:0;padding:0;font-style:italic;} ${Blog.style}</style>
+$script
 <pre>
 ${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xml">RSS</a>]
 """+content+"\n</pre>"
@@ -340,10 +350,7 @@ ${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xm
 
   def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean) = {
     val titleLength = makeDate(a).length + a.title.length
-
-    val bl = a.backlinks.toSet
-    val _sims = similarByTags(a, allTagMap).filter(s => !bl.contains(s.article)).take(5)
-    val sims = _sims.map(_.article)
+    val sims = similarByTags(a, allTagMap, without = a.backlinks).take(5)
 
     makeLink(a)+
     (if (prevNextNavigation) alignSpace("<<< >>>", titleLength)+makeNextPrevArrows(a, as) else "")+
@@ -385,8 +392,8 @@ ${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xm
 
   def makeNextPrevArrows(a: Article, as: Seq[Article]) = {
     val (prev, next) = nextPrev(a, as)
-    (if (prev == null) "&nbsp;&nbsp;&nbsp;" else s"""<a href="${relUrl(prev.slug)}">&lt;&lt;&lt;</a>""")+" "+
-    (if (next == null) "&nbsp;&nbsp;&nbsp;" else s"""<a href="${relUrl(next.slug)}">&gt;&gt;&gt;</a>""")
+    (if (prev == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${relUrl(prev.slug)}">&lt;&lt;&lt;</a>""")+" "+
+    (if (next == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${relUrl(next.slug)}">&gt;&gt;&gt;</a>""")
   }
 
   def makeTagLinks(ts: Seq[String]) =  {
