@@ -109,7 +109,7 @@ val tagsRegex    = """^#\[(.+)\]$""".r
 val boldRegex     = """(?xs)\*\*(.+?)\*\*""".r
 val italicRegex   = """(?xs)(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)""".r
 val linkRegex     = """(?x) " ([^"]+(?:\R[^"]+)?) " : \[ (\w+) \]""".r
-val imgBlockRegex = """(?xm) (?: ^\[\*\ +([^* ]+)\ +\*\]\ *\n)+ """.r
+val imgBlockRegex = """(?xm) (?: ^\[\*\ + [^* ]+ \ +\*\]\ *\n)+   (?: ^\[\*\ + [^* ]+ \ +\*\]\ *\n?) """.r
 val imgRegex      = """(?xm)      \[\*\ +([^* ]+)\ +\*\]\ * """.r
 val blockquoteRegex = """(?xm) ( (?: ^>[^\n]*\n)+ )""".r
 
