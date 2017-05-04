@@ -19,16 +19,16 @@ val layouts = Map(
 )
 
 object Blog {
-  val title: String   = cfg("title")
-  val baseUrl: String = cfg("baseUrl")
-  val fullArticlesOnIndex: Int = cfg("fullArticlesOnIndex").toInt
-  val pageWidth: Int =  cfg("pageWidth").toInt
-  val style: String = cfg.getOrElse("style", "")
-  val thumbWidth: Int = cfg.getOrElse("thumbnailWidth", "150").toInt
-  val thumbHeight: Int = cfg.getOrElse("thumbnailHeight", "100").toInt
-  val limitRss: Int = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
-  val fullTextInRss: Boolean = cfg.getOrElse("fullTextInRss", false.toString).toBoolean // ???
-  val layout: Layout = layouts(cfg.getOrElse("layout", "flow"))
+  val kind: String         = cfg.getOrElse("type", "blog")
+  val title: String        = cfg("title")
+  val baseUrl: String      = cfg("baseUrl")
+  val articlesOnIndex: Int = cfg("fullArticlesOnIndex").toInt
+  val pageWidth: Int       = cfg("pageWidth").toInt
+  val style: String        = cfg.getOrElse("style", "")
+  val thumbWidth: Int      = cfg.getOrElse("thumbnailWidth", "150").toInt
+  val thumbHeight: Int     = cfg.getOrElse("thumbnailHeight", "100").toInt
+  val limitRss: Int        = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
+  val layout: Layout       = layouts(cfg.getOrElse("layout", "flow"))
 }
 
 case class Article(
@@ -40,7 +40,8 @@ case class Article(
   images: Seq[Image],
   links: Seq[String],
   linkMap: Map[String, String],
-  backlinks: Seq[Article] = Seq()
+  backlinks: Seq[Article] = Seq(),
+  similar: Seq[Article] = Seq()
 ) {
   override def toString = {
     val f = new SimpleDateFormat("MM-dd-yyyy")
@@ -49,12 +50,7 @@ case class Article(
 }
 
 case class Tags(visible: Seq[String] = Seq(), hidden: Seq[String] = Seq())
-
-case class Image(
-  val url: String,
-  val thumb: String
-)
-
+case class Image(url: String, thumb: String)
 case class Sim(article: Article, commonTags: Int)
 
 
@@ -89,14 +85,11 @@ def localLink(url: String) = url.startsWith(Blog.baseUrl+"/")
 def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
 def extractSlug(url: String) = if (localLink(url)) dropLocalPrefix(url).dropRight(5) else sys.error("not local url")
 
-def thumbnailUrl(img: Image) = {
-  val (w, h) = (Blog.thumbWidth, Blog.thumbHeight)
-  s"t/${img.thumb}-${w}x${h}"
-}
+def thumbnailUrl(img: Image) =
+  s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"
 
 
 def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
-
   val underlinePos = lines.indexWhere(l => l.startsWith("==="), 2)
 
   if (underlinePos == -1) {
@@ -218,7 +211,7 @@ def similarByTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
 
 def similarByTags(a: Article, tagMap: Map[String, Seq[Article]], without: Seq[Article]): Seq[Article] = {
   val bl = a.backlinks.toSet
-  val _sims = similarByTags(a, allTagMap).filter(s => !bl.contains(s.article)).take(5)
+  val _sims = similarByTags(a, tagMap).filter(s => !bl.contains(s.article)).take(5)
   _sims.map(_.article)
 }
 
@@ -277,11 +270,11 @@ $script
   }
 
   def makeIndex(articles: Seq[Article]): String = {
-    val (fulls, links) = articles.splitAt(Blog.fullArticlesOnIndex)
+    val (fulls, links) = articles.splitAt(Blog.articlesOnIndex)
     (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("<br/>") + "<br/>"
   }
   def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean): String = {
-    val sims = similarByTags(a, allTagMap, without = a.backlinks).take(5)
+    val sims = a.similar.take(5)
 
     makeLink(a)+
     (if (prevNextNavigation) "<span class=f>"+fixed.makeNextPrevArrows(a, as)+"</span>" else "")+
@@ -344,13 +337,13 @@ ${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xm
   }
 
   def makeIndex(articles: Seq[Article]) = {
-    val (fulls, links) = articles.splitAt(Blog.fullArticlesOnIndex)
+    val (fulls, links) = articles.splitAt(Blog.articlesOnIndex)
     (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("\n")
   }
 
   def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean) = {
     val titleLength = makeDate(a).length + a.title.length
-    val sims = similarByTags(a, allTagMap, without = a.backlinks).take(5)
+    val sims = a.similar.take(5)
 
     makeLink(a)+
     (if (prevNextNavigation) alignSpace("<<< >>>", titleLength)+makeNextPrevArrows(a, as) else "")+
@@ -431,8 +424,6 @@ def generateRSS(articles: Seq[Article]): String = {
 
 
 
-
-
 def saveHtml(f: String, content: String): (String, String) =
   saveFile(f+".html", content)
 
@@ -444,75 +435,95 @@ def saveFile(f: String, content: String): (String, String) = {
 }
 
 
-var lines: Vector[String] = args.tail.flatMap { f =>
-  io.Source.fromFile(f).getLines ++ Seq("\n","\n")
-}.toVector
 
-var articlesList = List[Article]()
-val today = new Date
+def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
+  var lines: Vector[String] = args.tail.flatMap { f =>
+    io.Source.fromFile(f).getLines ++ Seq("\n","\n")
+  }.toVector
 
-while (lines.nonEmpty) {
-  val (a, ls) = getArticle(lines)
-  articlesList ::= a
-  lines = ls
-}
+  var articlesList = List[Article]()
+  val today = new Date
 
-var articles = articlesList.reverse.toVector
-
-val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
-val (visible, rest) = rest1.span { a => !a.title.startsWith("?") }
-if (rest.nonEmpty) sys.error("hidden and visible articles are mixed up")
-
-articles = articles.filter { a =>
-  val isInPast = a.date == null || a.date.before(today)
-  !a.title.startsWith("?") && isInPast
-}
-
-// slug duplicates
-articles.groupBy(_.slug) foreach { case (slug, as) =>
-  if (as.size > 1) {
-    sys.error("multiple articles with the same slug '"+slug+"'")
+  while (lines.nonEmpty) {
+    val (a, ls) = getArticle(lines)
+    articlesList ::= a
+    lines = ls
   }
-}
 
-// ordered by date
-val ordered = articles
-  .filter(_.date != null)
-  .map(_.date)
-  .sliding(2)
-  .forall { case Seq(a, b) => a.compareTo(b) >= 0 }
+  var articles = articlesList.reverse.toVector
 
-if (!ordered) sys.error("articles are not ordered by date")
+  val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
+  val (visible, rest) = rest1.span { a => !a.title.startsWith("?") }
+  if (rest.nonEmpty) sys.error("hidden and visible articles are mixed up")
 
-val tagMap: Map[String, Seq[Article]] =
-  articles
-    .flatMap { a => a.tags.visible.map { t => (t, a) } }
-    .groupBy(_._1)
-    .map { case (t, tas) => (t, tas.map { _._2 }) }
-
-val allTagMap: Map[String, Seq[Article]] =
-  articles
-    .flatMap { a => (a.tags.visible ++ a.tags.hidden).map { t => (t, a) } }
-    .groupBy(_._1)
-    .map { case (t, tas) => (t, tas.map { _._2 }) }
-
-
-val backlinks: Map[String, Seq[Article]] =
-  (for {
-    a <- articles
-    l <- a.links
-    if localLink(l)
-  } yield (extractSlug(l), a))
-    .groupBy(_._1)
-    .map { case (slug, as) => (slug, as.map { _._2 }) }
-
-articles = articles map { a =>
-  backlinks.get(a.slug) match {
-    case Some(as) => a.copy(backlinks = as)
-    case None => a
+  articles = articles.filter { a =>
+    val isInPast = a.date == null || a.date.before(today)
+    !a.title.startsWith("?") && isInPast
   }
+
+  // slug duplicates
+  articles.groupBy(_.slug) foreach { case (slug, as) =>
+    if (as.size > 1) {
+      sys.error("multiple articles with the same slug '"+slug+"'")
+    }
+  }
+
+  // ordered by date
+  val ordered = articles
+    .filter(_.date != null)
+    .map(_.date)
+    .sliding(2)
+    .forall { case Seq(a, b) => a.compareTo(b) >= 0 }
+
+  if (!ordered) sys.error("articles are not ordered by date")
+
+  val tagMap: Map[String, Seq[Article]] =
+    articles
+      .flatMap { a => a.tags.visible.map { t => (t, a) } }
+      .groupBy(_._1)
+      .map { case (t, tas) => (t, tas.map { _._2 }) }
+
+  val allTagMap: Map[String, Seq[Article]] =
+    articles
+      .flatMap { a => (a.tags.visible ++ a.tags.hidden).map { t => (t, a) } }
+      .groupBy(_._1)
+      .map { case (t, tas) => (t, tas.map { _._2 }) }
+
+
+  val backlinks: Map[String, Seq[Article]] =
+    (for {
+      a <- articles
+      l <- a.links
+      if localLink(l)
+    } yield (extractSlug(l), a))
+      .groupBy(_._1)
+      .map { case (slug, as) => (slug, as.map { _._2 }) }
+
+  val as = articles map { a =>
+    val bs = backlinks.getOrElse(a.slug, Seq())
+
+    a.copy(
+      backlinks = bs,
+      similar = similarByTags(a, allTagMap, without = bs)
+    )
+  }
+
+  (as, tagMap)
 }
 
+
+
+def prepareGallery(): (Seq[Article], Map[String, Seq[Article]]) = {
+  ???
+}
+
+
+
+val (articles, tagMap) = Blog.kind match {
+  case "blog" => prepareBlog()
+  case "gallery" => prepareGallery()
+  case _ => sys.error("wut")
+}
 
 
 
