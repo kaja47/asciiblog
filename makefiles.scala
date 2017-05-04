@@ -13,6 +13,11 @@ val cfg = io.Source.fromFile(args(0))
   .map { case Array(k, v) => (k, v)}
   .toMap
 
+val layouts = Map(
+  "fixed" -> new FixedLayout {},
+  "flow"  -> new FlowLayout {}
+)
+
 object Blog {
   val title: String   = cfg("title")
   val baseUrl: String = cfg("baseUrl")
@@ -23,6 +28,7 @@ object Blog {
   val thumbHeight: Int = cfg.getOrElse("thumbnailHeight", "100").toInt
   val limitRss: Int = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
   val fullTextInRss: Boolean = cfg.getOrElse("fullTextInRss", false.toString).toBoolean // ???
+  val layout: Layout = layouts(cfg.getOrElse("layout", "flow"))
 }
 
 case class Article(
@@ -200,6 +206,17 @@ def nextPrev(a: Article, as: Seq[Article]): (Article, Article) = {
   (if (a == as.head) null else as(pos-1), if (a == as.last) null else as(pos+1))
 }
 
+def similarByTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
+  (a.tags.visible ++ a.tags.hidden)
+    .flatMap(t => tagMap.getOrElse(t, Seq()))
+    .filter(_.slug != a.slug)
+    .groupBy(identity)
+    .map { case (a, ts) => Sim(a, ts.size) }
+    .toVector
+    .sortBy { s => (s.commonTags, s.article.date) }.reverse
+}
+
+
 
 trait Layout {
   def makePage(content: String): String
@@ -214,25 +231,81 @@ trait LayoutUtil {
     else new SimpleDateFormat("d. M.").format(a.date)+" "
 }
 
+trait FlowLayout extends Layout with LayoutUtil {
+  val fixed = new FixedLayout {
+    override def NL = "<br/>"
+    override def alignSpace(str: String, skip: Int = 0) = ""
+  }
+  import fixed.{ makeLink, makeTagLink, makeRelLink, makeNextPrevLinks, makeTagLinks, makeRelLinks }
+
+  def decorateText(a: Article): String = {
+    var txt = a.rawText
+    txt = blackout(txt)
+    txt = linkRegex.replaceAllIn(txt, m => {
+      val url = relativizeUrl(a.linkMap(m.group(2)))
+      s"""<a href="${url}">${m.group(1)}</a>"""
+    })
+    txt = fixed.imageBlock(txt, a.images)
+    txt = blockquoteRegex.replaceAllIn(txt, m =>
+      "<blockquote>"+m.group(1).replaceAll("(?mx) ^\\>\\ +", "")+"</blockquote><br/>"
+    )
+    txt = txt.replaceAll("\n\n+", "<br/>\n<br/>\n")
+    txt = linkRefBlockRegex.replaceAllIn(txt, "")
+    txt = boldRegex.replaceAllIn(txt, """<b>$1</b>""")
+    txt = italicRegex.replaceAllIn(txt, """<i>$1</i>""")
+    txt
+  }
+
+  def makePage(content: String): String = {
+s"""<meta charset="utf-8" />
+<title>${Blog.title}</title>
+<link rel="alternate" type="application/rss+xml" href="rss.xml"/>
+<style>a{color:inherit}blockquote{margin:0;paddig:0;font-style:italic;}.r{text-align:right}.f{float:right} ${Blog.style}</style>
+<div style="max-width:46em;font-family:monospace">
+<div class=r><a href="index.html">${Blog.title}</a> [<a href="rss.xml">RSS</a>]</div>
+"""+content+"\n</div>"
+  }
+
+  def makeIndex(articles: Seq[Article]): String = {
+    val (fulls, links) = articles.splitAt(Blog.fullArticlesOnIndex)
+    (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("<br/>") + "<br/>"
+  }
+  def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean): String = {
+    val bl = a.backlinks.toSet
+    val _sims = similarByTags(a, allTagMap).filter(s => !bl.contains(s.article)).take(5)
+    val sims = _sims.map(_.article)
+
+    makeLink(a)+
+    (if (prevNextNavigation) "<span class=f>"+fixed.makeNextPrevArrows(a, as)+"</span>" else "")+
+    "<br/><br/><br/>"+
+    decorateText(a)+"<br/>"+
+    (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+
+    "<div class=r>"+
+    (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"<br/>" else "")+
+    (if (tags && (a.backlinks.nonEmpty || sims.nonEmpty)) makeRelLinks(Seq(sims, a.backlinks))+"<br/>" else "")+
+    "</div>"
+  }
+
+  def makeTagPage(t: String, as: Seq[Article]) = fixed.makeTagPage(t, as)
+
+  def blackout(txt: String) =
+    blackoutRegex.replaceAllIn(txt, m => m.group(0).replaceAll("(?s).", "█").grouped(5).mkString("<wbr>"))
+}
 
 trait FixedLayout extends Layout with LayoutUtil {
   def NL = "\n"
 
   def decorateText(a: Article): String = {
     var txt = a.rawText
-
     txt = blackout(txt)
-
     txt = linkRegex.replaceAllIn(txt, m => {
       val url = relativizeUrl(a.linkMap(m.group(2)))
       s"""<span class=l>"<a href="${url}">${m.group(1)}</a>":[${m.group(2)}]</span>"""
     })
-
     txt = imageBlock(txt, a.images)
     txt = blockquoteRegex.replaceAllIn(txt, m =>
       "<blockquote>"+m.group(1).replaceAll(">", "&gt;")+"</blockquote>"
     )
-
     txt = linkRefBlockRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
     txt = boldRegex.replaceAllIn(txt, """<b>**<span>$1</span>**</b>""")
     txt = italicRegex.replaceAllIn(txt, """<i>*<span>$1</span>*</i>""")
@@ -334,21 +407,6 @@ ${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xm
 
 
 
-def similarByTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
-  (a.tags.visible ++ a.tags.hidden)
-    .flatMap(t => tagMap.getOrElse(t, Seq()))
-    .filter(_.slug != a.slug)
-    .groupBy(identity)
-    .map { case (a, ts) => Sim(a, ts.size) }
-    .toVector
-    .sortBy { s => (s.commonTags, s.article.date) }.reverse
-}
-
-
-
-
-
-
 def rssdate(date: Date) = if (date == null) "" else
   new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US).format(date)
 
@@ -365,9 +423,6 @@ def generateRSS(articles: Seq[Article]): String = {
 }
 
 
-
-val layout: Layout = new SaneLayout {}
-import layout._
 
 
 
@@ -455,8 +510,7 @@ articles = articles map { a =>
 
 
 
-
-
+import Blog.layout._
 
 val fileIndex = mutable.ArrayBuffer[(String, String)]()
 
