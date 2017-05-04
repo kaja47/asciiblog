@@ -23,7 +23,7 @@ object Blog {
   val title: String        = cfg("title")
   val baseUrl: String      = cfg("baseUrl")
   val articlesOnIndex: Int = cfg("fullArticlesOnIndex").toInt
-  val pageWidth: Int       = cfg("pageWidth").toInt
+  val pageWidth: Int       = cfg.getOrElse("pageWidth", "80").toInt
   val style: String        = cfg.getOrElse("style", "")
   val thumbWidth: Int      = cfg.getOrElse("thumbnailWidth", "150").toInt
   val thumbHeight: Int     = cfg.getOrElse("thumbnailHeight", "100").toInt
@@ -35,17 +35,17 @@ case class Article(
   title: String,
   slug: String,
   date: Date,
-  tags: Tags,
+  tags: Tags = Tags(),
   rawText: String,
-  images: Seq[Image],
-  links: Seq[String],
-  linkMap: Map[String, String],
+  images: Seq[Image] = Seq(),
+  links: Seq[String] = Seq(),
+  linkMap: Map[String, String] = Map(),
   backlinks: Seq[Article] = Seq(),
   similar: Seq[Article] = Seq()
 ) {
   override def toString = {
     val f = new SimpleDateFormat("MM-dd-yyyy")
-    s"Article(${f.format(date)} $title)"
+    "Article("+(if (date == null) "" else f.format(date)+" ")+title+")"
   }
 }
 
@@ -85,8 +85,7 @@ def localLink(url: String) = url.startsWith(Blog.baseUrl+"/")
 def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
 def extractSlug(url: String) = if (localLink(url)) dropLocalPrefix(url).dropRight(5) else sys.error("not local url")
 
-def thumbnailUrl(img: Image) =
-  s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"
+def thumbnailUrl(img: Image) = s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"
 
 
 def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
@@ -103,15 +102,15 @@ def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
 
 val titleRegex   = """^(.+?)(?:\[([^ ]+)\])?$""".r
 val linkRefBlockRegex = """(?xm) (?:  ^\[(.*?)\]:\ (.+)\n  )*  ^\[(.*?)\]:\ (.+) """.r
-val linkRefRegex = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
+val linkRefRegex      = """(?xm)      ^\[(.*?)\]:\ (.+)$""".r
 val dateRegex    = """^(\d+)-(\d+)-(\d+)$""".r
 val tagsRegex    = """^#\[(.+)\]$""".r
 
 val boldRegex     = """(?xs)\*\*(.+?)\*\*""".r
 val italicRegex   = """(?xs)(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)""".r
 val linkRegex     = """(?x) " ([^"]+(?:\R[^"]+)?) " : \[ (\w+) \]""".r
-val imgBlockRegex = """(?xm) (?: ^\[\*\ +(\S+)\ +\*\]\ *\n)+ """.r
-val imgRegex      = """(?xm) \[\*\ +(\S+)\ +\*\]\ * """.r
+val imgBlockRegex = """(?xm) (?: ^\[\*\ +([^* ]+)\ +\*\]\ *\n)+ """.r
+val imgRegex      = """(?xm)      \[\*\ +([^* ]+)\ +\*\]\ * """.r
 val blockquoteRegex = """(?xm) ( (?: ^>[^\n]*\n)+ )""".r
 
 val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
@@ -184,7 +183,7 @@ def generateSlug(title: String) = {
   title
     .toLowerCase
     .map(txl)
-    .map{ ch => if (!Character.isAlphabetic(ch)) "-" else ch }
+    .map{ ch => if (Character.isAlphabetic(ch) || Character.isDigit(ch)) ch else "-" }
     .mkString
     .replaceAll("--+", "-")
     .replaceAll("-+$", "")
@@ -250,8 +249,9 @@ trait FlowLayout extends Layout with LayoutUtil {
     txt = blockquoteRegex.replaceAllIn(txt, m =>
       "<blockquote>"+m.group(1).replaceAll("(?mx) ^\\>\\ +", "")+"</blockquote><br/>"
     )
-    txt = txt.replaceAll("\n\n+|$", "<br/>\n<br/>\n")
     txt = linkRefBlockRegex.replaceAllIn(txt, "")
+    txt = txt.replaceAll("\n*$", "")
+    txt = txt.replaceAll("\n\n+|$", "<br/>\n<br/>\n")
     txt = boldRegex.replaceAllIn(txt, """<b>$1</b>""")
     txt = italicRegex.replaceAllIn(txt, """<i>$1</i>""")
     txt
@@ -279,7 +279,7 @@ $script
     makeLink(a)+
     (if (prevNextNavigation) "<span class=f>"+fixed.makeNextPrevArrows(a, as)+"</span>" else "")+
     "<br/><br/><br/>\n"+
-    decorateText(a)+"<br/>"+
+    decorateText(a)+
     (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+{
       val rel =
         (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"<br/>" else "")+
@@ -317,12 +317,11 @@ trait FixedLayout extends Layout with LayoutUtil {
 
   def imageBlock(txt: String, images: Seq[Image]) =
     imgBlockRegex.replaceAllIn(txt, m => {
-      val links = imgRegex.findAllMatchIn(m.group(0)).map(_.group(1)).toVector
-      val block = links.map { l =>
+      val links = imgRegex.findAllMatchIn(m.group(0)).map(_.group(1)).toVector ;
+      links.map { l =>
         val thumbPath = thumbnailUrl(images.find(i => i.url == l).get)
         s"""<a href="$l"><img src="$thumbPath"/></a>"""
       }.grouped(3).map(_.mkString(" ")).mkString("\n")
-      block
     })
 
   def makePage(content: String) = {
@@ -513,18 +512,60 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
 
 
 
-def prepareGallery(): (Seq[Article], Map[String, Seq[Article]]) = {
-  ???
+def prepareGallery(): (Seq[Article], Seq[Article]) = {
+  var dir = args(1)
+  val albumDirs = new File(dir, "albums").listFiles.sortBy(_.getName).reverse
+
+  val dateTitle = """^(?:(\d+)-(\d+)-(\d+)\s*-?\s*)?(.*)$""".r
+
+  (for (albumDir <- albumDirs.toSeq) yield {
+    println(albumDir.getName)
+
+    val dateTitle(y, m, d, t) = albumDir.getName
+    val (date, title) =
+      if (y == null) (null, t)
+      else (new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime, t)
+
+    val urls = albumDir.list collect { case f if f.toLowerCase.endsWith(".jpg") =>
+      Blog.baseUrl+"/albums/"+albumDir.getName+"/"+f
+    }
+
+    val imgs = urls.map { url => new Image(url, hash(url)) }
+
+    def mkText(imgs: Seq[Image]) =
+      imgs.map { i => s"[* ${i.url} *]" }.mkString("\n")+"\n"
+
+    def mkSample(a: Article) =
+      s"""<a href="${relUrl(a.slug)}">"""+
+      a.images.take(3).map { i =>
+        s"""<img src="${thumbnailUrl(i)}" />"""
+      }.mkString(" ")+"</a>"
+
+    val a = new Article(
+      title = if (title.nonEmpty) title else albumDir.getName,
+      slug = generateSlug(albumDir.getName),
+      date = date,
+      rawText = mkText(imgs),
+      images = imgs
+    )
+
+    (a, a.copy(rawText = mkSample(a)))
+  }).unzip
 }
 
 
 
-val (articles, tagMap) = Blog.kind match {
-  case "blog" => prepareBlog()
-  case "gallery" => prepareGallery()
-  case _ => sys.error("wut")
-}
+val (articles, indexArticles, tagMap): (Seq[Article], Seq[Article], Map[String, Seq[Article]]) =
+  Blog.kind match {
+    case "blog" =>
+      val (as, tm) = prepareBlog()
+      (as, as, tm)
 
+    case "gallery" =>
+      val (as, is) = prepareGallery()
+      (as, is, Map())
+    case _ => sys.error("wut")
+  }
 
 
 
@@ -533,7 +574,7 @@ import Blog.layout._
 val fileIndex = mutable.ArrayBuffer[(String, String)]()
 
 // make index
-fileIndex += saveFile("index.html", makePage(makeIndex(articles)))
+fileIndex += saveFile("index.html", makePage(makeIndex(indexArticles)))
 
 // make articles
 articles foreach { a =>
@@ -557,9 +598,13 @@ for (image <- images) {
   val thumbFile = new File(thumbnailUrl(image))
   if (!thumbFile.exists) {
     println(s"resizing image ${image.url} -> $thumbFile")
-    val full = ImageIO.read(new URL(image.url))
-    val resized = resizeImage(full, w, h)
-    ImageIO.write(resized, "jpg", thumbFile)
+    try {
+      val full = ImageIO.read(new URL(image.url.replaceAll(" ", "%20"))) // TODO hackity hack
+      val resized = resizeImage(full, w, h)
+      ImageIO.write(resized, "jpg", thumbFile)
+    } catch { case e: javax.imageio.IIOException =>
+      println(e)
+    }
   }
 }
 
