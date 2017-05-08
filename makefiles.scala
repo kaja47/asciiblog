@@ -310,7 +310,7 @@ trait FlowLayout extends Layout with LayoutUtil {
 s"""<meta charset="utf-8" />
 <title>${Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="rss.xml"/>
-<style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace} ${Blog.style}</style>
+<style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace}.th{width:${Blog.thumbWidth}px;height:${Blog.thumbHeight}px} ${Blog.style}</style>
 $script
 <body onLoad="document.onkeypress=k">
 <div class=b>
@@ -370,7 +370,7 @@ trait FixedLayout extends Layout with LayoutUtil {
       val links = imgRegex.findAllMatchIn(m.group(0)).map(_.group(1)).toVector ;
       links.map { l =>
         val thumbPath = thumbnailUrl(images.find(i => i.url == l).get)
-        s"""<a href="$l"><img src="$thumbPath"/></a>"""
+        s"""<a href="$l"><img class=th src="$thumbPath"/></a>"""
       }.grouped(3).map(_.mkString(" ")).mkString("\n")
     })
 
@@ -588,7 +588,7 @@ def prepareGallery(): (Seq[Article], Seq[Article]) = {
     def mkSample(a: Article) =
       s"""<a href="${relUrl(a.slug)}">"""+
       a.images.take(3).map { i =>
-        s"""<img src="${thumbnailUrl(i)}" />"""
+        s"""<img class=th src="${thumbnailUrl(i)}" />"""
       }.mkString(" ")+"</a>"
 
     val a = new Article(
