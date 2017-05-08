@@ -14,11 +14,6 @@ val cfg = io.Source.fromFile(args(0))
   .map { case Array(k, v) => (k, v)}
   .toMap
 
-val layouts = Map(
-  "fixed" -> new FixedLayout {},
-  "flow"  -> new FlowLayout {}
-)
-
 object Blog {
   val kind: String         = cfg.getOrElse("type", "blog")
   val title: String        = cfg("title")
@@ -29,7 +24,6 @@ object Blog {
   val thumbWidth: Int      = cfg.getOrElse("thumbnailWidth", "150").toInt
   val thumbHeight: Int     = cfg.getOrElse("thumbnailHeight", "100").toInt
   val limitRss: Int        = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
-  val layout: Layout       = layouts(cfg.getOrElse("layout", "flow"))
 }
 
 case class Article(
@@ -258,8 +252,7 @@ def similarByTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
 
 def similarByTags(a: Article, tagMap: Map[String, Seq[Article]], without: Seq[Article]): Seq[Article] = {
   val bl = a.backlinks.toSet
-  val _sims = similarByTags(a, tagMap).filter(s => !bl.contains(s.article)).take(5)
-  _sims.map(_.article)
+  similarByTags(a, tagMap).filter(s => !bl.contains(s.article)).take(5).map(_.article)
 }
 
 
@@ -271,21 +264,7 @@ trait Layout {
   def makeTagPage(t: String, as: Seq[Article]): String
 }
 
-trait LayoutUtil {
-  def makeDate(a: Article) =
-    if (a.date == null) ""
-    else new SimpleDateFormat("d. M.").format(a.date)+" "
-
-  def script = """<script>function k(e){ var p={37:"prev",39:"next"}; window.location = document.getElementById(p[e.keyCode]).href;}</script>"""
-}
-
-trait FlowLayout extends Layout with LayoutUtil {
-  val fixed = new FixedLayout {
-    override def NL = "<br/>"
-    override def alignSpace(str: String, skip: Int = 0) = ""
-  }
-  import fixed.{ makeLink, makeTagLink, makeRelLink, makeNextPrevLinks, makeTagLinks, makeRelLinks }
-
+trait FlowLayout extends Layout {
   def decorateText(a: Article): String = {
     var txt = a.rawText
     txt = blackout(txt)
@@ -294,7 +273,7 @@ trait FlowLayout extends Layout with LayoutUtil {
       val url = relativizeUrl(a.linkMap.getOrElse(ref, throw new Exception(s"link reference [$ref] is not defined in article '${a.title}'")))
       s"""<a href="${url}">${m.group(1)}</a>"""
     })
-    txt = fixed.imageBlock(txt, a.images)
+    txt = imageBlock(txt, a.images)
     txt = blockquoteRegex.replaceAllIn(txt, m =>
       "<blockquote>"+m.group(1).replaceAll("(?mx) ^\\>\\ +", "")+"</blockquote><br/>"
     )
@@ -306,12 +285,21 @@ trait FlowLayout extends Layout with LayoutUtil {
     txt
   }
 
+  def imageBlock(txt: String, images: Seq[Image]): String =
+    imgBlockRegex.replaceAllIn(txt, m => {
+      imgRegex.findAllMatchIn(m.group(0)).map { m =>
+        val links = m.group(1)
+        val thumbPath = thumbnailUrl(images.find(i => i.url == links).get)
+        s"""<a href="$links"><img class=th src="$thumbPath"/></a>"""
+      }.mkString(" ")+"<br/>"
+    })
+
   def makePage(content: String): String = {
 s"""<meta charset="utf-8" />
 <title>${Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="rss.xml"/>
 <style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace}.th{width:${Blog.thumbWidth}px;height:${Blog.thumbHeight}px} ${Blog.style}</style>
-$script
+<script>function k(e){ var p={37:"prev",39:"next"}; window.location = document.getElementById(p[e.keyCode]).href;}</script>
 <body onLoad="document.onkeypress=k">
 <div class=b>
 <div class=r><b><a href="index.html">${Blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>
@@ -326,7 +314,7 @@ $script
     val sims = a.similar.take(5)
 
     makeLink(a)+
-    (if (prevNextNavigation) "<span class=f>"+fixed.makeNextPrevArrows(a, as)+"</span>" else "")+
+    (if (prevNextNavigation) "<span class=f>"+makeNextPrevArrows(a, as)+"</span>" else "")+
     "<br/><br/><br/>\n"+
     decorateText(a)+
     (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+{
@@ -338,84 +326,13 @@ $script
     }
   }
 
-  def makeTagPage(t: String, as: Seq[Article]) = fixed.makeTagPage(t, as)
+  def makeTagPage(t: String, as: Seq[Article]) = {
+    makeTagLink(t)+"<br/><br/>"+
+    as.map(makeLink).mkString("<br/>")
+  }
 
   def blackout(txt: String) =
     blackoutRegex.replaceAllIn(txt, m => m.group(0).replaceAll("(?s).", "█").grouped(5).mkString("<wbr>"))
-}
-
-trait FixedLayout extends Layout with LayoutUtil {
-  def NL = "\n"
-
-  def decorateText(a: Article): String = {
-    var txt = a.rawText
-    txt = blackout(txt)
-    txt = linkRegex.replaceAllIn(txt, m => {
-      val ref = m.group(2)
-      val url = relativizeUrl(a.linkMap.getOrElse(ref, throw new Exception(s"link reference [$ref] is not defined in article '${a.title}'")))
-      s"""<span class=l>"<a href="${url}">${m.group(1)}</a>":[${m.group(2)}]</span>"""
-    })
-    txt = imageBlock(txt, a.images)
-    txt = blockquoteRegex.replaceAllIn(txt, m =>
-      "<blockquote>"+m.group(1).replaceAll(">", "&gt;")+"</blockquote>"
-    )
-    txt = linkRefBlockRegex.replaceAllIn(txt, m => "<span class=y>"+m.group(0)+"</span>")
-    txt = boldRegex.replaceAllIn(txt, """<b>**<span>$1</span>**</b>""")
-    txt = italicRegex.replaceAllIn(txt, """<i>*<span>$1</span>*</i>""")
-    txt
-  }
-
-  def imageBlock(txt: String, images: Seq[Image]) =
-    imgBlockRegex.replaceAllIn(txt, m => {
-      val links = imgRegex.findAllMatchIn(m.group(0)).map(_.group(1)).toVector ;
-      links.map { l =>
-        val thumbPath = thumbnailUrl(images.find(i => i.url == l).get)
-        s"""<a href="$l"><img class=th src="$thumbPath"/></a>"""
-      }.grouped(3).map(_.mkString(" ")).mkString("\n")
-    })
-
-  def makePage(content: String) = {
-s"""<meta charset="utf-8" />
-<title>${Blog.title}</title>
-<link rel="alternate" type="application/rss+xml" href="rss.xml"/>
-<style>a{color:inherit} i,b,.y{color:#999} i span,b span,i a,.l a{color:black} .l{color:#bbb} blockquote{margin:0;padding:0;font-style:italic;} ${Blog.style}</style>
-$script
-<pre>
-${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xml">RSS</a>]
-"""+content+"\n</pre>"
-  }
-
-  def makeIndex(articles: Seq[Article]) = {
-    val (fulls, links) = articles.splitAt(Blog.articlesOnIndex)
-    (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("\n")
-  }
-
-  def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean) = {
-    val titleLength = makeDate(a).length + a.title.length
-    val sims = a.similar.take(5)
-
-    makeLink(a)+
-    (if (prevNextNavigation) alignSpace("<<< >>>", titleLength)+makeNextPrevArrows(a, as) else "")+
-    "\n"+
-    //"="*a.title.length+"\n"+
-    "\n\n"+
-    decorateText(a)+"\n\n\n"+
-    (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+
-    (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"\n" else "")+
-    (if (tags && (a.backlinks.nonEmpty || sims.nonEmpty)) makeRelLinks(Seq(sims, a.backlinks))+"\n" else "")
-  }
-
-  def makeTagPage(t: String, as: Seq[Article]) = {
-    makeTagLink(t)+NL+NL+
-    as.map(makeLink).mkString(NL)
-  }
-
-
-  def blackout(txt: String) =
-    blackoutRegex.replaceAllIn(txt, m => m.group(0).replaceAll("[^\n]", "█"))
-
-  def alignSpace(str: String, skip: Int = 0) =
-    " "*(Blog.pageWidth-str.length-skip)
 
   def makeLink(a: Article) =
     makeDate(a)+s"""<i><a href="${relUrl(a.slug)}">${a.title}</a></i>"""
@@ -428,8 +345,8 @@ ${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xm
 
   def makeNextPrevLinks(a: Article, as: Seq[Article]) = {
     val (prev, next) = nextPrev(a, as)
-    (if (prev == null) "" else "&lt;&lt;&lt; "+makeLink(prev)+NL) +
-    (if (next == null) "" else "&gt;&gt;&gt; "+makeLink(next)+NL)
+    (if (prev == null) "" else "&lt;&lt;&lt; "+makeLink(prev)+"<br/>") +
+    (if (next == null) "" else "&gt;&gt;&gt; "+makeLink(next)+"<br/>")
   }
 
   def makeNextPrevArrows(a: Article, as: Seq[Article]) = {
@@ -438,19 +355,17 @@ ${alignSpace(Blog.title)}<a href="index.html">${Blog.title}</a> [<a href="rss.xm
     (if (next == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${relUrl(next.slug)}">&gt;&gt;&gt;</a>""")
   }
 
-  def makeTagLinks(ts: Seq[String]) =  {
-    val len = ts.map(t => t.length + 2).sum - 1
-    alignSpace("", len)+ts.map(makeTagLink).mkString(" ")
-  }
+  def makeTagLinks(ts: Seq[String]) =
+    ts.map(makeTagLink).mkString(" ")
 
-  def makeRelLinks(ass: Seq[Seq[Article]]) =  {
-    val len = ass.flatten.map(t => 3).sum - 1
-    val rels = ass.map { as =>
+  def makeRelLinks(ass: Seq[Seq[Article]]) =
+    ass.map { as =>
       as.zipWithIndex.map { case (a, i) => makeRelLink(a, i+1) }.mkString(" ")
     }.mkString(" ")
 
-    alignSpace("", len)+rels
-  }
+  def makeDate(a: Article) =
+    if (a.date == null) ""
+    else new SimpleDateFormat("d. M.").format(a.date)+" "
 }
 
 
@@ -619,7 +534,8 @@ val (articles, indexArticles, tagMap): (Seq[Article], Seq[Article], Map[String, 
 
 
 
-import Blog.layout._
+val layout = new FlowLayout {}
+import layout._
 
 val fileIndex = mutable.ArrayBuffer[(String, String)]()
 
