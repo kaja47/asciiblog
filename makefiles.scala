@@ -199,13 +199,15 @@ def nextPrev(a: Article, as: Seq[Article]): (Article, Article) = {
 }
 
 def similarByTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
+  def dateDiff(a: Article, b: Article): Long = math.abs(a.date.getTime - b.date.getTime)
+
   (a.tags.visible ++ a.tags.hidden)
     .flatMap(t => tagMap.getOrElse(t, Seq()))
     .filter(_.slug != a.slug)
     .groupBy(identity)
     .map { case (a, ts) => Sim(a, ts.size) }
     .toVector
-    .sortBy { s => (s.commonTags, s.article.date) }.reverse
+    .sortBy { s => (~s.commonTags, dateDiff(a, s.article)) } // most common tags, published closest together
 }
 
 def similarByTags(a: Article, tagMap: Map[String, Seq[Article]], without: Seq[Article]): Seq[Article] = {
