@@ -244,7 +244,8 @@ trait FlowLayout extends Layout with LayoutUtil {
     var txt = a.rawText
     txt = blackout(txt)
     txt = linkRegex.replaceAllIn(txt, m => {
-      val url = relativizeUrl(a.linkMap(m.group(2)))
+      val ref = m.group(2)
+      val url = relativizeUrl(a.linkMap.getOrElse(ref, throw new Exception(s"link reference [$ref] is not defined in article '${a.title}'")))
       s"""<a href="${url}">${m.group(1)}</a>"""
     })
     txt = fixed.imageBlock(txt, a.images)
@@ -304,7 +305,8 @@ trait FixedLayout extends Layout with LayoutUtil {
     var txt = a.rawText
     txt = blackout(txt)
     txt = linkRegex.replaceAllIn(txt, m => {
-      val url = relativizeUrl(a.linkMap(m.group(2)))
+      val ref = m.group(2)
+      val url = relativizeUrl(a.linkMap.getOrElse(ref, throw new Exception(s"link reference [$ref] is not defined in article '${a.title}'")))
       s"""<span class=l>"<a href="${url}">${m.group(1)}</a>":[${m.group(2)}]</span>"""
     })
     txt = imageBlock(txt, a.images)
