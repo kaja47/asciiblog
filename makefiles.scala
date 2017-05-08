@@ -3,6 +3,7 @@ import java.text.SimpleDateFormat
 import java.io.File
 import java.net.URL
 import java.awt.image.{ BufferedImage, ConvolveOp, Kernel }
+import java.awt.{ AlphaComposite, RenderingHints => RH }
 import javax.imageio.ImageIO
 import scala.collection.mutable
 
@@ -54,27 +55,72 @@ case class Image(url: String, thumb: String)
 case class Sim(article: Article, commonTags: Int)
 
 
-def resizeImage(src: BufferedImage, width: Int, height: Int): BufferedImage = {
-  val blur = new ConvolveOp(
-    new Kernel(5, 5, Array.fill[Float](25)(1f/25)),
-    ConvolveOp.EDGE_NO_OP, null
-  )
 
+def resizeImage(src: BufferedImage, width: Int, height: Int): BufferedImage = {
   val zoom = math.min(1.0 * src.getWidth / width, 1.0 * src.getHeight / height)
   val wz = (width * zoom).toInt
   val hz = (height * zoom).toInt
   val x = (src.getWidth - wz) / 2
   val y = (src.getHeight - hz) / 2
-  val crop = blur.filter(src.getSubimage(x, y, wz, hz), null)
 
-  val tpe = if (crop.getType == BufferedImage.TYPE_CUSTOM) BufferedImage.TYPE_INT_ARGB else crop.getType
-  val thumb = new BufferedImage(width, height, tpe)
-  val g = thumb.createGraphics()
-  g.drawImage(crop, 0, 0, width, height, null)
+  progressiveResize(src.getSubimage(x, y, wz, hz), width, height)
+}
+
+/** adapted from https://github.com/coobird/thumbnailator/blob/master/src/main/java/net/coobird/thumbnailator/resizers/ProgressiveBilinearResizer.java */
+def progressiveResize(src: BufferedImage, width: Int, height: Int): BufferedImage = {
+  val dest = new BufferedImage(width, height, src.getType)
+
+  var (currentWidth, currentHeight) = (src.getWidth, src.getHeight)
+
+  if ((width * 2 >= currentWidth) && (height * 2 >= currentHeight)) {
+    val g = dest.createGraphics()
+    g.drawImage(src, 0, 0, width, height, null)
+    g.dispose()
+    return dest
+  }
+
+  val tmp = new BufferedImage(currentWidth, currentHeight, dest.getType)
+
+  val g = tmp.createGraphics()
+  g.setRenderingHint(RH.KEY_INTERPOLATION, RH.VALUE_INTERPOLATION_BILINEAR)
+  g.setComposite(AlphaComposite.Src)
+
+  var (startWidth, startHeight) = (width, height)
+
+  while (startWidth < currentWidth && startHeight < currentHeight) {
+    startWidth *= 2
+    startHeight *= 2
+  }
+
+  currentWidth = startWidth / 2
+  currentHeight = startHeight / 2
+
+  g.drawImage(src, 0, 0, currentWidth, currentHeight, null)
+
+  while ((currentWidth >= width * 2) && (currentHeight >= height * 2)) {
+    currentWidth /= 2
+    currentHeight /= 2
+
+    if (currentWidth < width) { currentWidth = width }
+    if (currentHeight < height) { currentHeight = height }
+
+    g.drawImage(
+        tmp,
+        0, 0, currentWidth, currentHeight,
+        0, 0, currentWidth * 2, currentHeight * 2,
+        null
+    )
+  }
+
   g.dispose()
 
-  thumb
+  val destg = dest.createGraphics()
+  destg.drawImage(tmp, 0, 0, width, height, 0, 0, currentWidth, currentHeight, null)
+  destg.dispose()
+
+  dest
 }
+
 
 
 //def url(slug: String) = Blog.baseUrl + "/" + slug + ".html"
