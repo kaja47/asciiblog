@@ -159,7 +159,6 @@ val linkRegex     = """(?x) " ([^"]+(?:\R[^"]+)?) " : \[ (\w+) \]""".r
 val imgBlockRegex = """(?xm) (?: ^\[\*\ + [^* ]+ \ +\*\]\ *\n)+   (?: ^\[\*\ + [^* ]+ \ +\*\]\ *\n?) """.r
 val imgRegex      = """(?xm)      \[\*\ +([^* ]+)\ +\*\]\ * """.r
 val blockquoteRegex = """(?xm) ( (?: ^>[^\n]*\n)+ )""".r
-
 val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
 
 def parseDate(l: String): Option[Date] = l match {
@@ -191,7 +190,7 @@ def hash(txt: String) = {
 }
 
 def parseArticle(lines: Vector[String]): Article = {
-  val ls = lines.map(_.trim)
+  val ls = lines.map(_.replaceAll("\\s*$", ""))
 
   val titleLine = ls(0)
   val titleRegex(title, slug) = titleLine
@@ -284,6 +283,7 @@ trait FlowLayout extends Layout {
     txt = blockquoteRegex.replaceAllIn(txt, m =>
       "<blockquote>"+m.group(1).replaceAll("(?mx) ^\\>\\ +", "")+"</blockquote><br/>"
     )
+    txt = txt.replaceAll("""(?xm) ^(-\ |\ \ )(.*?)(?=\n(?:-\ |\n\n)) """, "$1$2<br/>") // lists
     txt = linkRefBlockRegex.replaceAllIn(txt, "")
     txt = txt.replaceAll("\n*$", "")
     txt = txt.replaceAll("\n\n+|$", "<br/>\n<br/>\n")
