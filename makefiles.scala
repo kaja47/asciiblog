@@ -309,7 +309,6 @@ s"""<!DOCTYPE html>
 <title>${Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="rss.xml"/>
 <style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace}.th{width:${Blog.thumbWidth}px;height:${Blog.thumbHeight}px} ${Blog.style}</style>
-<script>/*document.addEventListener("keydown", function k(e){ var p={37:"prev",39:"next"}; window.location = document.getElementById(p[e.keyCode]).href;})*/</script>
 ${if (gallery) { "<script>"+galleryScript+"</script>" } else ""}
 </head>
 <body>
