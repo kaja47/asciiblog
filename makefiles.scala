@@ -298,7 +298,7 @@ trait FlowLayout extends Layout {
       imgRegex.findAllMatchIn(m.group(0)).map { m =>
         val links = m.group(1)
         val thumbPath = thumbnailUrl(images.find(i => i.url == links).get)
-        s"""<a href="$links"><img class=th src="$thumbPath"/></a>"""
+        s"""<a href="$links"><img class=thz src="$thumbPath"/></a>"""
       }.mkString(" ")+"<br/>"
     })
 
@@ -309,7 +309,7 @@ s"""<!DOCTYPE html>
 <meta charset="utf-8" />
 <title>${Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="rss.xml"/>
-<style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace}.th{width:${Blog.thumbWidth}px;height:${Blog.thumbHeight}px} ${Blog.style}</style>
+<style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace}.th,.thz{width:${Blog.thumbWidth}px;height:${Blog.thumbHeight}px} ${Blog.style}</style>
 ${if (gallery) { "<script>"+galleryScript+"</script>" } else ""}
 </head>
 <body>

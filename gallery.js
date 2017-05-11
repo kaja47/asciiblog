@@ -24,7 +24,7 @@ function show(i) {
 }
 
 window.addEventListener('load', function (e) {
-	imgs = document.querySelectorAll('img.th');
+	imgs = document.querySelectorAll('img.thz');
 	for (let i = 0; i < imgs.length; i++) {
 		imgs[i].addEventListener('click', function (e) {
 			show(i);
