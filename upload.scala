@@ -28,7 +28,7 @@ val targetFileIndex = readFileIndex(new File(target, ".files"))
 
 for {
   s <- source.listFiles.sortBy(_.getName)
-  if s.getName.matches("""(?x) ( .*\.html | .*\.xml | robots.txt | \.files )""")
+  if s.getName.matches("""(?x) ( .*\.html | .*\.xml | .*\.js | robots.txt | \.files )""")
 } {
   val fn = s.getName
   val t = new File(target, fn)

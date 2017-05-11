@@ -14,6 +14,13 @@ val cfg = io.Source.fromFile(args(0))
   .map { case Array(k, v) => (k, v)}
   .toMap
 
+  val galleryScript = {
+    val thisFile = System.getProperty("sun.java.command").split(" ").find(x => x.endsWith("makefiles.scala")).get
+    val scriptFile = new File(thisFile).getParent+"/gallery.js"
+    io.Source.fromFile(scriptFile).mkString
+      .replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "") // rather crude and incorrect minifier
+  }
+
 object Blog {
   val kind: String         = cfg.getOrElse("type", "blog")
   val title: String        = cfg("title")
@@ -258,7 +265,7 @@ def similarByTags(a: Article, tagMap: Map[String, Seq[Article]], without: Seq[Ar
 
 
 trait Layout {
-  def makePage(content: String): String
+  def makePage(content: String, gallery: Boolean): String
   def makeIndex(articles: Seq[Article]): String
   def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean): String
   def makeTagPage(t: String, as: Seq[Article]): String
@@ -294,16 +301,24 @@ trait FlowLayout extends Layout {
       }.mkString(" ")+"<br/>"
     })
 
-  def makePage(content: String): String = {
-s"""<meta charset="utf-8" />
+  def makePage(content: String, gallery: Boolean): String = {
+s"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
 <title>${Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="rss.xml"/>
 <style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace}.th{width:${Blog.thumbWidth}px;height:${Blog.thumbHeight}px} ${Blog.style}</style>
-<script>function k(e){ var p={37:"prev",39:"next"}; window.location = document.getElementById(p[e.keyCode]).href;}</script>
-<body onLoad="document.onkeypress=k">
+<script>/*document.addEventListener("keydown", function k(e){ var p={37:"prev",39:"next"}; window.location = document.getElementById(p[e.keyCode]).href;})*/</script>
+${if (gallery) { "<script>"+galleryScript+"</script>" } else ""}
+</head>
+<body>
 <div class=b>
 <div class=r><b><a href="index.html">${Blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>
-"""+content+"\n</div></body>"
+"""+content+"""
+</div>
+</body>
+</html>"""
   }
 
   def makeIndex(articles: Seq[Article]): String = {
@@ -540,16 +555,17 @@ import layout._
 val fileIndex = mutable.ArrayBuffer[(String, String)]()
 
 // make index
-fileIndex += saveFile("index.html", makePage(makeIndex(indexArticles)))
+val isIndexGallery = articles.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
+fileIndex += saveFile("index.html", makePage(makeIndex(indexArticles), isIndexGallery))
 
 // make articles
 articles foreach { a =>
-  fileIndex += saveHtml(a.slug, makePage(makeFullArticle(a, articles, true, true)))
+  fileIndex += saveHtml(a.slug, makePage(makeFullArticle(a, articles, true, true), a.images.nonEmpty))
 }
 
 // make tag pages
 tagMap foreach { case (t, as) =>
-  fileIndex += saveHtml(tagSlug(t), makePage(makeTagPage(t, as)))
+  fileIndex += saveHtml(tagSlug(t), makePage(makeTagPage(t, as), false))
 }
 
 // make RSS
