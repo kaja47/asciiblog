@@ -286,6 +286,7 @@ trait FlowLayout extends Layout {
     txt = txt.replaceAll("""(?xm) ^(-\ |\ \ )(.*?)(?=\n(?:-\ |\n\n)) """, "$1$2<br/>") // lists
     txt = linkRefBlockRegex.replaceAllIn(txt, "")
     txt = txt.replaceAll("\n*$", "")
+    txt = txt.replaceAll("""(?xs) \<!--.*?--\>""", "")
     txt = txt.replaceAll("\n\n+|$", "<br/>\n<br/>\n")
     txt = boldRegex.replaceAllIn(txt, """<b>$1</b>""")
     txt = italicRegex.replaceAllIn(txt, """<i>$1</i>""")
