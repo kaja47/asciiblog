@@ -264,7 +264,7 @@ def similarByTags(a: Article, tagMap: Map[String, Seq[Article]], without: Seq[Ar
 
 
 trait Layout {
-  def makePage(content: String, gallery: Boolean): String
+  def makePage(content: String, title: String, gallery: Boolean): String
   def makeIndex(articles: Seq[Article]): String
   def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean): String
   def makeTagPage(t: String, as: Seq[Article]): String
@@ -302,12 +302,12 @@ trait FlowLayout extends Layout {
       }.mkString(" ")+"<br/>"
     })
 
-  def makePage(content: String, gallery: Boolean): String = {
+  def makePage(content: String, title: String, gallery: Boolean): String = {
 s"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
-<title>${Blog.title}</title>
+<title>${(if (title != null) title+" | " else "")+Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="rss.xml"/>
 <style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace}.th,.thz{width:${Blog.thumbWidth}px;height:${Blog.thumbHeight}px} ${Blog.style}</style>
 ${if (gallery) { "<script>"+galleryScript+"</script>" } else ""}
@@ -556,16 +556,16 @@ val fileIndex = mutable.ArrayBuffer[(String, String)]()
 
 // make index
 val isIndexGallery = articles.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
-fileIndex += saveFile("index.html", makePage(makeIndex(indexArticles), isIndexGallery))
+fileIndex += saveFile("index.html", makePage(makeIndex(indexArticles), null, isIndexGallery))
 
 // make articles
 articles foreach { a =>
-  fileIndex += saveHtml(a.slug, makePage(makeFullArticle(a, articles, true, true), a.images.nonEmpty))
+  fileIndex += saveHtml(a.slug, makePage(makeFullArticle(a, articles, true, true), a.title, a.images.nonEmpty))
 }
 
 // make tag pages
 tagMap foreach { case (t, as) =>
-  fileIndex += saveHtml(tagSlug(t), makePage(makeTagPage(t, as), false))
+  fileIndex += saveHtml(tagSlug(t), makePage(makeTagPage(t, as), null, false))
 }
 
 // make RSS
