@@ -37,7 +37,7 @@ for {
     println(s"copying $s -> $t")
     Files.copy(s.toPath, t.toPath, REPLACE_EXISTING)
   } else {
-    println(s" skipping $s -> $t")
+    //println(s" skipping $s -> $t")
   }
 }
 
@@ -51,7 +51,7 @@ for (s <- thumbSource.listFiles) {
     println(s"copying $s -> $t")
     Files.copy(s.toPath, t.toPath, REPLACE_EXISTING)
   } else {
-    println(s" skipping $s -> $t")
+    //println(s" skipping $s -> $t")
   }
 
 }
