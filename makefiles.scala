@@ -31,6 +31,9 @@ object Blog {
   val thumbWidth: Int      = cfg.getOrElse("thumbnailWidth", "150").toInt
   val thumbHeight: Int     = cfg.getOrElse("thumbnailHeight", "100").toInt
   val limitRss: Int        = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
+
+  val articlesMustBeSorted: Boolean = true
+  val articlesMustNotBeMixed: Boolean = true
 }
 
 case class Article(
@@ -40,11 +43,13 @@ case class Article(
   tags: Tags = Tags(),
   rawText: String,
   images: Seq[Image] = Seq(),
-  links: Seq[String] = Seq(),
   linkMap: Map[String, String] = Map(),
   backlinks: Seq[Article] = Seq(),
-  similar: Seq[Article] = Seq()
+  similar: Seq[Article] = Seq(),
+  prev: Article = null,
+  next: Article = null
 ) {
+  def links: Seq[String] = linkMap.values.toVector
   override def toString = {
     val f = new SimpleDateFormat("MM-dd-yyyy")
     "Article("+(if (date == null) "" else f.format(date)+" ")+title+")"
@@ -217,7 +222,6 @@ def parseArticle(lines: Vector[String]): Article = {
     rawText = body.mkString("\n"),
     images  = images,
     linkMap = linkMap,
-    links   = linkMap.values.toVector
   )
 }
 
@@ -264,19 +268,22 @@ def similarByTags(a: Article, tagMap: Map[String, Seq[Article]], without: Seq[Ar
 
 
 trait Layout {
-  def makePage(content: String, title: String, gallery: Boolean): String
+  def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String
   def makeIndex(articles: Seq[Article]): String
   def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean): String
   def makeTagPage(t: String, as: Seq[Article]): String
 }
 
-trait FlowLayout extends Layout {
+object FlowLayout extends Layout {
+  def undefRefError(ref: String, a: Article) =
+    throw new Exception(s"link reference [$ref] is not defined in article '${a.title}'")
+
   def decorateText(a: Article): String = {
     var txt = a.rawText
     txt = blackout(txt)
     txt = linkRegex.replaceAllIn(txt, m => {
       val ref = m.group(2)
-      val url = relativizeUrl(a.linkMap.getOrElse(ref, throw new Exception(s"link reference [$ref] is not defined in article '${a.title}'")))
+      val url = relativizeUrl(a.linkMap.getOrElse(ref, undefRefError(ref, a)))
       s"""<a href="${url}">${m.group(1)}</a>"""
     })
     txt = imageBlock(txt, a.images)
@@ -302,13 +309,14 @@ trait FlowLayout extends Layout {
       }.mkString(" ")+"<br/>"
     })
 
-  def makePage(content: String, title: String, gallery: Boolean): String = {
+  def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String = {
 s"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
 <title>${(if (title != null) title+" | " else "")+Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="rss.xml"/>
+${if (rss != null) s"""<link rel="alternate" type="application/rss+xml" href="$rss"/>""" else ""}
 <style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace}.th,.thz{width:${Blog.thumbWidth}px;height:${Blog.thumbHeight}px} ${Blog.style}</style>
 ${if (gallery) { "<script>"+galleryScript+"</script>" } else ""}
 </head>
@@ -323,7 +331,7 @@ ${if (gallery) { "<script>"+galleryScript+"</script>" } else ""}
 
   def makeIndex(articles: Seq[Article]): String = {
     val (fulls, links) = articles.splitAt(Blog.articlesOnIndex)
-    (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("<br/>") + "<br/>"
+    (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("<br/><br/>") + "<br/>"
   }
   def makeFullArticle(a: Article, as: Seq[Article], prevNextNavigation: Boolean, tags: Boolean): String = {
     val sims = a.similar.take(5)
@@ -358,17 +366,13 @@ ${if (gallery) { "<script>"+galleryScript+"</script>" } else ""}
   def makeRelLink(a: Article, ord: Int) =
     s"""<i><a href="${relUrl(a.slug)}">#${ord}</a></i>"""
 
-  def makeNextPrevLinks(a: Article, as: Seq[Article]) = {
-    val (prev, next) = nextPrev(a, as)
-    (if (prev == null) "" else "&lt;&lt;&lt; "+makeLink(prev)+"<br/>") +
-    (if (next == null) "" else "&gt;&gt;&gt; "+makeLink(next)+"<br/>")
-  }
+  def makeNextPrevLinks(a: Article, as: Seq[Article]) =
+    (if (a.prev == null) "" else "&lt;&lt;&lt; "+makeLink(a.prev)+"<br/>") +
+    (if (a.next == null) "" else "&gt;&gt;&gt; "+makeLink(a.next)+"<br/>")
 
-  def makeNextPrevArrows(a: Article, as: Seq[Article]) = {
-    val (prev, next) = nextPrev(a, as)
-    (if (prev == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${relUrl(prev.slug)}">&lt;&lt;&lt;</a>""")+" "+
-    (if (next == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${relUrl(next.slug)}">&gt;&gt;&gt;</a>""")
-  }
+  def makeNextPrevArrows(a: Article, as: Seq[Article]) =
+    (if (a.prev == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${relUrl(a.prev.slug)}">&lt;&lt;&lt;</a>""")+" "+
+    (if (a.next == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${relUrl(a.next.slug)}">&gt;&gt;&gt;</a>""")
 
   def makeTagLinks(ts: Seq[String]) =
     ts.map(makeTagLink).mkString(" ")
@@ -406,6 +410,9 @@ def generateRSS(articles: Seq[Article]): String = {
 def saveHtml(f: String, content: String): (String, String) =
   saveFile(f+".html", content)
 
+def saveXml(f: String, content: String): (String, String) =
+  saveFile(f+".xml", content)
+
 def saveFile(f: String, content: String): (String, String) = {
   val fw = new java.io.FileWriter(f)
   fw.write(content)
@@ -431,9 +438,11 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
 
   var articles = articlesList.reverse.toVector
 
-  val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
-  val (visible, rest) = rest1.span { a => !a.title.startsWith("?") }
-  if (rest.nonEmpty) sys.error("hidden and visible articles are mixed up")
+  if (Blog.articlesMustNotBeMixed) {
+    val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
+    val (visible, rest) = rest1.span { a => !a.title.startsWith("?") }
+    if (rest.nonEmpty) sys.error("hidden and visible articles are mixed up")
+  }
 
   articles = articles.filter { a =>
     val isInPast = a.date == null || a.date.before(today)
@@ -448,46 +457,42 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
   }
 
   // ordered by date
-  val ordered = articles
-    .filter(_.date != null)
-    .map(_.date)
-    .sliding(2)
-    .forall { case Seq(a, b) => a.compareTo(b) >= 0 }
+  if (Blog.articlesMustBeSorted) {
+    val ordered = articles
+      .filter(_.date != null)
+      .map(_.date)
+      .sliding(2)
+      .forall { case Seq(a, b) => a.compareTo(b) >= 0 }
 
-  if (!ordered) sys.error("articles are not ordered by date")
+    if (!ordered) sys.error("articles are not ordered by date")
+  }
+
+  def invert[A, B](m: Map[A, Seq[B]]): Map[B, Seq[A]] =
+    m.flatMap { case (a, bs) => bs.map { b => (b, a) }  }
+      .groupBy(_._1)
+      .map { case (b, bas) => (b, bas.map(_._2).toVector) }
 
   val tagMap: Map[String, Seq[Article]] =
-    articles
-      .flatMap { a => a.tags.visible.map { t => (t, a) } }
-      .groupBy(_._1)
-      .map { case (t, tas) => (t, tas.map { _._2 }) }
+    invert(articles.map { a => (a, a.tags.visible) }.toMap)
 
   val allTagMap: Map[String, Seq[Article]] =
-    articles
-      .flatMap { a => (a.tags.visible ++ a.tags.hidden).map { t => (t, a) } }
-      .groupBy(_._1)
-      .map { case (t, tas) => (t, tas.map { _._2 }) }
-
+    invert(articles.map { a => (a, a.tags.visible ++ a.tags.hidden) }.toMap)
 
   val backlinks: Map[String, Seq[Article]] =
-    (for {
-      a <- articles
-      l <- a.links
-      if localLink(l)
-    } yield (extractSlug(l), a))
-      .groupBy(_._1)
-      .map { case (slug, as) => (slug, as.map { _._2 }) }
+    invert(articles.map { a => (a, a.links filter localLink map extractSlug) }.toMap)
 
-  val as = articles map { a =>
+  articles = articles.zipWithIndex map { case (a, i) =>
     val bs = backlinks.getOrElse(a.slug, Seq())
 
     a.copy(
       backlinks = bs,
-      similar = similarByTags(a, allTagMap, without = bs)
+      similar = similarByTags(a, allTagMap, without = bs),
+      prev = if (a == articles.head) null else articles(i-1),
+      next = if (a == articles.last) null else articles(i+1)
     )
   }
 
-  (as, tagMap)
+  (articles, tagMap)
 }
 
 
@@ -549,27 +554,27 @@ val (articles, indexArticles, tagMap): (Seq[Article], Seq[Article], Map[String, 
 
 
 
-val layout = new FlowLayout {}
-import layout._
+import FlowLayout._
 
 val fileIndex = mutable.ArrayBuffer[(String, String)]()
 
 // make index
 val isIndexGallery = articles.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
-fileIndex += saveFile("index.html", makePage(makeIndex(indexArticles), null, isIndexGallery))
+fileIndex += saveHtml("index", makePage(makeIndex(indexArticles), gallery = isIndexGallery))
 
 // make articles
 articles foreach { a =>
-  fileIndex += saveHtml(a.slug, makePage(makeFullArticle(a, articles, true, true), a.title, a.images.nonEmpty))
+  fileIndex += saveHtml(a.slug, makePage(makeFullArticle(a, articles, true, true), title = a.title, gallery = a.images.nonEmpty))
 }
 
 // make tag pages
 tagMap foreach { case (t, as) =>
-  fileIndex += saveHtml(tagSlug(t), makePage(makeTagPage(t, as), null, false))
+  fileIndex += saveHtml(tagSlug(t), makePage(makeTagPage(t, as), title = t, rss = tagSlug(t)+".xml"))
+  fileIndex += saveXml(tagSlug(t), generateRSS(as))
 }
 
 // make RSS
-fileIndex += saveFile("rss.xml", generateRSS(articles))
+fileIndex += saveXml("rss", generateRSS(articles))
 
 
 // make thumbnails
