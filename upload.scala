@@ -7,11 +7,8 @@ if (args.length != 2) {
   sys.exit()
 }
 
-val sourceDir = args(0)
-val targetDir = args(1)
-
-val source = new File(sourceDir)
-val target = new File(targetDir)
+val source = new File(args(0))
+val target = new File(args(1))
 
 def parseFileIndex(lines: Iterator[String]): Map[String, String] =
   lines.map { l => val Array(f, h) = l.split(" ", 2) ; (f, h) }.toMap
@@ -23,17 +20,18 @@ def readFileIndex(f: File): Map[String, String] =
     Map()
   }
 
-val sourceFileIndex = readFileIndex(new File(source, ".files"))
-val targetFileIndex = readFileIndex(new File(target, ".files"))
+val sourceIndex = readFileIndex(new File(source, ".files"))
+val targetIndex = readFileIndex(new File(target, ".files"))
 
 for {
-  s <- source.listFiles.sortBy(_.getName)
-  if s.getName.matches("""(?x) ( .*\.html | .*\.xml | .*\.js | robots.txt | \.files )""")
+  s <- source.listFiles.sortBy(f => (f.getName == ".files", f.getName)) // file index last
+  fn = s.getName
+  if fn.matches("""(?x) ( .*\.html | .*\.xml | .*\.js | robots.txt | \.files )""")
+  if sourceIndex.contains(fn)
 } {
-  val fn = s.getName
   val t = new File(target, fn)
 
-  if (!targetFileIndex.contains(fn) || targetFileIndex(fn) != sourceFileIndex(fn)) {
+  if (!targetIndex.contains(fn) || targetIndex(fn) != sourceIndex(fn)) {
     println(s"copying $s -> $t")
     Files.copy(s.toPath, t.toPath, REPLACE_EXISTING)
   } else {
@@ -41,8 +39,8 @@ for {
   }
 }
 
-val thumbSource = new File(sourceDir, "t")
-val thumbTarget = new File(targetDir, "t")
+val thumbSource = new File(source, "t")
+val thumbTarget = new File(target, "t")
 thumbTarget.mkdirs()
 
 for (s <- thumbSource.listFiles) {
