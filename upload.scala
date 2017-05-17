@@ -13,6 +13,7 @@ val target = new File(args(1))
 def parseFileIndex(lines: Iterator[String]): Map[String, String] =
   lines.map { l => val Array(f, h) = l.split(" ", 2) ; (f, h) }.toMap
 
+// [file -> hash]
 def readFileIndex(f: File): Map[String, String] =
   if (f.exists) {
     parseFileIndex(io.Source.fromFile(f).getLines)
@@ -20,24 +21,27 @@ def readFileIndex(f: File): Map[String, String] =
     Map()
   }
 
-val sourceIndex = readFileIndex(new File(source, ".files"))
-val targetIndex = readFileIndex(new File(target, ".files"))
+val sf = new File(source, ".files")
+val tf = new File(target, ".files")
+val sourceIndex = readFileIndex(sf)
+val targetIndex = readFileIndex(tf)
 
 for {
-  s <- source.listFiles.sortBy(f => (f.getName == ".files", f.getName)) // file index last
-  fn = s.getName
-  if fn.matches("""(?x) ( .*\.html | .*\.xml | .*\.js | robots.txt | \.files )""")
-  if sourceIndex.contains(fn)
+  (fn, shash) <- sourceIndex.toSeq.sortBy(_._1)
 } {
+  val s = new File(source, fn)
   val t = new File(target, fn)
 
-  if (!targetIndex.contains(fn) || targetIndex(fn) != sourceIndex(fn)) {
+  if (!t.exists() || !targetIndex.contains(fn) || targetIndex(fn) != sourceIndex(fn)) {
     println(s"copying $s -> $t")
+    if (t.getParentFile != null) {
+      t.getParentFile.mkdirs()
+    }
     Files.copy(s.toPath, t.toPath, REPLACE_EXISTING)
-  } else {
-    //println(s" skipping $s -> $t")
   }
 }
+
+Files.copy(sf.toPath, tf.toPath, REPLACE_EXISTING)
 
 val thumbSource = new File(source, "t")
 val thumbTarget = new File(target, "t")
@@ -48,8 +52,5 @@ for (s <- thumbSource.listFiles) {
   if (!t.exists) {
     println(s"copying $s -> $t")
     Files.copy(s.toPath, t.toPath, REPLACE_EXISTING)
-  } else {
-    //println(s" skipping $s -> $t")
   }
-
 }
