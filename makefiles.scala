@@ -1,4 +1,5 @@
 import java.util.{ Date, GregorianCalendar, Calendar, Locale }
+import java.util.regex.Matcher.quoteReplacement
 import java.text.SimpleDateFormat
 import java.io.File
 import java.net.{ URL, URI }
@@ -6,27 +7,29 @@ import java.awt.image.{ BufferedImage, ConvolveOp, Kernel }
 import java.awt.{ AlphaComposite, RenderingHints => RH }
 import javax.imageio.ImageIO
 import scala.collection.mutable
-import scala.util.matching.Regex.Match
+import scala.util.matching.Regex
 
 
 val cfg = io.Source.fromFile(args(0))
   .getLines
-  .map(l => l.split(" ", 2))
-  .map { case Array(k, v) => (k, v)}
+  .map(kv)
   .toMap
 
-  val galleryScript = {
-    val thisFile = System.getProperty("sun.java.command").split(" ").find(x => x.endsWith("makefiles.scala")).get
-    val scriptFile = new File(thisFile).getParent+"/gallery.js"
-    io.Source.fromFile(scriptFile).mkString
-      .replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "") // rather crude and incorrect minifier
-  }
+def kv(l: String) = { val Array(k, v) = l.split(" ", 2) ; (k, v) }
+
+val thisDir =
+  new File(System.getProperty("sun.java.command").split(" ").find(_.endsWith("makefiles.scala")).get).getParent
+
+val galleryScript =
+  io.Source.fromFile(thisDir+"/gallery.js").mkString
+    .replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "") // rather crude and incorrect minifier
 
 object Blog {
   val kind: String         = cfg.getOrElse("type", "blog")
   val title: String        = cfg("title")
   val baseUrl: String      = cfg("baseUrl")
-  val articlesOnIndex: Int = cfg("fullArticlesOnIndex").toInt
+  val files: Seq[String]   = cfg("files").split(" ")
+  val articlesOnIndex: Int = cfg.getOrElse("fullArticlesOnIndex", "5").toInt
   val style: String        = cfg.getOrElse("style", "")
   val thumbWidth: Int      = cfg.getOrElse("thumbnailWidth", "150").toInt
   val thumbHeight: Int     = cfg.getOrElse("thumbnailHeight", "100").toInt
@@ -35,14 +38,14 @@ object Blog {
   val imageRoot: String    = cfg.getOrElse("imageRoot", "")
   val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "true").toBoolean
   val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "true").toBoolean
+  val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.map(kv).toMap
 }
 
-case class Base(articles: Seq[Article], tagMap: Map[String, Seq[Article]] = Map()) {
-  val bySlug: Map[String, Article] = articles.map(a => (a.slug, a)).toMap
-  val byMeta: Map[String, Article] = articles.flatMap(a => a.meta collect { case m: String => (m, a) }).toMap
-  val all = articles
-  val feed = articles.filter(_.inFeed)
-  private val art2ord = feed.zipWithIndex.toMap
+case class Base(all: Seq[Article], tagMap: Map[String, Seq[Article]] = Map()) {
+  lazy val bySlug: Map[String, Article] = all.map(a => (a.slug, a)).toMap
+  lazy val byMeta: Map[String, Article] = all.flatMap(a => a.meta.scalars collect { case m: String => (m, a) }).toMap
+  lazy val feed = all.filter(_.inFeed)
+  private lazy val art2ord = feed.zipWithIndex.toMap
 
   def find(id: String): Option[Article] = bySlug.get(id).orElse(byMeta.get(id))
   def isValidId(id: String) = find(id).nonEmpty
@@ -68,22 +71,25 @@ case class Article(
   date: Date,
   tags: Tags = Tags(),
   license: String = null,
+  meta: Meta = Meta(),
   rawText: String,
   images: Seq[Image] = Seq(),
   linkMap: Map[String, String] = Map(), // map of link refs only
   links: Seq[String] = Seq(), // all link bodies (inside [ref] or href="url")
   backlinks: Seq[Article] = Seq(),
   similar: Seq[Article] = Seq(),
-  meta: Seq[Any] = Seq(),
-  pub: Seq[String] = Seq(),
-  rel: Seq[String] = Seq(),
+  pub: Seq[Article] = Seq(),
+  pubBy: Article = null,
   inFeed: Boolean = true
 ) {
-  //def links: Seq[String] = linkMap.values.toVector
-  override def toString = {
-    val f = new SimpleDateFormat("MM-dd-yyyy")
-    "Article("+(if (date == null) "" else f.format(date)+" ")+title+")"
-  }
+  def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy").format(date)
+  override def toString = s"Article($prettyDate $title)"
+  def asSlug: Slug = Slug(slug)
+}
+
+case class Meta(xs: Map[String, Meta] = Map()) {
+  def scalars = xs.collect { case (k, v) if v == null => k }
+  def seq(k: String): Seq[String] = xs.get(k).map(_.xs.keys.toSeq).getOrElse(Seq())
 }
 
 case class Image(
@@ -97,10 +103,9 @@ case class Image(
   source: String = null
 )
 
+case class Slug(id: String)
 case class Tags(visible: Seq[String] = Seq(), hidden: Seq[String] = Seq(), supertags: Seq[String] = Seq())
 case class Sim(article: Article, commonTags: Int)
-
-
 
 def resizeImage(src: BufferedImage, width: Int, height: Int): BufferedImage = {
   val zoom = math.min(1.0 * src.getWidth / width, 1.0 * src.getHeight / height)
@@ -198,9 +203,9 @@ def relativize(url: String, baseUrl: String) = {
     (Seq.fill(backLevels)("..") ++ us.drop(prefixLen)).mkString("/")
   }
 }
-def localLink(url: String) = url.startsWith(Blog.baseUrl+"/")
+def isLocalLink(url: String) = url.startsWith(Blog.baseUrl+"/")
 def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
-def extractSlug(url: String) = if (localLink(url)) dropLocalPrefix(url).dropRight(5) else sys.error("not local url")
+def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(5)) else sys.error("not local url")
 
 def thumbnailUrl(img: Image) = s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"
 
@@ -252,49 +257,26 @@ val ahrefRegex    = """(?x) (?<= href=") (.*?) (?=") """.r
 
 
 val imgRegexFragment = """
-\s*
-\[\*
-\s+
+\s*  \[\*  \s+
 ([^*\n]+?) (?= \s+ \d++x\d++ | \s+ \.\[ | \s+ \.\( | \s+ (?:\*|\>|\<)\] )
-
 (?: \s+ \d++x\d++ )?
-
-(?:
-  \s+
-  \.
-  (?:
-        \[ ([^\]\n]++) \]
-    (?: \( ([^)\n]++ ) \) )? |
-        \( ([^)\n]++ ) \)
-  )
-)?
-
+(?:  \s+  \.  (?:  \[ ([^\]\n]++) \]  (?: \( ([^\n]+? ) \) )?  |  \( ([^\n]+? )  \)  )  )?
 \s+
-
 (\*|\>|\<)\]
-
-(?:
-  :
-  \[ ([^\]\n]++) \]
-)?
-
-(?:
-  \s+
-  (?: \*\*\* \s+ ([^\n]++))
-)?
-
+(?:  :  \[ ([^\]\n]++) \]  )?
+(?:  \s+  (?: \*\*\* \s+ ([^\n]++))  )?
 \s*
 """
 
-val imgLicenseRegex = """(?x) (.*?) \s* \((?:(CC\ [\w-]+)\s+)?([^\ ]*)?\)\s*$""".r
+val imgLicenseRegex = """(?x) (.*?) \s* (?: \( (?:(CC\ [\w-]+)\s+)? \s* ([^\ ]*)? \) )? \s*$""".r
 val licenses = Set("CC by", "CC by-nc", "CC by-nd", "CC by-sa", "CC by-nc-nd", "CC by-nc-sa")
 
 def mkImage: PartialFunction[String, Image] = {
   case imgRegex(url, mod, alt1, alt2, align, link, title) =>
     val u = if (link != null) link else url // ???
-
     val (t, license, source) = title match {
       case imgLicenseRegex(t, l, s) if licenses.contains(l) => (t, l, s)
+      case imgLicenseRegex(t, null, s) => (t, null, s)
       case t => (t, null, null)
     }
 
@@ -303,17 +285,12 @@ def mkImage: PartialFunction[String, Image] = {
       thumb = hash(url),
       alt  = if (alt1 != null) alt1 else alt2,
       mods = mod,
-      align = align match {
-        case "*" => null
-        case a => a
-      },
+      align = if (align == "*") null else align,
       title = t,
       license = license,
       source = source
     )
 }
-
-
 
 val imgBlockRegex = s"""(?xm) (?: ^$imgRegexFragment\n )*  (?: ^$imgRegexFragment\n?) """.r
 val imgRegex      = s"""(?xm) $imgRegexFragment""".r
@@ -333,48 +310,42 @@ def parseDate(l: String): Option[Seq[Date]] = {
   if (dates.nonEmpty && dates.forall(_.isDefined)) Some(dates.map(_.get)) else None
 }
 
-def parseLicense(l: String): Option[String] = {
+def parseLicense(l: String): Option[String] =
   if (licenses.contains(l)) Some(l) else None
-}
 
-def parseTags(l: String): Option[Tags] = l match {
-  case tagsRegex(ts) =>
+def _parseTags(r: Regex): PartialFunction[String, Tags] = {
+  case r(ts) =>
     val (hidden, visible) = ts.split(",").map(_.trim).partition(t => t.startsWith("(") && t.endsWith(")"))
-    Some(Tags(visible = visible, hidden = hidden.map(_.drop(1).dropRight(1))))
-  case _ => None
+    Tags(visible = visible, hidden = hidden.map(_.drop(1).dropRight(1)))
 }
 
-def parseSupertags(l: String): Option[Tags] = l match {
-  case supertagRegex(ts) =>
-    Some(Tags(supertags = ts.split(",").map(_.trim)))
-  case _ => None
-}
+val parseTags = _parseTags(tagsRegex).lift
+val parseSupertags = _parseTags(supertagRegex).andThen { t => Tags(supertags = t.visible) }.lift
 
-def parseMetaFormat(str: String): Seq[Any] = {
+def parseMetaFormat(str: String): Meta = Meta(
   if (str.trim.isEmpty) {
-    Seq()
+    Map()
   } else {
     val Array(k, rest) = str.split(":", 2)
     if (rest.trim.apply(0) == '[') {
       val Array(v, rest2) = rest.trim.tail.split("]", 2) // 2 levels only
-      (k.trim, parseMetaFormat(v)) +: parseMetaFormat(rest2)
+      parseMetaFormat(rest2).xs + ((k.trim, parseMetaFormat(v)))
     } else {
       rest.split(",", 2) match {
-        case Array(v, rest2) => s"${k.trim}:${v.trim}" +: parseMetaFormat(rest2)
-        case Array(v) => s"${k.trim}:${v.trim}" +: Seq()
+        case Array(v, rest2) => parseMetaFormat(rest2).xs + (s"${k.trim}:${v.trim}" -> null)
+        case Array(v) => Map(s"${k.trim}:${v.trim}" -> null)
       }
     }
   }
-}
+)
 
-def parseMetaFormat(prefix: String, str: String): Option[Seq[Any]] = {
+def parseMetaFormat(prefix: String, str: String): Option[Meta] = {
   if (str.startsWith(prefix)) {
     Some(parseMetaFormat(str.drop(prefix.length)))
   } else None
 }
 
-def parseMeta(l: String): Option[Seq[Any]] = parseMetaFormat("meta: ", l)
-def parseRel(l: String): Option[Seq[Any]] = parseMetaFormat("rel: ", l)
+def parseMeta(l: String): Option[Meta] = parseMetaFormat("meta: ", l)
 
 def process[T](ls: Seq[String], f: String => Option[T]): (Option[T], Seq[String]) = {
   val pairs = ls.zip(ls.map(f))
@@ -409,8 +380,8 @@ def parseArticle(lines: Vector[String]): Article = {
     ((r, t), rest)
   }
 
-  val ((((((dates, tags), stags), license), meta), rel), rest) =
-    p(p(p(p(p(process(metaLines, parseDate), parseTags), parseSupertags), parseLicense), parseMeta), parseRel)
+  val (((((dates, tags), stags), license), meta), rest) =
+    p(p(p(p(process(metaLines, parseDate), parseTags), parseSupertags), parseLicense), parseMeta)
 
   if (rest.nonEmpty) sys.error("some metainformation was not processed: "+rest)
 
@@ -436,10 +407,8 @@ def parseArticle(lines: Vector[String]): Article = {
     images  = images,
     linkMap = linkMap,
     links   = links,
-    meta    = meta.getOrElse(Seq()),
-    pub     = meta.getOrElse(Seq()).find { case (k, v) => k == "pub" ; case _ => false }.map { case (k, v) => v.asInstanceOf[Seq[String]] }.getOrElse(Seq()),
-    rel     = rel.getOrElse(Seq()).asInstanceOf[Seq[String]],
-    inFeed = inFeed
+    meta    = meta.getOrElse(Meta()),
+    inFeed  = inFeed
   )
 }
 
@@ -460,7 +429,7 @@ def generateSlug(title: String) = {
 def tagSlug(tag: String) = "tag/"+generateSlug(tag)
 
 def similarByTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
-  // TODO use a.rel
+  // TODO use a.meta.seq("rel")
   def dateDiff(a: Article, b: Article): Long = {
     (a.date, b.date) match {
       case (null, null) => 0
@@ -488,28 +457,53 @@ def similarByTags(a: Article, tagMap: Map[String, Seq[Article]], without: Seq[Ar
 trait Layout {
   def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String
   def makeIndex(articles: Base): String
-  def makeFullArticle(a: Article, as: Base, prevNextNavigation: Boolean, tags: Boolean): String
+  def makeFullArticle(a: Article, prevNextNavigation: Boolean, tags: Boolean): String
   def makeTagPage(t: String, as: Seq[Article]): String
 }
 
-class FlowLayout(baseUrl: String) extends Layout {
-  def txl(s: String) = s // TODO
+class FlowLayout(baseUrl: String, _base: Base) extends Layout {
+  implicit val base = _base
 
   def rel(url: String): String = relativize(url, baseUrl)
+  def txl(s: String) = Blog.translation(s)
+  def ifs(c: Boolean, body: => String) = if (c) body else ""
+  def ifs(x: Any, body: => String) = if (x != null) body else ""
+  def ifs(x: String) = if (x != null) x else ""
 
-  def decorateText(a: Article, as: Base): String = {
+
+  def decorateText(a: Article): String = {
+
+    val (mainImage, images) = a.images match {
+      case Seq() => (null, Seq())
+      case fst +: rest if fst.mods == "main" || fst.mods == "float_right" => (fst, rest)
+      case is => (null, is)
+    }
+ 
     var txt = a.rawText
+
+    if (mainImage != null && mainImage.mods == "float_right") {
+      txt = imgTag(mainImage, "fr", true)+txt
+    }
+
     txt = blackout(txt)
 		txt = altRegex.replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
 
-    txt = ahrefRegex.replaceAllIn(txt, m => rel(resolveLink(m.group(1), as, a)))
+    txt = ahrefRegex.replaceAllIn(txt, m => rel(resolveLink(m.group(1), base, a)))
     txt = linkRegex.replaceAllIn(txt, m => {
-      val url = resolveLink(m.group(2), as, a)
+      val url = resolveLink(m.group(2), base, a)
       s"""<a href="${rel(url)}">${m.group(1)}</a>"""
     })
 
+    if (mainImage != null && mainImage.mods == "main") {
+      if (hrRegex.findAllMatchIn(txt).nonEmpty) {
+        txt = hrRegex.replaceFirstIn(txt, quoteReplacement("\n"+imgTag(mainImage, "main", true)+"\n"))
+      } else {
+        txt += "<br/><br/>"+imgTag(mainImage, "main", true)
+      }
+    }
+
     txt = hrRegex.replaceAllIn(txt, "\n\n---<br/>\n\n")
-    txt = imageBlock(txt, a.images)
+    txt = imageBlock(txt, images)
     txt = blockquoteRegex.replaceAllIn(txt, m =>
       "<blockquote>"+m.group(1).replaceAll("(?mx) ^\\>\\ +", "")+"</blockquote><br/>"
     )
@@ -525,17 +519,19 @@ class FlowLayout(baseUrl: String) extends Layout {
     txt
   }
 
-  def ifs(c: Boolean, body: => String) = if (c) body else ""
-  def ifs(x: Any, body: => String) = if (x != null) body else ""
-  def ifs(x: String) = if (x != null) x else ""
+  def imgTag(img: Image, cl: String, full: Boolean = false) = {
+    val thumbPath = thumbnailUrl(img)
+    val desc =
+      (ifs(img.title)+" "+
+      (ifs(img.license)+" "+ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")).trim).trim
+    s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="${if (full) img.url else rel(thumbPath)}"/></a>$desc</span>"""
+  }
 
   def imageBlock(txt: String, images: Seq[Image]): String =
     imgBlockRegex.replaceAllIn(txt, m => {
-      imgRegex.findAllMatchIn(m.group(0)).map { m =>
+      imgRegex.findAllMatchIn(m.group(0)).flatMap { m =>
         val url = mkImage(m.group(0)).url
-        val img = images.find(i => i.url == url).get
-        val thumbPath = thumbnailUrl(img)
-        s"""<a href="$url"><img class=thz title="${img.alt}" src="${rel(thumbPath)}"/>${ifs(img.title)}${ifs(img.license, " ("+img.license+" "+img.source+")")}</a>"""
+        images.find(i => i.url == url).map { img => imgTag(img, "thz") }
       }.mkString(" ")+"<br/>"
     })
 
@@ -547,7 +543,13 @@ s"""<!DOCTYPE html>
 <title>${(if (title != null) title+" | " else "")+Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="${rel("rss.xml")}"/>
 ${if (rss != null) s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>""" else ""}
-<style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace;line-height:1.3}.about{text-decoration: underline red;}.th,.thz{width:${Blog.thumbWidth}px;height:${Blog.thumbHeight}px} ${Blog.style}</style>
+<style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace;line-height:1.3}.about{text-decoration: underline red;}
+img.th,img.thz{}
+.thz,.fr,.main{font-size:0.8em}
+span.thz {width:${Blog.thumbWidth}px;display:inline-block;vertical-align:top}
+span.fr {max-width:50%;float:right;text-align:right;} span.fr img {max-width:100%}
+span.main {display:block;text-align:right;margin-bottom:0.5em;} span.main img {max-width:100%}
+${Blog.style}</style>
 ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
 </head>
 <body>
@@ -561,40 +563,39 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
 
   def makeIndex(articles: Base): String = {
     val (fulls, links) = articles.feed.splitAt(Blog.articlesOnIndex)
-    (fulls.map(a => makeFullArticle(a, articles, false, false)) ++ links.map(makeLink)).mkString("<br/>\n") + "<br/>"
+    fulls.map(a => makeFullArticle(a, false, false)).mkString("<br/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
   }
 
-  def makeFullArticle(a: Article, as: Base, prevNextNavigation: Boolean, tags: Boolean): String = {
+  def makeFullArticle(a: Article, prevNextNavigation: Boolean, tags: Boolean): String = {
     val sims = a.similar.take(5)
 
     makeLink(a)+
-    (if (prevNextNavigation) "<span class=f>"+makeNextPrevArrows(a, as)+"</span>" else "")+
+    (if (prevNextNavigation) "<span class=f>"+makeNextPrevArrows(a)+"</span>" else "")+
     "<br/><br/><br/>\n"+
-    decorateText(a, as)+
-    (if (prevNextNavigation) makeNextPrevLinks(a, as) else "")+
+    decorateText(a)+
+    (if (prevNextNavigation) makeNextPrevLinks(a) else "")+
     (if (a.pub.nonEmpty) txl("published")+"<br>\n"+
-    a.pub.map { p => as.find(p).map(makeLink).getOrElse(undefId(p, a)) }.mkString("<br/>\n")+"<br/>" else "")+
-    {
-      val rel =
-        (if (tags && a.tags.supertags.nonEmpty) makeSupertagLinks(a.tags.supertags, as, a)+"<br/>" else "")+
-        (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"<br/>" else "")+
-        (if (tags && (a.backlinks.nonEmpty || sims.nonEmpty)) makeRelLinks(Seq(sims, a.backlinks))+"<br/>" else "")
-
-      if (rel.nonEmpty) "<div class=r>"+rel+"</div>" else ""
-    }+
-    (if (a.license != null) "<div class=r>"+a.license+"</div>" else "")
+    a.pub.map(makeLink).mkString("<br/>\n")+"<br/>" else "")+
+    (if (a.pubBy != null) txl("publishedBy")+" "+articleLink(a.pubBy, makeDate(a))+"<br/>" else "")+
+    "<div class=r>"+
+      (if (tags && a.tags.supertags.nonEmpty) makeSupertagLinks(a.tags.supertags, a)+"<br/>" else "")+
+      (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"<br/>" else "")+
+      (if (tags && (a.backlinks.nonEmpty || sims.nonEmpty)) makeRelLinks(Seq(sims, a.backlinks))+"<br/>" else "")+
+      (if (tags && a.license != null) a.license+"</br>" else "")+
+    "</div>"
   }
 
   def makeTagPage(t: String, as: Seq[Article]) = {
     makeTagLink(t)+"<br/><br/>"+
+    base.find(tagSlug(t)).map(a => decorateText(a)).getOrElse("")+
     as.map(makeLink).mkString("<br/>")
   }
 
   def blackout(txt: String) =
     blackoutRegex.replaceAllIn(txt, m => m.group(0).replaceAll("(?s).", "█").grouped(5).mkString("<wbr>"))
 
-  def makeLink(a: Article) =
-    makeDate(a)+s"""<i><a href="${rel(absUrl(a))}">${a.title}</a></i>"""
+  def articleLink(a: Article, title: String) = s"""<i><a href="${rel(absUrl(a))}">${title}</a></i>"""
+  def makeLink(a: Article) = makeDate(a)+articleLink(a, a.title)
 
   def makeTagLink(t: String) =
     s"""<span class=y>#</span><i><a href="${rel(absUrlFromSlug(tagSlug(t)))}">${t}</a></i>"""
@@ -602,22 +603,22 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
   def makeRelLink(a: Article, ord: Int) =
     s"""<i><a href="${rel(absUrl(a))}">#${ord}</a></i>"""
 
-  def makeNextPrevLinks(a: Article, as: Base) =
-    (if (as.prev(a) == null) "" else "«« "+makeLink(as.prev(a))+"<br/>") +
-    (if (as.next(a) == null) "" else "»» "+makeLink(as.next(a))+"<br/>")
+  def makeNextPrevLinks(a: Article) =
+    (if (base.prev(a) == null) "" else "«« "+makeLink(base.prev(a))+"<br/>") +
+    (if (base.next(a) == null) "" else "»» "+makeLink(base.next(a))+"<br/>")
 
-  def makeNextPrevArrows(a: Article, as: Base) =
-    (if (as.prev(a) == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${rel(absUrl(as.prev(a)))}">«««</a>""")+" "+
-    (if (as.next(a) == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${rel(absUrl(as.next(a)))}">»»»</a>""")
+  def makeNextPrevArrows(a: Article) =
+    (if (base.prev(a) == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${rel(absUrl(base.prev(a)))}">«««</a>""")+" "+
+    (if (base.next(a) == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${rel(absUrl(base.next(a)))}">»»»</a>""")
 
   def makeTagLinks(ts: Seq[String]) =
     ts.map(makeTagLink).mkString(" ")
 
-  def makeSupertagLinks(ts: Seq[String], as: Base, a: Article) =
+  def makeSupertagLinks(ts: Seq[String], a: Article) =
     ts.map(t =>
       s"""<b>${makeTagLink(t)}</b>"""+
-      (if (as.prev(a, t) != null) s"""<a href="${rel(absUrl(as.prev(a, t)))}">««</a>""" else "")+
-      (if (as.next(a, t) != null) s"""<a href="${rel(absUrl(as.next(a, t)))}">»»</a>""" else "")
+      (if (base.prev(a, t) != null) s"""<a href="${rel(absUrl(base.prev(a, t)))}">««</a>""" else "")+
+      (if (base.next(a, t) != null) s"""<a href="${rel(absUrl(base.next(a, t)))}">»»</a>""" else "")
     ).mkString(" ")
 
   def makeRelLinks(ass: Seq[Seq[Article]]) =
@@ -634,14 +635,13 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
 
   val thisYear = year(new Date)
 
-  def makeDate(a: Article) =
-    if (a.date == null) "" else {
-      if (year(a.date) == thisYear) {
-        new SimpleDateFormat("d. M.").format(a.date)+" "
-      } else {
-        new SimpleDateFormat("d. M. yyyy").format(a.date)+" "
-      }
-    }
+  def makeDate(a: Article) = a.date match {
+    case null => ""
+    case d if year(a.date) == thisYear =>
+      new SimpleDateFormat("d. M.").format(d)+" "
+    case d =>
+      new SimpleDateFormat("d. M. yyyy").format(d)+" "
+  }
 }
 
 
@@ -681,7 +681,7 @@ def saveXml(f: String, content: String): (String, String) =
 
 
 def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
-  var lines: Vector[String] = args.tail.flatMap { f =>
+  var lines: Vector[String] = Blog.files.flatMap { f =>
     io.Source.fromFile(f).getLines ++ Seq("\n","\n")
   }.toVector
 
@@ -725,33 +725,48 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
     if (!ordered) sys.error("articles are not ordered by date")
   }
 
-  if (Blog.sortByDate) { // newes first, articles without date last
-    articles = articles.sortBy(a => ~(if (a.date == null) 0 else a.date.getTime))
-  }
-
   def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] =
     m.flatMap { case (a, bs) => bs.map { b => (b, a) }  }
       .groupBy(_._1)
       .map { case (b, bas) => (b, bas.map(_._2).toVector) }
 
-  val tagMap: Map[String, Seq[Article]] =
+  implicit val base = Base(articles)
+  def refs(a: Article, k: String) = a.meta.seq(k) flatMap base.find
+
+  var tagMap: Map[String, Seq[Article]] =
     invert(articles.map { a => (a, (a.tags.visible ++ a.tags.supertags).distinct) })
 
   val allTagMap: Map[String, Seq[Article]] =
     invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden ++ a.tags.supertags).distinct) })
 
-  val backlinks: Map[String, Seq[Article]] = {
-    val base = Base(articles)
-    invert(articles.map { a => (a, a.links map { l => resolveLink(l, base, a) } filter localLink map extractSlug) })
-  }
+  val backlinks: Map[Slug, Seq[Article]] =
+    invert(articles.map { a => (a, a.links map { l => resolveLink(l, base, a) } filter isLocalLink map extractSlug) })
+
+  val pubsBy: Map[Slug, Article] =
+    invert(articles.map { a => (a, refs(a, "pub").map(_.asSlug)) })
+      .map { case (k, vs) => (k, vs.sortBy(_.date).head) }
 
   articles = articles map { a =>
-    val bs = backlinks.getOrElse(a.slug, Seq())
+    val bs = backlinks.getOrElse(a.asSlug, Seq())
+    val pubBy = pubsBy.getOrElse(a.asSlug, null)
+
+    a.meta.seq("pub") foreach { id =>
+      if (base.find(id).isEmpty) undefId(id, a)
+    }
 
     a.copy(
+      date = if (a.date == null && pubBy != null) pubBy.date else a.date,
       backlinks = bs,
-      similar = similarByTags(a, allTagMap, without = bs)
+      similar = similarByTags(a, allTagMap, without = bs),
+      pub = refs(a, "pub"),
+      pubBy = pubBy
     )
+  }
+
+  if (Blog.sortByDate) { // newest first, articles without date last
+    val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
+    articles = articles.sortBy(byDate)
+    tagMap = tagMap.map { case (t, as) => (t, as.sortBy(byDate)) }
   }
 
   (articles, tagMap)
@@ -825,7 +840,7 @@ val isIndexGallery = articles.all.take(Blog.articlesOnIndex).exists(_.images.non
 
 val path = "index.html"
 val url  =  absUrlFromPath(path)
-val l = new FlowLayout(url)
+val l = new FlowLayout(url, articles)
 val content = l.makeIndex(indexArticles)
 fileIndex += saveFile(path, l.makePage(content, gallery = isIndexGallery))
 
@@ -833,8 +848,8 @@ fileIndex += saveFile(path, l.makePage(content, gallery = isIndexGallery))
 articles.all foreach { a =>
   val path = relUrlFromSlug(a.slug)
   val url  = absUrlFromSlug(a.slug)
-  var l = new FlowLayout(url)
-  val content = l.makeFullArticle(a, articles, true, true)
+  var l = new FlowLayout(url, articles)
+  val content = l.makeFullArticle(a, true, true)
   fileIndex += saveFile(path, l.makePage(content, title = a.title, gallery = a.images.nonEmpty))
 }
 
@@ -842,7 +857,7 @@ articles.all foreach { a =>
 tagMap foreach { case (t, as) =>
   val path = relUrlFromSlug(tagSlug(t))
   val url  = absUrlFromSlug(tagSlug(t))
-  var l = new FlowLayout(url)
+  var l = new FlowLayout(url, articles)
   val content = l.makeTagPage(t, as)
   fileIndex += saveFile(path, l.makePage(content, title = t, rss = tagSlug(t)+".xml"))
   fileIndex += saveXml(tagSlug(t), generateRSS(as))
