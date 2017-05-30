@@ -28,7 +28,7 @@ object Blog {
   val kind: String         = cfg.getOrElse("type", "blog")
   val title: String        = cfg("title")
   val baseUrl: String      = cfg("baseUrl")
-  val files: Seq[String]   = cfg("files").split(" ")
+  val files: Seq[String]   = cfg.getOrElse("files", "").split(" ").filter(_.nonEmpty)
   val articlesOnIndex: Int = cfg.getOrElse("fullArticlesOnIndex", "5").toInt
   val style: String        = cfg.getOrElse("style", "")
   val thumbWidth: Int      = cfg.getOrElse("thumbnailWidth", "150").toInt
@@ -322,38 +322,27 @@ def _parseTags(r: Regex): PartialFunction[String, Tags] = {
 val parseTags = _parseTags(tagsRegex).lift
 val parseSupertags = _parseTags(supertagRegex).andThen { t => Tags(supertags = t.visible) }.lift
 
-def parseMetaFormat(str: String): Meta = Meta(
+def _parseMetaFormat(str: String): Meta = Meta(
   if (str.trim.isEmpty) {
     Map()
   } else {
     val Array(k, rest) = str.split(":", 2)
     if (rest.trim.apply(0) == '[') {
       val Array(v, rest2) = rest.trim.tail.split("]", 2) // 2 levels only
-      parseMetaFormat(rest2).xs + ((k.trim, parseMetaFormat(v)))
+      _parseMetaFormat(rest2).xs + ((k.trim, _parseMetaFormat(v)))
     } else {
       rest.split(",", 2) match {
-        case Array(v, rest2) => parseMetaFormat(rest2).xs + (s"${k.trim}:${v.trim}" -> null)
+        case Array(v, rest2) => _parseMetaFormat(rest2).xs + (s"${k.trim}:${v.trim}" -> null)
         case Array(v) => Map(s"${k.trim}:${v.trim}" -> null)
       }
     }
   }
 )
 
-def parseMetaFormat(prefix: String, str: String): Option[Meta] = {
-  if (str.startsWith(prefix)) {
-    Some(parseMetaFormat(str.drop(prefix.length)))
+def parseMeta(l: String, prefix: String = "meta: "): Option[Meta] =
+  if (l.startsWith(prefix)) {
+    Some(_parseMetaFormat(l.drop(prefix.length)))
   } else None
-}
-
-def parseMeta(l: String): Option[Meta] = parseMetaFormat("meta: ", l)
-
-def process[T](ls: Seq[String], f: String => Option[T]): (Option[T], Seq[String]) = {
-  val pairs = ls.zip(ls.map(f))
-  val idx = pairs.indexWhere { case (l, v) => v != None }
-  if (idx == -1) (None, ls) else {
-    (pairs(idx)._2, ls.patch(idx, Seq(), 1))
-  }
-}
 
 def hash(txt: String) = {
   val md5 = java.security.MessageDigest.getInstance("MD5")
@@ -373,17 +362,14 @@ def parseArticle(lines: Vector[String]): Article = {
   val (metaLines, _body) = ls.drop(2).span(l => l.nonEmpty)
   val body = _body.dropWhile(l => l.isEmpty).reverse.dropWhile(l => l.isEmpty).reverse
 
+  val dates   = metaLines.flatMap(parseDate _      andThen (_.toSeq))
+  val tags    = metaLines.flatMap(parseTags        andThen (_.toSeq))
+  val stags   = metaLines.flatMap(parseSupertags   andThen (_.toSeq))
+  val license = metaLines.flatMap(parseLicense _   andThen (_.toSeq))
+  val meta    = metaLines.flatMap(l => parseMeta(l, "meta: ").toSeq)
 
-  def p[T, R](previous: (R, Seq[String]), f: String => Option[T]): ((R, Option[T]), Seq[String]) = {
-    val (r, lines) = previous
-    val (t, rest) = process(lines, f)
-    ((r, t), rest)
-  }
-
-  val (((((dates, tags), stags), license), meta), rest) =
-    p(p(p(p(process(metaLines, parseDate), parseTags), parseSupertags), parseLicense), parseMeta)
-
-  if (rest.nonEmpty) sys.error("some metainformation was not processed: "+rest)
+  if ((dates++tags++stags++license++meta).size < metaLines.size)
+    sys.error("some metainformation was not processed: "+metaLines)
 
   val linkMap = body.collect {
     case linkRefRegex(r, url) => (r, url)
@@ -400,14 +386,14 @@ def parseArticle(lines: Vector[String]): Article = {
   new Article(
     title   = title.trim,
     slug    = if (slug == null || slug == "") generateSlug(title) else slug,
-    date    = dates.map(_.head).getOrElse(null), // TODO, currently it's using only the first date
-    tags    = tags.getOrElse(Tags()).copy(supertags = stags.getOrElse(Tags()).supertags),
-    license = license.getOrElse(null),
+    date    = dates.headOption.map(_.head).getOrElse(null), // TODO, currently it's using only the first date
+    tags    = tags.headOption.getOrElse(Tags()).copy(supertags = stags.headOption.getOrElse(Tags()).supertags),
+    license = license.headOption.getOrElse(null),
     rawText = body.mkString("\n"),
     images  = images,
     linkMap = linkMap,
     links   = links,
-    meta    = meta.getOrElse(Meta()),
+    meta    = meta.headOption.getOrElse(Meta()),
     inFeed  = inFeed
   )
 }
@@ -461,6 +447,15 @@ trait Layout {
   def makeTagPage(t: String, as: Seq[Article]): String
 }
 
+
+sealed trait Fragment
+final case class Html(txt: String) extends Fragment
+final case class Para(txt: String) extends Fragment
+final case class HR() extends Fragment
+final case class Imgs(txt: String) extends Fragment
+final case class LinkRefs(txt: String) extends Fragment
+
+
 class FlowLayout(baseUrl: String, _base: Base) extends Layout {
   implicit val base = _base
 
@@ -496,7 +491,7 @@ class FlowLayout(baseUrl: String, _base: Base) extends Layout {
 
     if (mainImage != null && mainImage.mods == "main") {
       if (hrRegex.findAllMatchIn(txt).nonEmpty) {
-        txt = hrRegex.replaceFirstIn(txt, quoteReplacement("\n"+imgTag(mainImage, "main", true)+"\n"))
+        txt = hrRegex.replaceFirstIn(txt, quoteReplacement("<br/><br/>\n"+imgTag(mainImage, "main", true)+"<br/>\n"))
       } else {
         txt += "<br/><br/>"+imgTag(mainImage, "main", true)
       }
@@ -563,7 +558,7 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
 
   def makeIndex(articles: Base): String = {
     val (fulls, links) = articles.feed.splitAt(Blog.articlesOnIndex)
-    fulls.map(a => makeFullArticle(a, false, false)).mkString("<br/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
+    fulls.map(a => makeFullArticle(a, false, false)).mkString("<br/><br/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
   }
 
   def makeFullArticle(a: Article, prevNextNavigation: Boolean, tags: Boolean): String = {
@@ -864,7 +859,7 @@ tagMap foreach { case (t, as) =>
 }
 
 // make RSS
-fileIndex += saveXml("rss", generateRSS(articles.all))
+fileIndex += saveXml("rss", generateRSS(articles.feed))
 
 
 // make thumbnails
