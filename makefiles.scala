@@ -17,6 +17,14 @@ val cfg = io.Source.fromFile(args(0))
 
 def kv(l: String) = { val Array(k, v) = l.split(" ", 2) ; (k, v) }
 
+def timer[T](label: String)(f: => T) = {
+  val s = System.currentTimeMillis
+  val r = f
+  val e = System.currentTimeMillis
+  println(s"$label ${e-s} ms")
+  r
+}
+
 val thisDir =
   new File(System.getProperty("sun.java.command").split(" ").find(_.endsWith("makefiles.scala")).get).getParent
 
@@ -85,9 +93,11 @@ case class Article(
   def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy").format(date)
   override def toString = s"Article($prettyDate $title)"
   def asSlug: Slug = Slug(slug)
+  def format = meta.scalar("format")
 }
 
 case class Meta(xs: Map[String, Meta] = Map()) {
+  def scalar(key: String): String = scalars.find(_.startsWith(key+":")).map(_.drop(key.length+1).trim).getOrElse(null)
   def scalars = xs.collect { case (k, v) if v == null => k }
   def seq(k: String): Seq[String] = xs.get(k).map(_.xs.keys.toSeq).getOrElse(Seq())
 }
@@ -109,12 +119,12 @@ case class Sim(article: Article, commonTags: Int)
 
 def resizeImage(src: BufferedImage, width: Int, height: Int): BufferedImage = {
   val zoom = math.min(1.0 * src.getWidth / width, 1.0 * src.getHeight / height)
-  val wz = (width * zoom).toInt
-  val hz = (height * zoom).toInt
+  val wz = math.max(1, (width * zoom).toInt)
+  val hz = math.max(1, (height * zoom).toInt)
   val x = (src.getWidth - wz) / 2
   val y = (src.getHeight - hz) / 2
-
-  progressiveResize(src.getSubimage(x, y, wz, hz), width, height)
+  val crop = src.getSubimage(x, y, wz, hz)
+  progressiveResize(crop, width, height)
 }
 
 /** adapted from https://github.com/coobird/thumbnailator/blob/master/src/main/java/net/coobird/thumbnailator/resizers/ProgressiveBilinearResizer.java */
@@ -184,7 +194,6 @@ def isAbsolute(url: String) = new URI(fixPath(url)).isAbsolute
 def relativize(url: String, baseUrl: String) = {
   val u = new URI(url)
   val b = new URI(baseUrl)
-
   require(b.isAbsolute)
 
   if (u.getHost != null && u.getHost != b.getHost) {
@@ -206,14 +215,13 @@ def relativize(url: String, baseUrl: String) = {
 def isLocalLink(url: String) = url.startsWith(Blog.baseUrl+"/")
 def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
 def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(5)) else sys.error("not local url")
-
 def thumbnailUrl(img: Image) = s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"
 
-def undefRefError(ref: String, a: Article) =
-  println(s"link reference [$ref] is not defined in article '${a.title}'")
+def undefRefError(ref: String, a: Article) = ()
+  //println(s"link reference [$ref] is not defined in article '${a.title}'") TODO
 
 def undefId(id: String, a: Article) = {
-  println(s"id [$id] is not defined in article '${a.title}'")
+  //println(s"id [$id] is not defined in article '${a.title}'") TODO
   "undefined id "+id
 }
 
@@ -250,7 +258,7 @@ val boldRegex     = """(?xs)\*\*(.+?)\*\*""".r
 val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*) (.+?) (?<!\*) \* (?!\*) """.r
 val italic2Regex  = """(?xsUu) (?<!:) // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) // """.r
 val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r
-val hrRegex       = """(?xm) \n\n ---+ \n\n""".r
+val hrRegex       = """(?xm) ---+ """.r
 val altRegex      = """(?xm) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
 val linkRegex     = """(?x)  " ([^"]+?) " : \[ ([^\]\n]+?) \]""".r
 val ahrefRegex    = """(?x) (?<= href=") (.*?) (?=") """.r
@@ -329,7 +337,7 @@ def _parseMetaFormat(str: String): Meta = Meta(
     val Array(k, rest) = str.split(":", 2)
     if (rest.trim.apply(0) == '[') {
       val Array(v, rest2) = rest.trim.tail.split("]", 2) // 2 levels only
-      _parseMetaFormat(rest2).xs + ((k.trim, _parseMetaFormat(v)))
+      _parseMetaFormat(rest2.replaceAll("\\s*(,\\s*)", "")).xs + ((k.trim, _parseMetaFormat(v)))
     } else {
       rest.split(",", 2) match {
         case Array(v, rest2) => _parseMetaFormat(rest2).xs + (s"${k.trim}:${v.trim}" -> null)
@@ -414,8 +422,6 @@ def generateSlug(title: String) = {
 
 def tagSlug(tag: String) = "tag/"+generateSlug(tag)
 
-def similarByTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
-  // TODO use a.meta.seq("rel")
   def dateDiff(a: Article, b: Article): Long = {
     (a.date, b.date) match {
       case (null, null) => 0
@@ -424,18 +430,33 @@ def similarByTags(a: Article, tagMap: Map[String, Seq[Article]]): Seq[Sim] = {
     }
   }
 
-  (a.tags.supertags ++ a.tags.visible ++ a.tags.hidden)
-    .flatMap(t => tagMap.getOrElse(t, Seq()))
-    .filter(_.slug != a.slug)
-    .groupBy(identity)
-    .map { case (a, ts) => Sim(a, ts.size) }
-    .toVector
-    .sortBy { s => (~s.commonTags, dateDiff(a, s.article)) } // most common tags, published closest together
-}
+class Similarities(tagMap: Map[String, Seq[Article]]) {
+  private val arts: Array[Article] = tagMap.values.flatten.toArray.distinct
+  private val artMap: Map[Article, Int] = arts.zipWithIndex.toMap
+  private val tm: Map[String, Array[Int]] = tagMap.map { case (t, as) => (t, as.map(artMap).toArray) }
+  private val len = arts.length
 
-def similarByTags(a: Article, tagMap: Map[String, Seq[Article]], without: Seq[Article]): Seq[Article] = {
-  val bl = a.backlinks.toSet
-  similarByTags(a, tagMap).filter(s => !bl.contains(s.article)).take(5).map(_.article)
+  // TODO use a.meta.seq("rel")
+  def similarByTags(article: Article): Seq[Sim] = {
+    val freq = new Array[Int](len) // article idx -> count
+    val alltags = article.tags.supertags ++ article.tags.visible ++ article.tags.hidden
+    for (t <- alltags) {
+      tm.get(t) foreach { arr =>
+        var i = 0; while (i < arr.length) {
+          freq(arr(i)) += 1
+          i += 1
+        }
+      }
+    }
+
+    (0 until len).iterator.collect { case i if freq(i) >= 1 && arts(i).slug != article.slug =>
+      Sim(arts(i), freq(i))
+    } .toVector
+      .sortBy { s => (~s.commonTags, dateDiff(article, s.article)) } // most common tags, published closest together
+  }
+
+  def similarByTags(a: Article, count: Int, without: Seq[Article]): Seq[Article] =
+    similarByTags(a).filter(s => !without.contains(s.article)).take(count).map(_.article)
 }
 
 
@@ -449,24 +470,44 @@ trait Layout {
 
 
 sealed trait Fragment
-final case class Html(txt: String) extends Fragment
-final case class Para(txt: String) extends Fragment
-final case class HR() extends Fragment
-final case class Imgs(txt: String) extends Fragment
-final case class LinkRefs(txt: String) extends Fragment
+final case class Heading(txt: String) extends Fragment
+final case class Text(txt: String) extends Fragment
+final case class Hr() extends Fragment
+final case class Images(images: Seq[Image]) extends Fragment
+final case class Linkref(txt: String) extends Fragment
+
+def parseText(txt: String) = {
+
+  txt.split("\n\n\n") map {
+
+    case headingRegex(txt) => Heading(txt)
+    case hrRegex => Hr()
+    case txt if txt.trim.startsWith("[*") => Images(???)
+    case linkRefRegex
+
+    
+  
+  
+  }
 
 
-class FlowLayout(baseUrl: String, _base: Base) extends Layout {
-  implicit val base = _base
+}
 
+
+
+class FlowLayout(baseUrl: String, base: Base) extends Layout {
   def rel(url: String): String = relativize(url, baseUrl)
   def txl(s: String) = Blog.translation(s)
   def ifs(c: Boolean, body: => String) = if (c) body else ""
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
 
-
   def decorateText(a: Article): String = {
+
+    if (a.format == "html") {
+      // TODO - resolveLink
+      return a.rawText
+    }
 
     val (mainImage, images) = a.images match {
       case Seq() => (null, Seq())
@@ -476,9 +517,9 @@ class FlowLayout(baseUrl: String, _base: Base) extends Layout {
  
     var txt = a.rawText
 
-    if (mainImage != null && mainImage.mods == "float_right") {
-      txt = imgTag(mainImage, "fr", true)+txt
-    }
+    //if (mainImage != null && mainImage.mods == "float_right") {
+    //  txt = imgTag(mainImage, "fr", true)+txt
+    //}
 
     txt = blackout(txt)
 		txt = altRegex.replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
@@ -489,22 +530,22 @@ class FlowLayout(baseUrl: String, _base: Base) extends Layout {
       s"""<a href="${rel(url)}">${m.group(1)}</a>"""
     })
 
-    if (mainImage != null && mainImage.mods == "main") {
-      if (hrRegex.findAllMatchIn(txt).nonEmpty) {
-        txt = hrRegex.replaceFirstIn(txt, quoteReplacement("<br/><br/>\n"+imgTag(mainImage, "main", true)+"<br/>\n"))
-      } else {
-        txt += "<br/><br/>"+imgTag(mainImage, "main", true)
-      }
-    }
+    //if (mainImage != null && mainImage.mods == "main") {
+    //  if (hrRegex.findAllMatchIn(txt).nonEmpty) {
+    //    txt = hrRegex.replaceFirstIn(txt, quoteReplacement("<br/><br/>\n"+imgTag(mainImage, "main", true)+"<br/>\n"))
+    //  } else {
+    //    txt += "<br/><br/>"+imgTag(mainImage, "main", true)
+    //  }
+    //}
 
-    txt = hrRegex.replaceAllIn(txt, "\n\n---<br/>\n\n")
-    txt = imageBlock(txt, images)
+    txt = hrRegex.replaceAllIn(txt, "\n\n<hr/>\n\n")
+    txt = imageBlock(txt, images) // TODO a.images
     txt = blockquoteRegex.replaceAllIn(txt, m =>
       "<blockquote>"+m.group(1).replaceAll("(?mx) ^\\>\\ +", "")+"</blockquote><br/>"
     )
     txt = txt.replaceAll("""(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n)) """, "$1$2<br/>") // lists
     txt = linkRefBlockRegex.replaceAllIn(txt, "")
-		txt = headingRegex.replaceAllIn(txt, """<h2>$1</h2>""")
+		txt = headingRegex.replaceAllIn(txt, """<h3>$1</h3>""")
     txt = txt.replaceAll("(\n*---+)?\n*$", "")
     txt = txt.replaceAll("""(?xs) \<!--.*?--\>""", "")
     txt = txt.replaceAll("\n\n+|$", "<br/>\n<br/>\n")
@@ -544,6 +585,8 @@ img.th,img.thz{}
 span.thz {width:${Blog.thumbWidth}px;display:inline-block;vertical-align:top}
 span.fr {max-width:50%;float:right;text-align:right;} span.fr img {max-width:100%}
 span.main {display:block;text-align:right;margin-bottom:0.5em;} span.main img {max-width:100%}
+h2 {display:inline;margin:none;font-size:1em }
+hr { border: 0px dashed gray; border-top-width: 1px; }
 ${Blog.style}</style>
 ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
 </head>
@@ -562,21 +605,18 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
   }
 
   def makeFullArticle(a: Article, prevNextNavigation: Boolean, tags: Boolean): String = {
-    val sims = a.similar.take(5)
-
-    makeLink(a)+
-    (if (prevNextNavigation) "<span class=f>"+makeNextPrevArrows(a)+"</span>" else "")+
+    makeTitle(a)+
+    ifs(prevNextNavigation, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     "<br/><br/><br/>\n"+
     decorateText(a)+
-    (if (prevNextNavigation) makeNextPrevLinks(a) else "")+
-    (if (a.pub.nonEmpty) txl("published")+"<br>\n"+
-    a.pub.map(makeLink).mkString("<br/>\n")+"<br/>" else "")+
-    (if (a.pubBy != null) txl("publishedBy")+" "+articleLink(a.pubBy, makeDate(a))+"<br/>" else "")+
+    ifs(prevNextNavigation, makeNextPrevLinks(a))+
+    ifs(a.pub.nonEmpty, txl("published")+"<br/>"+ a.pub.map(makeLink).mkString("<br/>")+"<br/>")+
+    ifs(a.pubBy != null, txl("publishedBy")+" "+articleLink(a.pubBy, makeDate(a))+"<br/>")+
     "<div class=r>"+
-      (if (tags && a.tags.supertags.nonEmpty) makeSupertagLinks(a.tags.supertags, a)+"<br/>" else "")+
-      (if (tags && a.tags.visible.nonEmpty) makeTagLinks(a.tags.visible)+"<br/>" else "")+
-      (if (tags && (a.backlinks.nonEmpty || sims.nonEmpty)) makeRelLinks(Seq(sims, a.backlinks))+"<br/>" else "")+
-      (if (tags && a.license != null) a.license+"</br>" else "")+
+      ifs(tags && a.tags.supertags.nonEmpty, makeSupertagLinks(a.tags.supertags, a)+"<br/>")+
+      ifs(tags && a.tags.visible.nonEmpty,   makeTagLinks(a.tags.visible)+"<br/>")+
+      ifs(tags && (a.backlinks.nonEmpty || a.similar.nonEmpty), makeRelLinks(Seq(a.similar, a.backlinks))+"<br/>")+
+      ifs(tags && a.license != null, a.license+"</br>")+
     "</div>"
   }
 
@@ -591,6 +631,7 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
 
   def articleLink(a: Article, title: String) = s"""<i><a href="${rel(absUrl(a))}">${title}</a></i>"""
   def makeLink(a: Article) = makeDate(a)+articleLink(a, a.title)
+  def makeTitle(a: Article) = makeDate(a)+"<h2>"+articleLink(a, a.title)+"</h2>"
 
   def makeTagLink(t: String) =
     s"""<span class=y>#</span><i><a href="${rel(absUrlFromSlug(tagSlug(t)))}">${t}</a></i>"""
@@ -725,7 +766,7 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
       .groupBy(_._1)
       .map { case (b, bas) => (b, bas.map(_._2).toVector) }
 
-  implicit val base = Base(articles)
+  val base = Base(articles)
   def refs(a: Article, k: String) = a.meta.seq(k) flatMap base.find
 
   var tagMap: Map[String, Seq[Article]] =
@@ -741,6 +782,8 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
     invert(articles.map { a => (a, refs(a, "pub").map(_.asSlug)) })
       .map { case (k, vs) => (k, vs.sortBy(_.date).head) }
 
+  val sim = new Similarities(allTagMap)
+
   articles = articles map { a =>
     val bs = backlinks.getOrElse(a.asSlug, Seq())
     val pubBy = pubsBy.getOrElse(a.asSlug, null)
@@ -752,11 +795,11 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
     a.copy(
       date = if (a.date == null && pubBy != null) pubBy.date else a.date,
       backlinks = bs,
-      similar = similarByTags(a, allTagMap, without = bs),
+      similar = sim.similarByTags(a, count= 5, without = bs),
       pub = refs(a, "pub"),
       pubBy = pubBy
     )
-  }
+}
 
   if (Blog.sortByDate) { // newest first, articles without date last
     val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
