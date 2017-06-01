@@ -1,5 +1,4 @@
 import java.util.{ Date, GregorianCalendar, Calendar, Locale }
-import java.util.regex.Matcher.quoteReplacement
 import java.text.SimpleDateFormat
 import java.io.File
 import java.net.{ URL, URI }
@@ -310,7 +309,6 @@ val imgRegexFragment = """
 """
 
 val imgRegex      = s"""(?xm) $imgRegexFragment""".r
-val blockquoteRegex = """(?xm) ( (?: ^>[^\n]*\n)+ )""".r
 val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
 
 val imgLicenseRegex = """(?x) (.*?) \s* (?: \( (?:(CC\ [\w-]+)\s+)? \s* ([^\ ]*)? \) )? \s*$""".r
@@ -544,12 +542,8 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
       txt = altRegex.replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
       txt = ahrefRegex.replaceAllIn(txt, m => rel(resolveLink(m.group(1), base, a)))
       txt = linkRegex.replaceAllIn(txt, m => {
-        val url = resolveLink(m.group(2), base, a)
-        s"""<a href="${rel(url)}">${m.group(1)}</a>"""
+        s"""<a href="${rel(resolveLink(m.group(2), base, a))}">${m.group(1)}</a>"""
       })
-      txt = blockquoteRegex.replaceAllIn(txt, m =>
-        "<blockquote>"+m.group(1).replaceAll("(?mx) ^\\>\\ +", "")+"</blockquote><br/>"
-      )
       txt = txt.replaceAll("""(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n)) """, "$1$2<br/>") // lists
       txt = txt.replaceAll("""(?xs) \<!--.*?--\>""", "")
       txt = boldRegex.replaceAllIn(txt, """<b>$1</b>""")
@@ -671,7 +665,7 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
   def makeTitle(a: Article) = makeDate(a)+"<h2>"+articleLink(a, a.title)+"</h2>"
 
   def makeTagLink(t: String) =
-    s"""<span class=y>#</span><i><a href="${rel(absUrlFromSlug(tagSlug(t)))}">${t}</a></i>"""
+    s"""#<i><a href="${rel(absUrlFromSlug(tagSlug(t)))}">${t}</a></i>"""
 
   def makeNextPrevLinks(a: Article) =
     (if (base.prev(a) == null) "" else "«« "+makeLink(base.prev(a))+"<br/>") +
