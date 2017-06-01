@@ -286,7 +286,6 @@ def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
 
 val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
 val dateRegex     = """^(\d+)-(\d+)-(\d+)(?: (\d+):(\d+)(?::(\d+))?)?$""".r
-val tagsRegex     = """^((?:#|\?|!).+)$""".r
 
 val linkRefRegex      = """(?xm)      ^\[(.*?)\]:\ (.+)$""".r
 val boldRegex     = """(?xs)\*\*(.+?)\*\*""".r
@@ -354,23 +353,23 @@ def parseDate(l: String): Option[Seq[Date]] = {
 def parseLicense(l: String): Option[String] =
   if (licenses.contains(l)) Some(l) else None
 
+val tagsRegex     = """^((?:#|\?|!).+)$""".r
+val tagBlockRegex = """(##|#|\?|!)(.+?)(?=( |^)(##|#|\?|!)|$)""".r
 val parseTags: PartialFunction[String, Tags] = {
-    case tagsRegex(s) =>
-      val symbols = Set("#", "!", "?")
-      var res = Tags()
-      var ts = s.split("(\\s*,)?\\s+")
-
-      while (ts.nonEmpty) {
-        val tags = ts.tail.takeWhile(t => !symbols.contains(t))
-        res = ts.head match {
-          case "!" => res.copy(supertags = res.supertags ++ tags)
-          case "#" => res.copy(visible   = res.visible   ++ tags)
-          case "?" => res.copy(hidden    = res.hidden    ++ tags)
-        }
-        ts = ts.drop(tags.length + 1)
+  case tagsRegex(s) =>
+    tagBlockRegex.findAllMatchIn(s).foldLeft(Tags()) { (t, m) =>
+      val tags = m.group(2).split("\\s*,\\s*")
+      m.group(1) match {
+        case "!"|"##" => t.copy(supertags = t.supertags ++ tags)
+        case "#"      => t.copy(visible   = t.visible   ++ unbracketed(tags), hidden = t.hidden ++ bracketed(tags))
+        case "?"      => t.copy(hidden    = t.hidden    ++ tags)
       }
-      res
-  }
+    }
+}
+
+val bracketRegex  = """^\(([^)]+)\)$""".r
+def bracketed(xs: Array[String])   = xs.collect { case bracketRegex(x) => x }
+def unbracketed(xs: Array[String]) = xs.filter { case bracketRegex(x) => false ; case _ => true }
 
 def _parseMetaFormat(str: String): Meta = Meta(
   if (str.trim.isEmpty) {
