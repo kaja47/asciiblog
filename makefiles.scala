@@ -406,6 +406,7 @@ def parseArticle(lines: Vector[String]): Article = {
 
   val titleLine = ls(0)
   val titleRegex(xxx, title, slug) = titleLine
+  val realSlug = if (slug == null || slug == "") generateSlug(title) else slug
   val inFeed = xxx == null
 
   val (metaLines, _body) = ls.drop(2).span(l => l.nonEmpty)
@@ -420,16 +421,23 @@ def parseArticle(lines: Vector[String]): Article = {
     sys.error("some metainformation was not processed: "+metaLines)
 
   val txt = segmentText(body.mkString("\n"))
+  val linkRefs = txt.linkRefs
+  if (linkRefs.map(_._1).toSet.size != linkRefs.size) {
+    //sys.error(s"duplicate link refs in article '$realSlug'")
+  }
+  if (linkRefs.exists { case (r, url) => url.trim.startsWith("???") }) {
+    //sys.error(s"undefined linkRef url in article '$realSlug'")
+  }
 
   new Article(
     title   = title.trim,
-    slug    = if (slug == null || slug == "") generateSlug(title) else slug,
+    slug    = realSlug,
     date    = dates.headOption.map(_.head).getOrElse(null), // TODO, currently it's using only the first date
     tags    = tags.fold(Tags()) { (a, b) => Tags(a.visible ++ b.visible, a.hidden ++ b.hidden, a.supertags ++ b.supertags)},
     license = license.headOption.getOrElse(null),
     rawText = body.mkString("\n"),
     images  = txt.images,
-    linkMap = txt.linkMap,
+    linkMap = txt.linkRefs.toMap,
     links   = txt.links,
     meta    = meta.headOption.getOrElse(Meta()),
     inFeed  = inFeed
@@ -464,9 +472,11 @@ trait Layout {
 
 
 case class Text(segments: Seq[Segment]) {
-  def linkMap: Map[String, String] = segments.collect { case Linkref(lm) => lm }.flatMap { _.iterator }.toMap
-  def links: Seq[String] = segments.collect { case Paragraph(txt) => // TODO + inside of blockquote
-    (ahrefRegex.findAllMatchIn(txt).map(_.group(1)) ++ linkRegex.findAllMatchIn(txt).map(_.group(2))).toVector
+  def linkRefs: Seq[(String, String)] = segments.collect { case Linkref(lm) => lm }.flatMap { _.iterator }
+  def links: Seq[String] = segments.collect {
+    case Paragraph(txt) =>
+      (ahrefRegex.findAllMatchIn(txt).map(_.group(1)) ++ linkRegex.findAllMatchIn(txt).map(_.group(2))).toVector
+    case Blockquote(txt) => txt.links
   }.flatten
   def images: Seq[Image] = segments.collect { case Images(imgs) => imgs }.flatten
 }
@@ -478,7 +488,7 @@ final case class Linkref(linkMap: Map[String, String]) extends Segment
 final case class Images(images: Seq[Image]) extends Segment
 final case class Paragraph(txt: String) extends Segment
 final case class Code(txt: String) extends Segment
-final case class Blockquote(txt: String) extends Segment
+final case class Blockquote(txt: Text) extends Segment
 
 def segmentText(txt: String): Text = {
   def matchAllLines[T](ls: Seq[String])(f: PartialFunction[String, T]): Option[Seq[T]] = {
@@ -498,8 +508,8 @@ def segmentText(txt: String): Text = {
           matchAllLines(ls)(mkImage).map(Images)
         }.orElse {
           matchAllLines(ls) {
-            case l if l.startsWith(">") => l.drop(2) // TODO >\s and >$
-          }.map { ls => Blockquote(ls.mkString("\n")) }
+            case l if l.startsWith("> ") || l == ">"  => l.drop(2)
+          }.map { ls => Blockquote(Text(splitBlocks(ls.mkString("\n")))) }
         }.getOrElse {
           Paragraph(txt)
         }
@@ -548,40 +558,37 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
       "<p>"+txt+"</p>"
     }
 
-    val segs = segmentText(a.rawText).segments
+    def mkText(txt: Text): String = {
+      var x: Option[Images] = None
+      val s1 = txt.segments.map {
+        case Images(is) if x == None && is.head.mods == "float_right" =>
+          x = Some(Images(Seq(is.head)))
+          Images(is.tail)
+        case s => s
+      }
 
-    var x: Images = null
-    val s1 = segs.toArray.map {
-      case Images(is) if x == null && is.head.mods == "float_right" =>
-        x = Images(Seq(is.head))
-        Images(is.tail)
-      case s => s
+      val s2 = (x ++ s1).toVector match {
+        case xs :+ Hr() => xs :+ Hr()
+        case xs => xs :+ Hr()
+      }
+
+      s2.map {
+        case Heading(txt)   => s"<h3>$txt</h3>"
+        case Hr()           => "<hr/>"
+        case Linkref(txt)   => ""
+        case Code(txt)      => s"<pre>$txt</pre>"
+        case Images(images) =>
+          images.map {
+            case i if i.mods == "main" => imgTag(i, "main", true)
+            case i if i.mods == "float_right" => imgTag(i, "fr", true)
+            case i => imgTag(i, "thz")
+          }.mkString(" ")
+        case Paragraph(txt) => paragraph(txt)
+        case Blockquote(txt) => "<blockquote>"+mkText(txt)+"</blockquote>"
+      }.mkString("")//+"<br/>"
     }
 
-    val s2 = (if (x != null) x +: s1 else s1)
-    val s3 = s2.last match {
-      case Hr() => s2
-      case _ => s2 :+ Hr()
-    }
-
-    s3.map {
-      case Heading(txt)   => s"<h3>$txt</h3>"
-      case Hr()           => "<hr/>"
-      case Linkref(txt)   => ""
-      case Code(txt)      => s"<pre>$txt</pre>"
-      case Images(images) =>
-        images.map {
-          case i if i.mods == "main" => imgTag(i, "main", true)
-          case i if i.mods == "float_right" => imgTag(i, "fr", true)
-          case i => imgTag(i, "thz")
-        }.mkString(" ")
-
-      case Paragraph(txt) => paragraph(txt)
-      case Blockquote(txt) => "<blockquote>"+txt+"</blockquote>" // TODO internal formatting
-
-    }.mkString("")+"<br/>"
-
-
+    mkText(segmentText(a.rawText))
   }
 
   def imgTag(img: Image, cl: String, full: Boolean = false) = {
