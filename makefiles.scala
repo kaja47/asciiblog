@@ -595,7 +595,44 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
     s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="${if (full) img.url else rel(thumbPath)}"/></a>$desc</span>"""
   }
 
+  val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
+
+  val tagRegex   = """\<([a-zA-Z]\w*?)\W""".r
+  def classesAndTags(txt: String): Set[String] = {
+    val classes = classRegex.findAllMatchIn(txt).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
+    val tags    = tagRegex.findAllMatchIn(txt).map(_.group(1))
+    (tags ++ classes.map("."+_)).toSet
+  }
+
+  val selectorRegex = """^(\w+)?(\.\w+)?$""".r
+  def style(styleLine: String, cats: Set[String]): Option[String] = {
+    val (selectorList, rule) = styleLine.span(_ != '{')
+    val matchingSelectors = selectorList.split(",").map(_.trim).flatMap { selector =>
+      val matches = selector.split(" ").forall { s =>
+        selectorRegex.findFirstMatchIn(s) match {
+          case Some(m) => (Option(m.group(1)) ++ Option(m.group(2))).forall(cats.contains)
+          case None => true
+        }
+      }
+      if (matches) Some(selector) else None
+    }
+    if (matchingSelectors.nonEmpty) Some(matchingSelectors.mkString(",")+rule) else None
+  }
+
+  def styles(styleTxt: String, cats: Set[String]) =
+    styleTxt.lines.map(_.trim).filter(_.nonEmpty).flatMap(l => style(l, cats)).mkString("")
+
+
   def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String = {
+val body = s"""<body>
+<div class=b>
+<div class=r><b><a href="${rel("index.html")}">${Blog.title}</a></b> [<a href="${rel("rss.xml")}">RSS</a>]</div>
+"""+content+"""
+</div>
+</body>"""
+
+val cats = classesAndTags(body)
+
 s"""<!DOCTYPE html>
 <html>
 <head>
@@ -603,24 +640,26 @@ s"""<!DOCTYPE html>
 <title>${(if (title != null) title+" | " else "")+Blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="${rel("rss.xml")}"/>
 ${if (rss != null) s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>""" else ""}
-<style>a{color:inherit}blockquote{margin:0;padding:0;font-style:italic;}.r{text-align:right}.f{float:right}.b{max-width:46em;font-family:monospace;line-height:1.3}.about{text-decoration: underline red;}
+<style>${styles("""
+a{color:inherit}
+.r{text-align:right}
+.f{float:right}
+.b{max-width:46em;font-family:monospace;line-height:1.3}
+blockquote{margin:0;padding:0;font-style:italic;}
+.about{text-decoration: underline red;}
 img.th,img.thz{}
 .thz,.fr,.main{font-size:0.8em}
 span.thz {width:${Blog.thumbWidth}px;display:inline-block;vertical-align:top}
-span.fr {max-width:50%;float:right;text-align:right;} span.fr img {max-width:100%}
-span.main {display:block;text-align:right;margin-bottom:0.5em;} span.main img {max-width:100%}
+span.fr {text-align:right; max-width:50%; float:right;}
+span.main {text-align:right; display:block; margin-bottom:0.5em;}
+span.main img, span.fr img {max-width:100%}
 h2 {display:inline;margin:none;font-size:1em }
 hr { border: 0px dashed gray; border-top-width: 1px; margin: 0.5em 4em; }
 p { margin: 1.5em 0; }
+""", cats)}
 ${Blog.style}</style>
 ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
-</head>
-<body>
-<div class=b>
-<div class=r><b><a href="${rel("index.html")}">${Blog.title}</a></b> [<a href="${rel("rss.xml")}">RSS</a>]</div>
-"""+content+"""
-</div>
-</body>
+</head>$body
 </html>"""
   }
 
