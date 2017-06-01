@@ -72,12 +72,11 @@ case class Base(all: Seq[Article], tagMap: Map[String, Seq[Article]] = Map()) {
   def prev(a: Article, tag: String) = move(a, tag, -1)
 }
 
-class Similarities(tagMap: Map[String, Seq[Article]]) {
+class Similarities(base: Base, tagMap: Map[String, Seq[Article]]) {
   private val arts: Array[Article] = tagMap.values.flatten.toArray.distinct
   private val artMap: Map[Article, Int] = arts.zipWithIndex.toMap
   private val tm: Map[String, Array[Int]] = tagMap.map { case (t, as) => (t, as.map(artMap).toArray) }
 
-  // TODO use a.meta.seq("rel")
   def similarByTags(article: Article): Seq[Sim] = {
     def dateDiff(a: Article, b: Article): Long = {
       (a.date, b.date) match {
@@ -95,6 +94,10 @@ class Similarities(tagMap: Map[String, Seq[Article]]) {
           i += 1
         }
       }
+    }
+
+    for (i <- article.meta.seq("rel").flatMap(base.find).flatMap(artMap.get)) {
+      freq(i) += 64
     }
 
     (0 until arts.length).iterator.collect { case i if freq(i) >= 1 && arts(i).slug != article.slug =>
@@ -804,7 +807,7 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
     invert(articles.map { a => (a, refs(a, "pub").map(_.asSlug)) })
       .map { case (k, vs) => (k, vs.sortBy(_.date).head) }
 
-  val sim = new Similarities(allTagMap)
+  val sim = new Similarities(base, allTagMap)
 
   articles = articles map { a =>
     val bs = backlinks.getOrElse(a.asSlug, Seq())
