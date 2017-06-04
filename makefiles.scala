@@ -46,7 +46,6 @@ object Blog {
   val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "true").toBoolean
   val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "true").toBoolean
   val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.map(kv).toMap
-  val defaultVisibilityRules = cfg.collect { case (k, v) if k.startsWith("visibility:") => (k.split(":", 2)(1), v) }
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -836,10 +835,7 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
     articlesList.reverse.toVector
   }
 
-  val defaultVis = Blog.defaultVisibilityRules flatMap { case (pattern, vis) => listFiles(pattern) map { f => (f, vis) } }
-
   var articles = Blog.files.flatMap(listFiles).flatMap { f =>
-    val defvis = defaultVis.get(f)
     eatLines(io.Source.fromFile(f).getLines.toVector)
   }
 
