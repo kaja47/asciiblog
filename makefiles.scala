@@ -35,7 +35,7 @@ object Blog {
   val kind: String         = cfg.getOrElse("type", "blog")
   val title: String        = cfg("title")
   val baseUrl: String      = cfg("baseUrl")
-  val files: Seq[String]   = cfg.getOrElse("files", "").split(" ").filter(_.nonEmpty)
+  val files: Seq[String]   = spaceSeparatedStrings(cfg.getOrElse("files", "").trim)
   val articlesOnIndex: Int = cfg.getOrElse("fullArticlesOnIndex", "5").toInt
   val style: String        = cfg.getOrElse("style", "")
   val thumbWidth: Int      = cfg.getOrElse("thumbnailWidth", "150").toInt
@@ -46,7 +46,45 @@ object Blog {
   val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "true").toBoolean
   val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "true").toBoolean
   val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.map(kv).toMap
+  val defaultVisibilityRules = cfg.collect { case (k, v) if k.startsWith("visibility:") => (k.split(":", 2)(1), v) }
 }
+
+def spaceSeparatedStrings(str: String): Seq[String] = str match {
+  case "" => Seq()
+  case str if str(0) == '"' =>
+    val (s, rest) = str.drop(1).span(_ != '"')
+    s +: spaceSeparatedStrings(rest.drop(1).trim)
+  case _ =>
+    val (s, rest) = str.span(_ != ' ')
+    s +: spaceSeparatedStrings(rest.trim)
+}
+
+
+
+val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
+def listFiles(pattern: String): Array[File] = pattern match {
+  case p if p.endsWith("*") =>
+    val f = new File(p.init)
+    if (f.isDirectory) {
+      val fs = f.listFiles
+      if (fs == null) Array() else fs
+    } else {
+      val prefix = f.getName
+      val fs = f.getParentFile.listFiles
+      if (fs == null) Array() else fs.filter { _.getName.startsWith(prefix) }
+    }
+  case patternBracketRegex(p, variants) =>
+    val f = new File(p)
+    if (f.isDirectory) {
+      variants.split(",").map { v => new File(f, v) }
+    } else {
+      variants.split(",").map { v => new File(f.getParentFile, f.getName+v) }
+    }
+  case _ =>
+    val f = new File(pattern)
+    if (f.isDirectory) f.listFiles else Array(f)
+  }
+
 
 case class Base(all: Seq[Article], tagMap: Map[String, Seq[Article]] = Map()) {
   lazy val bySlug: Map[String, Article] = all.map(a => (a.slug, a)).toMap
@@ -133,10 +171,10 @@ case class Article(
   def format = meta.scalar("format")
 }
 
-case class Meta(xs: Map[String, Meta] = Map()) {
+case class Meta(values: Map[String, Meta] = Map()) {
   def scalar(key: String): String = scalars.find(_.startsWith(key+":")).map(_.drop(key.length+1).trim).getOrElse(null)
-  def scalars = xs.collect { case (k, v) if v == null => k }
-  def seq(k: String): Seq[String] = xs.get(k).map(_.xs.keys.toSeq).getOrElse(Seq())
+  def scalars = values.collect { case (k, v) if v == null => k }
+  def seq(k: String): Seq[String] = values.get(k).map(_.values.keys.toSeq).getOrElse(Seq())
 }
 
 case class Image(
@@ -292,11 +330,11 @@ val boldRegex     = """(?xs)\*\*(.+?)\*\*""".r
 val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*) (.+?) (?<!\*) \* (?!\*) """.r
 val italic2Regex  = """(?xsUu) (?<!:) // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) // """.r
 val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r
-val hrRegex       = """(?xm) ---+ """.r
+val hrRegex       = """(?xm) ---+|\*\*\*+ """.r
 val altRegex      = """(?xm) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
 val linkRegex     = """(?x)  " ([^"]+?) " : \[ ([^\]\n]+?) \]""".r
 val ahrefRegex    = """(?x) (?<= href=") (.*?) (?=") """.r
-val codeRegex     = """(?xs) /---code[^\n]*\n (.*?) \\---""".r
+val blockRegex    = """(?xs) /---(\w+)[^\n]*\n (.*?) \\--- | \<!-- (.*?) --\>  """.r
 
 val imgRegexFragment = """
 \s*  \[\*  \s+
@@ -371,22 +409,21 @@ val bracketRegex  = """^\(([^)]+)\)$""".r
 def bracketed(xs: Array[String])   = xs.collect { case bracketRegex(x) => x }
 def unbracketed(xs: Array[String]) = xs.filter { case bracketRegex(x) => false ; case _ => true }
 
-def _parseMetaFormat(str: String): Meta = Meta(
-  if (str.trim.isEmpty) {
-    Map()
-  } else {
-    val Array(k, rest) = str.split(":", 2)
-    if (rest.trim.apply(0) == '[') {
-      val Array(v, rest2) = rest.trim.tail.split("]", 2) // 2 levels only
-      _parseMetaFormat(rest2.replaceAll("\\s*(,\\s*)", "")).xs + ((k.trim, _parseMetaFormat(v)))
-    } else {
-      rest.split(",", 2) match {
-        case Array(v, rest2) => _parseMetaFormat(rest2).xs + (s"${k.trim}:${v.trim}" -> null)
-        case Array(v) => Map(s"${k.trim}:${v.trim}" -> null)
-      }
-    }
-  }
-)
+val metaRegex = """(?x) \s+ | \[ | \] | , | \w+:\w+ | \w+ | :""".r
+
+def _parseMetaFormat(str: String) = {
+  def build(tokens: Seq[String]): Meta =
+    Meta(tokens.dropWhile(_ == ",") match {
+      case Seq(k, ":", "[", rest @ _*) =>
+        val (v, Seq("]", rest2 @ _*)) = rest.span(_ != "]") // 2 levels only
+        Map(k -> build(v)) ++ build(rest2).values
+      case Seq(k, ",", rest @ _*) => Map(k -> null) ++ build(rest).values
+      case Seq(k) => Map(k -> null)
+      case Seq() => Map()
+    })
+
+  build(metaRegex.findAllMatchIn(str).map(_.group(0).trim).filter(_.nonEmpty).toVector)
+}
 
 def parseMeta(l: String, prefix: String = "meta: "): Option[Meta] =
   if (l.startsWith(prefix)) {
@@ -487,7 +524,7 @@ final case class Hr() extends Segment
 final case class Linkref(linkMap: Map[String, String]) extends Segment
 final case class Images(images: Seq[Image]) extends Segment
 final case class Paragraph(txt: String) extends Segment
-final case class Code(txt: String) extends Segment
+final case class Block(tpe: String, txt: String) extends Segment
 final case class Blockquote(txt: Text) extends Segment
 
 def segmentText(txt: String): Text = {
@@ -516,15 +553,15 @@ def segmentText(txt: String): Text = {
     }
 
   var prev = 0
-  val segments: Seq[Segment] = (for (m <- codeRegex.findAllMatchIn(txt)) yield {
-    val res: Seq[Segment] = splitBlocks(txt.substring(prev, m.start)) :+ Code(m.group(1))
+  val segments: Seq[Segment] = (for (m <- blockRegex.findAllMatchIn(txt)) yield {
+    val block = if (m.group(1) != null) Block(m.group(1), m.group(2)) else Block("comment", m.group(3))
+    val res = splitBlocks(txt.substring(prev, m.start)) :+ block
     prev = m.end+1
     res
   }).toVector.flatten ++ (if (prev > txt.length) Seq() else splitBlocks(txt.substring(prev)))
 
   Text(segments)
 }
-
 
 class FlowLayout(baseUrl: String, base: Base) extends Layout {
   def rel(url: String): String = relativize(url, baseUrl)
@@ -572,7 +609,12 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
         case Heading(txt)   => s"<h3>$txt</h3>"
         case Hr()           => "<hr/>"
         case Linkref(txt)   => ""
-        case Code(txt)      => s"<pre>$txt</pre>"
+        case Block("html", txt) => txt
+        case Block("div",  txt) => s"<div>$txt</div>"
+        case Block("code", txt) => s"<pre>$txt</pre>"
+        case Block("pre",  txt) => s"<pre>$txt</pre>"
+        case Block("comment",_) => ""
+        case Block(tpe, _) => sys.error(s"unknown block type $tpe")
         case Images(images) =>
           images.map {
             case i if i.mods == "main" => imgTag(i, "main", true)
@@ -676,9 +718,9 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
     ifs(!compact,
       "<div style='font-size:0.9em;'>"+
       "<div class='f r'>"+
-        ifs(a.tags.supertags.nonEmpty, makeSupertagLinks(a.tags.supertags, a)+"<br/>")+
-        ifs(a.tags.visible.nonEmpty,   makeTagLinks(a.tags.visible)+"<br/>")+
-        ifs(a.license != null, a.license+"</br>")+
+        ifs(a.tags.supertags.nonEmpty, makeSupertagLinks(a.tags.supertags, a)+"<br/>\n")+
+        ifs(a.tags.visible.nonEmpty,   makeTagLinks(a.tags.visible)+"<br/>\n")+
+        ifs(a.license != null, a.license+"<br/>")+
       "</div>"+
       makeNextPrevLinks(a)+
       ifs(a.pub.nonEmpty, txl("published")+"<br/>"+ a.pub.map(makeLink).mkString("<br/>")+"<br/>")+
@@ -780,20 +822,26 @@ def saveXml(f: String, content: String): (String, String) =
 
 
 def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
-  var lines: Vector[String] = Blog.files.flatMap { f =>
-    io.Source.fromFile(f).getLines ++ Seq("\n","\n")
-  }.toVector
 
-  var articlesList = List[Article]()
-  val today = new Date
+  def eatLines(_lines: Vector[String]): Vector[Article] = {
+    var articlesList = List[Article]()
+    var lines = _lines
 
-  while (lines.nonEmpty) {
-    val (a, ls) = getArticle(lines)
-    articlesList ::= a
-    lines = ls
+    while (lines.nonEmpty) {
+      val (a, ls) = getArticle(lines)
+      articlesList ::= a
+      lines = ls
+    }
+
+    articlesList.reverse.toVector
   }
 
-  var articles = articlesList.reverse.toVector
+  val defaultVis = Blog.defaultVisibilityRules flatMap { case (pattern, vis) => listFiles(pattern) map { f => (f, vis) } }
+
+  var articles = Blog.files.flatMap(listFiles).flatMap { f =>
+    val defvis = defaultVis.get(f)
+    eatLines(io.Source.fromFile(f).getLines.toVector)
+  }
 
   if (Blog.articlesMustNotBeMixed) {
     val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
@@ -801,6 +849,7 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
     if (rest.nonEmpty) sys.error("hidden and visible articles are mixed up")
   }
 
+  val today = new Date
   articles = articles.filter { a =>
     val isInPast = a.date == null || a.date.before(today)
     !a.title.startsWith("?") && isInPast
@@ -815,12 +864,8 @@ def prepareBlog(): (Seq[Article], Map[String, Seq[Article]]) = {
 
   // ordered by date
   if (Blog.articlesMustBeSorted) {
-    val ordered = articles
-      .filter(_.date != null)
-      .map(_.date)
-      .sliding(2)
-      .forall { case Seq(a, b) => a.compareTo(b) >= 0 }
-
+    val dated = articles.filter(_.date != null)
+    val ordered = dated == dated.sortBy(~_.date.getTime)
     if (!ordered) sys.error("articles are not ordered by date")
   }
 
