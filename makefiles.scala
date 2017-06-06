@@ -49,8 +49,8 @@ object Blog {
   val articlesInRss: Boolean = cfg.getOrElse("articlesInRss", "false").toBoolean
   val sortByDate: Boolean    = cfg.getOrElse("sortByDate", "false").toBoolean
   val imageRoot: String      = cfg.getOrElse("imageRoot", "")
-  val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "true").toBoolean
-  val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "true").toBoolean
+  val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean
+  val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean
   val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.collect(kv).toMap
 }
 
