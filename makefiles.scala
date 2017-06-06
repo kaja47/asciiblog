@@ -40,6 +40,7 @@ object Blog {
   val style: String        = cfg.getOrElse("style", "")
   val thumbWidth: Int      = cfg.getOrElse("thumbnailWidth", "150").toInt
   val thumbHeight: Int     = cfg.getOrElse("thumbnailHeight", "100").toInt
+  val bigThumbWidth: Int   = 800
   val limitRss: Int        = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
   val sortByDate: Boolean  = cfg.getOrElse("sortByDate", "false").toBoolean
   val imageRoot: String    = cfg.getOrElse("imageRoot", "")
@@ -61,7 +62,7 @@ def spaceSeparatedStrings(str: String): Seq[String] = str match {
 
 
 val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
-def listFiles(pattern: String): Array[File] = pattern match {
+def listFiles(pattern: String): Array[File] = ((pattern match {
   case p if p.endsWith("*") =>
     val f = new File(p.init)
     if (f.isDirectory) {
@@ -82,7 +83,7 @@ def listFiles(pattern: String): Array[File] = pattern match {
   case _ =>
     val f = new File(pattern)
     if (f.isDirectory) f.listFiles else Array(f)
-  }
+  }): Array[File]).filter(f => !f.getName.startsWith("."))
 
 
 case class Base(all: Seq[Article], tagMap: Map[String, Seq[Article]] = Map()) {
@@ -208,7 +209,12 @@ case class Tags(visible: Seq[String] = Seq(), hidden: Seq[String] = Seq(), super
 }
 case class Sim(article: Article, commonTags: Int)
 
-def resizeImage(src: BufferedImage, width: Int, height: Int): BufferedImage = {
+def resizeImage(src: BufferedImage, _width: Int, _height: Int = -1): BufferedImage = {
+  val (width, height) =
+    if (_height <= 0) {
+      if (_width > src.getWidth) (src.getWidth, src.getHeight) // do not scale up
+      else (_width, (1.0 * _width / src.getWidth * src.getHeight).toInt)
+    } else (_width, _height)
   val zoom = math.min(1.0 * src.getWidth / width, 1.0 * src.getHeight / height)
   val wz = math.max(1, (width * zoom).toInt)
   val hz = math.max(1, (height * zoom).toInt)
@@ -307,6 +313,7 @@ def isLocalLink(url: String) = url.startsWith(Blog.baseUrl+"/")
 def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
 def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(5)) else sys.error("not local url")
 def thumbnailUrl(img: Image) = s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"
+def bigThumbnailUrl(img: Image, half: Boolean) = s"t/${img.thumb}-${Blog.bigThumbWidth / (if (half) 2 else 1)}"
 
 def undefRefError(ref: String, a: Article) =
   println(s"link reference [$ref] is not defined in article '${a.title} [${a.slug}]'")
@@ -592,30 +599,29 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
 
+  def paragraph(_txt: String, a: Article) = {
+    var txt = _txt
+    txt = blackout(txt)
+    txt = altRegex.replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
+    txt = ahrefRegex.replaceAllIn(txt, m => rel(resolveLink(m.group(1), base, a)))
+    txt = linkRegex.replaceAllIn(txt, m => {
+      s"""<a href="${rel(resolveLink(m.group(2), base, a))}">${m.group(1)}</a>"""
+    })
+    txt = txt.replaceAll("""(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n|\d+\)\ )) """, "$1$2<br/>") // lists
+    txt = txt.replaceAll("""(?xm) ^(\d+\)\ )(?!\ )(.*?)(?=\n(?:\d+\)\ |\n\n)) """, "$1$2<br/>") // lists
+    txt = txt.replaceAll("""(?xs) \<!--.*?--\>""", "")
+    txt = boldRegex.replaceAllIn(txt, """<b>$1</b>""")
+    txt = italicRegex.replaceAllIn(txt, """<i>$1</i>""")
+    txt = italic2Regex.replaceAllIn(txt, """<i>$1</i>""")
+    txt
+  }
+
   def decorateText(a: Article): String = {
     if (a.format == "html") {
       return a.rawText // TODO - resolveLink
     }
 
-    def paragraph(_txt: String) = {
-      var txt = _txt
-      txt = blackout(txt)
-      txt = altRegex.replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
-      txt = ahrefRegex.replaceAllIn(txt, m => rel(resolveLink(m.group(1), base, a)))
-      txt = linkRegex.replaceAllIn(txt, m => {
-        s"""<a href="${rel(resolveLink(m.group(2), base, a))}">${m.group(1)}</a>"""
-      })
-      txt = txt.replaceAll("""(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n)) """, "$1$2<br/>") // lists
-      txt = txt.replaceAll("""(?xs) \<!--.*?--\>""", "")
-      txt = boldRegex.replaceAllIn(txt, """<b>$1</b>""")
-      txt = italicRegex.replaceAllIn(txt, """<i>$1</i>""")
-      txt = italic2Regex.replaceAllIn(txt, """<i>$1</i>""")
-      "<p>"+txt+"</p>"
-    }
-
     def mkText(txt: Text): String = {
-
-
       var x: Option[Images] = None
       val s1 = txt.segments.map {
         case Images(is) if x == None && is.head.mods == "main" && is.head.align == ">" =>
@@ -638,14 +644,9 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
         case Block("code", txt) => s"<pre>$txt</pre>"
         case Block("pre",  txt) => s"<pre>$txt</pre>"
         case Block("comment",_) => ""
-        case Block(tpe, _) => sys.error(s"unknown block type $tpe")
-        case Images(images) =>
-          images.map {
-            case i if i.mods == "main" && i.align == ">" => imgTag(i, "fr", true)
-            case i if i.mods == "main" => imgTag(i, "main", true)
-            case i => imgTag(i, "thz")
-          }.mkString(" ")
-        case Paragraph(txt) => paragraph(txt)
+        case Block(tpe, _)  => sys.error(s"unknown block type $tpe")
+        case Images(images) => images.map(img => imgTag(img, a)).mkString(" ")
+        case Paragraph(txt) => "<p>"+paragraph(txt, a)+"</p>"
         case Blockquote(txt) => "<blockquote>"+mkText(txt)+"</blockquote>"
       }.mkString("")//+"<br/>"
     }
@@ -653,12 +654,15 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
     mkText(segmentText(a.rawText))
   }
 
-  def imgTag(img: Image, cl: String, full: Boolean = false) = {
-    val thumbPath = thumbnailUrl(img)
+  def imgTag(img: Image, a: Article) = {
+    val (cl, src) = img match {
+      case i if i.mods == "main" && i.align == ">" => ("fr", rel(bigThumbnailUrl(img, true)))
+      case i if i.mods == "main" => ("main", rel(bigThumbnailUrl(img, false)))
+      case i => ("thz", rel(thumbnailUrl(img)))
+    }
     val desc =
-      (ifs(img.title)+" "+
-      (ifs(img.license)+" "+ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")).trim).trim
-    s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="${if (full) img.url else rel(thumbPath)}"/></a>$desc</span>"""
+      (ifs(img.title, paragraph(img.title, a))+" "+(ifs(img.license)+" "+ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")).trim).trim
+    s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="$src"/></a>$desc</span>"""
   }
 
   val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
@@ -716,12 +720,12 @@ blockquote{margin:0;padding:0;font-style:italic;}
 img.th,img.thz{}
 .thz,.fr,.main{font-size:0.8em}
 span.thz {width:${Blog.thumbWidth}px;display:inline-block;vertical-align:top}
-span.fr {text-align:right; max-width:50%; float:right;}
+span.fr {text-align:right; max-width:45%; float:right;}
 span.main {text-align:right; display:block; margin-bottom:0.5em;}
 span.main img, span.fr img {max-width:100%}
 h2 {display:inline;margin:none;font-size:1em }
 hr { border: 0px dashed gray; border-top-width: 1px; margin: 0.5em 4em; }
-p { margin: 1.5em 0; }
+p { margin: 1.4em 0; }
 """, cats)}
 ${Blog.style}</style>
 ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
@@ -741,7 +745,7 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
     decorateText(a)+
     ifs(!compact,
       "<div style='font-size:0.9em;'>"+
-      "<div class='f r'>"+
+      "<div class='f r' style='max-width:50%'>"+
         ifs(a.tags.supertags.nonEmpty, makeSupertagLinks(a.tags.supertags.map(base.tagByTitle), a)+"<br/>\n")+
         ifs(a.tags.visible.nonEmpty,   makeTagLinks(a.tags.visible.map(base.tagByTitle))+"<br/>\n")+
         ifs(a.license != null, a.license+"<br/>")+
@@ -749,9 +753,8 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
       makeNextPrevLinks(a)+
       ifs(a.pub.nonEmpty, txl("published")+"<br/>"+ a.pub.map(makeLink).mkString("<br/>")+"<br/>")+
       ifs(a.pubBy != null, txl("publishedBy")+" "+articleLink(a.pubBy, makeDate(a))+"<br/>")+
-      ifs(a.backlinks.nonEmpty || a.similar.nonEmpty,
-        txl("similar")+"<br/> "+(a.similar ++ a.backlinks).map(s => articleLink(s, s.title)).mkString("<br/>")+"<br/>"
-      )+
+      ifs(a.similar.nonEmpty,   "<p>"+txl("similar")+"<br/>"  +a.similar.map(s => articleLink(s, s.title)).mkString("<br/>")  +"</p>")+
+      ifs(a.backlinks.nonEmpty, "<p>"+txl("backlinks")+"<br/>"+a.backlinks.map(s => articleLink(s, s.title)).mkString("<br/>")+"</p>")+
     "</div>")
   }
 
@@ -932,6 +935,7 @@ def prepareBlog(): Base = {
 
   val backlinks: Map[Slug, Seq[Article]] =
     invert(articles.map { a => (a, a.links map { l => resolveLink(l, base, a) } filter isLocalLink map extractSlug) })
+      .map { case (k, as) => (k, as.distinct) }
 
   val pubsBy: Map[Slug, Article] =
     invert(articles.map { a => (a, refs(a, "pub").map(_.asSlug)) })
@@ -1066,8 +1070,17 @@ fileIndex += saveXml("rss", generateRSS(base.feed.take(Blog.limitRss)))
 val images = base.all.flatMap(_.images)
 new File("t").mkdir()
 for (image <- images) {
-  val (w, h) = (Blog.thumbWidth, Blog.thumbHeight)
-  val thumbFile = new File(thumbnailUrl(image))
+
+  val (thumbFile, w, h) =
+    if (image.mods == "main" && image.align == ">") {
+      (new File(bigThumbnailUrl(image, true)), Blog.bigThumbWidth/2, -1)
+    } else if (image.mods == "main") {
+      (new File(bigThumbnailUrl(image, false)), Blog.bigThumbWidth, -1)
+    } else {
+      val (w, h) = (Blog.thumbWidth, Blog.thumbHeight)
+      (new File(thumbnailUrl(image)), w, h)
+    }
+
   if (!thumbFile.exists) {
     println(s"resizing image ${image.url} -> $thumbFile")
     try {

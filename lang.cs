@@ -1,4 +1,5 @@
 published publikované články:
 publishedBy publikováno
 source zdroj
-similar podobné články:
+similar příbuzné články:
+backlinks sem odkazují:
