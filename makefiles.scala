@@ -11,10 +11,14 @@ import scala.util.matching.Regex
 
 val cfg = io.Source.fromFile(args(0))
   .getLines
-  .map(kv)
+  .collect(kv)
   .toMap
 
-def kv(l: String) = { val Array(k, v) = l.split(" ", 2) ; (k, v) }
+def kv: PartialFunction[String, (String, String)] = {
+  case s if s.split(" ", 2).length == 2 =>
+    val Array(k, v) = s.split(" ", 2)
+    (k, v)
+}
 
 def timer[T](label: String)(f: => T) = {
   val s = System.currentTimeMillis
@@ -32,21 +36,22 @@ val galleryScript =
     .replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "") // rather crude and incorrect minifier
 
 object Blog {
-  val kind: String         = cfg.getOrElse("type", "blog")
-  val title: String        = cfg("title")
-  val baseUrl: String      = cfg("baseUrl")
-  val files: Seq[String]   = spaceSeparatedStrings(cfg.getOrElse("files", "").trim)
-  val articlesOnIndex: Int = cfg.getOrElse("fullArticlesOnIndex", "5").toInt
-  val style: String        = cfg.getOrElse("style", "")
-  val thumbWidth: Int      = cfg.getOrElse("thumbnailWidth", "150").toInt
-  val thumbHeight: Int     = cfg.getOrElse("thumbnailHeight", "100").toInt
-  val bigThumbWidth: Int   = 800
-  val limitRss: Int        = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
-  val sortByDate: Boolean  = cfg.getOrElse("sortByDate", "false").toBoolean
-  val imageRoot: String    = cfg.getOrElse("imageRoot", "")
+  val kind: String           = cfg.getOrElse("type", "blog")
+  val title: String          = cfg("title")
+  val baseUrl: String        = cfg("baseUrl")
+  val files: Seq[String]     = spaceSeparatedStrings(cfg.getOrElse("files", "").trim)
+  val articlesOnIndex: Int   = cfg.getOrElse("fullArticlesOnIndex", "5").toInt
+  val style: String          = cfg.getOrElse("style", "")
+  val thumbWidth: Int        = cfg.getOrElse("thumbnailWidth", "150").toInt
+  val thumbHeight: Int       = cfg.getOrElse("thumbnailHeight", "100").toInt
+  val bigThumbWidth: Int     = 800
+  val limitRss: Int          = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
+  val articlesInRss: Boolean = cfg.getOrElse("articlesInRss", "false").toBoolean
+  val sortByDate: Boolean    = cfg.getOrElse("sortByDate", "false").toBoolean
+  val imageRoot: String      = cfg.getOrElse("imageRoot", "")
   val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "true").toBoolean
   val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "true").toBoolean
-  val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.map(kv).toMap
+  val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.collect(kv).toMap
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -284,8 +289,9 @@ def progressiveResize(src: BufferedImage, width: Int, height: Int): BufferedImag
 
 def absUrlFromPath(path: String) = Blog.baseUrl + "/" + path
 def absUrlFromSlug(slug: String) = Blog.baseUrl + "/" + slug + ".html"
-def absUrl(a: Article) = absUrlFromSlug(a.slug)
 def relUrlFromSlug(slug: String) = slug + ".html"
+def absUrl(a: Article) = absUrlFromSlug(a.slug)
+def relUrl(a: Article) = relUrlFromSlug(a.slug)
 def fixPath(path: String) = path.replaceAll(" ", "%20") // TODO hackity hack
 def isAbsolute(url: String) = new URI(fixPath(url)).isAbsolute
 def relativize(url: String, baseUrl: String) = {
@@ -818,15 +824,16 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
 def rssdate(date: Date) = if (date == null) "" else
   new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US).format(date)
 
-def generateRSS(articles: Seq[Article]): String =
+def makeRSS(articles: Seq[Article], mkBody: Article => String): String =
   "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" + (
 <rss version="2.0">
 <channel>
-<title>{Blog.title}</title>
-{articles.map { a =>
-<item><title>{a.title}</title><guid isPermaLink="true">{absUrlFromSlug(a.slug)}</guid><pubDate>{rssdate(a.date)}</pubDate></item>
-}}
-</channel>
+<title>{Blog.title}</title>{
+if (mkBody == null)
+  articles.map(a => <item><title>{a.title}</title><guid isPermaLink="true">{absUrlFromSlug(a.slug)}</guid><pubDate>{rssdate(a.date)}</pubDate></item>)
+else
+  articles.map(a => <item><title>{a.title}</title><guid isPermaLink="true">{absUrlFromSlug(a.slug)}</guid><pubDate>{rssdate(a.date)}</pubDate><description>{mkBody(a)}</description></item>)
+}</channel>
 </rss>).toString
 
 
@@ -1040,19 +1047,17 @@ fileIndex += saveFile(path, l.makePage(content, gallery = isIndexGallery))
 
 // make articles
 base.articles foreach { a =>
-  val path = relUrlFromSlug(a.slug)
-  var l = new FlowLayout(absUrlFromSlug(a.slug), base)
+  var l = new FlowLayout(absUrl(a), base)
   val content = l.makeFullArticle(a, false)
-  fileIndex += saveFile(path, l.makePage(content, title = a.title, gallery = a.images.nonEmpty))
+  fileIndex += saveFile(relUrl(a), l.makePage(content, a.title, gallery = a.images.nonEmpty))
 }
 
 // make tag pages
 base.allTags foreach { case (t, as) =>
-  val path = relUrlFromSlug(t.slug)
-  var l = new FlowLayout(absUrlFromSlug(t.slug), base)
+  var l = new FlowLayout(absUrl(t), base)
   val content = l.makeTagPage(t, as)
-  fileIndex += saveFile(path, l.makePage(content, title = t.title, rss = t.slug+".xml"))
-  fileIndex += saveXml(t.slug, generateRSS(as.take(Blog.limitRss)))
+  fileIndex += saveFile(relUrl(t), l.makePage(content, t.title, rss = t.slug+".xml"))
+  fileIndex += saveXml(relUrl(t), makeRSS(as.take(Blog.limitRss), null))
 }
 
 {
@@ -1063,7 +1068,8 @@ base.allTags foreach { case (t, as) =>
 }
 
 // make RSS
-fileIndex += saveXml("rss", generateRSS(base.feed.take(Blog.limitRss)))
+def mkBody(a: Article) = (new FlowLayout(absUrl(a), base)).makeFullArticle(a, true)
+fileIndex += saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
 
 // make thumbnails
