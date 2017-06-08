@@ -1,31 +1,26 @@
-import java.util.{ Date, GregorianCalendar, Calendar, Locale }
-import java.text.SimpleDateFormat
-import java.io.File
-import java.net.{ URL, URI }
 import java.awt.image.{ BufferedImage, ConvolveOp, Kernel }
 import java.awt.{ AlphaComposite, RenderingHints => RH }
+import java.io.File
+import java.net.{ URL, URI }
+import java.text.SimpleDateFormat
+import java.util.{ Date, GregorianCalendar, Calendar, Locale }
 import javax.imageio.ImageIO
-import scala.collection.mutable
+import scala.collection.{ mutable, immutable }
 import scala.util.matching.Regex
 
 
-val cfg = io.Source.fromFile(args(0))
-  .getLines
-  .collect(kv)
-  .toMap
+val cfg = io.Source.fromFile(args(0)).getLines.collect(kv).toMap
 
 def kv: PartialFunction[String, (String, String)] = {
   case s if s.split(" ", 2).length == 2 =>
-    val Array(k, v) = s.split(" ", 2)
-    (k, v)
+    val Array(k, v) = s.split(" ", 2); (k, v)
 }
 
 def timer[T](label: String)(f: => T) = {
   val s = System.currentTimeMillis
-  val r = f
-  val e = System.currentTimeMillis
-  println(s"$label ${e-s} ms")
-  r
+  val res = f
+  println(s"$label ${System.currentTimeMillis-s} ms")
+  res
 }
 
 val thisDir =
@@ -44,7 +39,7 @@ object Blog {
   val style: String          = cfg.getOrElse("style", "")
   val thumbWidth: Int        = cfg.getOrElse("thumbnailWidth", "150").toInt
   val thumbHeight: Int       = cfg.getOrElse("thumbnailHeight", "100").toInt
-  val bigThumbWidth: Int     = 800
+  val bigThumbWidth: Int     = cfg.getOrElse("bigThumbnailWidth", "800").toInt
   val limitRss: Int          = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
   val articlesInRss: Boolean = cfg.getOrElse("articlesInRss", "false").toBoolean
   val sortByDate: Boolean    = cfg.getOrElse("sortByDate", "false").toBoolean
@@ -52,6 +47,7 @@ object Blog {
   val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean
   val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean
   val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.collect(kv).toMap
+  val dumpAll: Boolean       = cfg.getOrElse("dumpAll", "false").toBoolean // ignore hidden articles, dump everything into main feed TODO
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -91,10 +87,10 @@ def listFiles(pattern: String): Array[File] = ((pattern match {
   }): Array[File]).filter(f => !f.getName.startsWith("."))
 
 
-case class Base(all: Seq[Article], tagMap: Map[String, Seq[Article]] = Map()) {
-  lazy val extraTags: Seq[Article] = {
-    val direct = all.filter(_.isTag).map { t => t.title }.toSet
-    tagMap.collect { case (t, as) if !direct.contains(t) => Article(t, tagSlug(t), isTag = true) }.toSeq
+case class Base(all: Seq[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
+  private lazy val extraTags: Seq[Article] = {
+    val direct = all.collect { case a if a.isTag => a.asTag }.toSet
+    tagMap.collect { case (t, as) if !direct.contains(t) => Article(t.title, tagSlug(t.title), meta = Meta(Map("tag" -> null))) }.toSeq
   }
 
   lazy val bySlug: Map[String, Article] = (all ++ extraTags).map(a => (a.slug, a)).toMap
@@ -103,10 +99,10 @@ case class Base(all: Seq[Article], tagMap: Map[String, Seq[Article]] = Map()) {
   lazy val articles = all.filter(a => !a.isTag)
   lazy val feed = all.filter(a => a.inFeed && !a.isTag)
 
-  lazy val allTags: Seq[(Article, Seq[Article])] =
-    (all ++ extraTags).filter(_.isTag).map { t => (t, tagMap.getOrElse(t.title, Seq())) }
+  lazy val allTags: Map[Article, Seq[Article]] =
+    (all ++ extraTags).filter(_.isTag).map { t => (t, tagMap.getOrElse(t.asTag, Seq())) }.toMap
 
-  lazy val tagByTitle: Map[String, Article] = allTags.map { case (t, _) => (t.title, t) }.toMap
+  lazy val tagByTitle: Map[Tag, Article] = allTags.map { case (t, _) => (t.asTag, t) }
 
   private lazy val art2ord = feed.zipWithIndex.toMap
 
@@ -117,7 +113,7 @@ case class Base(all: Seq[Article], tagMap: Map[String, Seq[Article]] = Map()) {
   def next(a: Article) = art2ord.get(a).flatMap { ord => feed.lift(ord+1) }.getOrElse(null)
   def prev(a: Article) = art2ord.get(a).flatMap { ord => feed.lift(ord-1) }.getOrElse(null)
 
-  private def move(a: Article, tag: String, n: Int) = {
+  private def move(a: Article, tag: Tag, n: Int) = {
     val as = tagMap(tag)
     val pos = as.indexWhere(_.slug == a.slug)
     require(pos != -1)
@@ -125,16 +121,16 @@ case class Base(all: Seq[Article], tagMap: Map[String, Seq[Article]] = Map()) {
     else as(pos+n)
   }
 
-  def next(a: Article, tag: String) = move(a, tag, +1)
-  def prev(a: Article, tag: String) = move(a, tag, -1)
+  def next(a: Article, tag: Tag) = move(a, tag, +1)
+  def prev(a: Article, tag: Tag) = move(a, tag, -1)
 }
 
-class Similarities(base: Base, tagMap: Map[String, Seq[Article]]) {
+class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
   private val arts: Array[Article] = tagMap.values.flatten.toArray.distinct
   private val artMap: Map[Article, Int] = arts.zipWithIndex.toMap
-  private val tm: Map[String, Array[Int]] = tagMap.map { case (t, as) => (t, as.map(artMap).toArray) }
+  private val tm: Map[Tag, Array[Int]] = tagMap.map { case (t, as) => (t, as.map(artMap).toArray) }
 
-  def similarByTags(article: Article): Seq[Sim] = {
+  def similarByTags(a: Article): Seq[Sim] = {
     def dateDiff(a: Article, b: Article): Long = {
       (a.date, b.date) match {
         case (null, null) => 0
@@ -143,24 +139,21 @@ class Similarities(base: Base, tagMap: Map[String, Seq[Article]]) {
       }
     }
     val freq = new Array[Int](arts.length) // article idx -> count
-    val alltags = article.tags.supertags ++ article.tags.visible ++ article.tags.hidden
-    for (t <- alltags) {
-      tm.get(t) foreach { arr =>
-        var i = 0; while (i < arr.length) {
-          freq(arr(i)) += 1
-          i += 1
-        }
+    for (t <- (a.tags.visible ++ a.tags.hidden); arr <- tm.get(t)) {
+      var i = 0; while (i < arr.length) {
+        freq(arr(i)) += 1
+        i += 1
       }
     }
 
-    for (i <- article.meta.seq("rel").flatMap(base.find).flatMap(artMap.get)) {
+    for (i <- a.meta.seq("rel").flatMap(base.find).flatMap(artMap.get)) {
       freq(i) += 64
     }
 
-    (0 until arts.length).iterator.collect { case i if freq(i) >= 1 && arts(i).slug != article.slug =>
+    (0 until arts.length).iterator.collect { case i if freq(i) >= 1 && arts(i).slug != a.slug =>
       Sim(arts(i), freq(i))
     } .toVector
-      .sortBy { s => (~s.commonTags, dateDiff(article, s.article)) } // most common tags, published closest together
+      .sortBy { s => (~s.commonTags, dateDiff(a, s.article)) } // most common tags, published closest together
   }
 
   def similarByTags(a: Article, count: Int, without: Seq[Article]): Seq[Article] =
@@ -182,19 +175,28 @@ case class Article(
   similar: Seq[Article] = Seq(),
   pub: Seq[Article] = Seq(),
   pubBy: Article = null,
-  inFeed: Boolean = true,
-  isTag: Boolean = false
+  inFeed: Boolean = true
 ) {
   def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy ").format(date)
-  override def toString = (if (isTag) "Tag" else "Article")+s"($prettyDate$title)"
+  override def toString = (if (isTag) "Article[Tag]" else "Article")+s"($prettyDate$title)"
   def asSlug: Slug = Slug(slug)
   def format = meta.scalar("format")
+  def isSupertag = meta.values.contains("supertag")
+  def isTag      = meta.values.contains("tag") || isSupertag
+  def asTag = if (isTag) Tag(title, isSupertag) else null
 }
 
 case class Meta(values: Map[String, Meta] = Map()) {
   def scalar(key: String): String = scalars.find(_.startsWith(key+":")).map(_.drop(key.length+1).trim).getOrElse(null)
   def scalars = values.collect { case (k, v) if v == null => k }
   def seq(k: String): Seq[String] = values.get(k).map(_.values.keys.toSeq).getOrElse(Seq())
+  def merge(that: Meta): Meta =
+    Meta(that.values.foldLeft(values) { case (res, (k, v)) =>
+      res.get(k) match {
+        case None => res + ((k, v))
+        case Some(m) => res + ((k, v.merge(m)))
+      }
+    })
 }
 
 case class Image(
@@ -209,9 +211,10 @@ case class Image(
 )
 
 case class Slug(id: String)
-case class Tags(visible: Seq[String] = Seq(), hidden: Seq[String] = Seq(), supertags: Seq[String] = Seq()) {
-  def merge(t: Tags) = Tags(visible ++ t.visible, hidden ++ t.hidden, supertags ++ t.supertags)
+case class Tags(visible: Seq[Tag] = Seq(), hidden: Seq[Tag] = Seq()) {
+  def merge(t: Tags) = Tags(visible ++ t.visible, hidden ++ t.hidden)
 }
+case class Tag(title: String, supertag: Boolean = false)
 case class Sim(article: Article, commonTags: Int)
 
 def resizeImage(src: BufferedImage, _width: Int, _height: Int = -1): BufferedImage = {
@@ -318,6 +321,8 @@ def relativize(url: String, baseUrl: String) = {
 def isLocalLink(url: String) = url.startsWith(Blog.baseUrl+"/")
 def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
 def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(5)) else sys.error("not local url")
+def slugsOfLinkedArticles(a: Article, base: Base): Seq[Slug] =
+    a.links.map(l => resolveLink(l, base, a)).filter(isLocalLink).map(extractSlug)
 def thumbnailUrl(img: Image) = s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"
 def bigThumbnailUrl(img: Image, half: Boolean) = s"t/${img.thumb}-${Blog.bigThumbWidth / (if (half) 2 else 1)}"
 
@@ -329,14 +334,13 @@ def undefId(id: String, a: Article) = {
   "undefined id "+id
 }
 
-def resolveLink(link: String, base: Base, a: Article) = {
+def resolveLink(link: String, base: Base, a: Article) =
   a.linkMap.getOrElse(link, link) match {
     case l if isAbsolute(l) => l
     case l if base.isValidId(l) => absUrlFromSlug(base.canonicSlug(l))
-    case l if l matches """[\w/%-]+""" => undefRefError(Seq(link) ++ a.linkMap.get(link) mkString " -> ", a) ; link
+    case l if l matches """[\w/%-]+""" => undefRefError((Seq(link) ++ a.linkMap.get(link)).mkString(" -> "), a) ; link
     case l => l
   }
-}
 
 
 def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
@@ -351,7 +355,7 @@ def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
 }
 
 
-val titleRegex    = """^(###+\s*)?(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
+val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
 val dateRegex     = """^(\d+)-(\d+)-(\d+)(?: (\d+):(\d+)(?::(\d+))?)?$""".r
 
 val linkRefRegex      = """(?xm)      ^\[(.*?)\]:\ (.+)$""".r
@@ -426,11 +430,12 @@ val parseTags: PartialFunction[String, Tags] = {
   case tagsRegex(s) =>
     tagBlockRegex.findAllMatchIn(s).foldLeft(Tags()) { (t, m) =>
       val tags = m.group(2).split("\\s*,\\s*").map(_.trim)
-      m.group(1) match {
-        case "!"|"##" => t.copy(supertags = t.supertags ++ tags)
-        case "#"      => t.copy(visible   = t.visible   ++ unbracketed(tags), hidden = t.hidden ++ bracketed(tags))
-        case "?"      => t.copy(hidden    = t.hidden    ++ tags)
-      }
+      val (vis, hid): (Seq[Tag], Seq[Tag]) = (m.group(1) match {
+        case "!"|"##" => (tags.map(Tag(_, true)), Seq())
+        case "#"      => (unbracketed(tags).map(Tag(_)), bracketed(tags).map(Tag(_)))
+        case "?"      => (Seq(), tags.map(Tag(_)))
+      })
+      t.copy(visible = t.visible ++ vis, hidden = t.hidden ++ hid)
     }
 }
 
@@ -471,13 +476,7 @@ def parseArticle(lines: Vector[String]): Article = {
   val ls = lines.map(_.replaceAll("\\s*$", ""))
 
   val titleLine = ls(0)
-  val titleRegex(hash, xxx, title, slug) = titleLine
-  val isTag = hash != null || (slug != null && isTagSlug(slug))
-  val inFeed = xxx == null && !isTag
-  val realSlug =
-    if (slug != null && slug != "") slug else
-      if (isTag) tagSlug(title)
-      else generateSlug(title)
+  val titleRegex(xxx, title, slug) = titleLine
 
   val (metaLines, _body) = ls.drop(2).span(l => l.nonEmpty)
   val body = _body.dropWhile(l => l.isEmpty).reverse.dropWhile(l => l.isEmpty).reverse
@@ -485,9 +484,17 @@ def parseArticle(lines: Vector[String]): Article = {
   val dates   = metaLines.flatMap(parseDate _      andThen (_.toSeq))
   val tags    = metaLines.flatMap(parseTags.lift   andThen (_.toSeq))
   val license = metaLines.flatMap(parseLicense _   andThen (_.toSeq))
-  val meta    = metaLines.flatMap(l => parseMeta(l, "meta: ").toSeq)
+  val metas   = metaLines.flatMap(l => parseMeta(l, "meta: ").toSeq)
+  val meta = metas.foldLeft(Meta())(_ merge _)
 
-  if ((dates ++ tags ++ license ++ meta).size < metaLines.size)
+  val isTag = meta.values.contains("supertag") || meta.values.contains("tag") || (slug != null && isTagSlug(slug))
+  val inFeed = xxx == null && !isTag
+  val realSlug =
+    if (slug != null && slug != "") slug else
+      if (isTag) tagSlug(title)
+      else generateSlug(title)
+
+  if ((dates ++ tags ++ license ++ metas).size < metaLines.size)
     sys.error("some metainformation was not processed: "+metaLines)
 
   val txt = segmentText(body.mkString("\n"))
@@ -504,14 +511,13 @@ def parseArticle(lines: Vector[String]): Article = {
     slug    = realSlug,
     date    = dates.headOption.map(_.head).getOrElse(null), // TODO, currently it's using only the first date
     tags    = tags.fold(Tags()) { (a, b) => a.merge(b) },
-    meta    = meta.headOption.getOrElse(Meta()),
+    meta    = meta,
     license = license.headOption.getOrElse(null),
     rawText = body.mkString("\n"),
     images  = txt.images,
     linkMap = txt.linkRefs.toMap,
     links   = txt.links,
-    inFeed  = inFeed,
-    isTag   = isTag
+    inFeed  = inFeed
   )
 }
 
@@ -538,7 +544,6 @@ trait Layout {
   def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String
   def makeIndex(articles: Base): String
   def makeFullArticle(a: Article, compact: Boolean): String
-  def makeTagPage(tag: Article, as: Seq[Article]): String
   def makeTagIndex(base: Base): String
 }
 
@@ -749,11 +754,14 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     "<br/>\n"+
     decorateText(a)+
+    ifs(a.isTag, {
+      val linked = slugsOfLinkedArticles(a, base).toSet
+      base.allTags(a).filter(a => !linked.contains(a.asSlug)).map(makeLink).mkString("<br/>")+"<br/>"
+    })+
     ifs(!compact,
       "<div style='font-size:0.9em;'>"+
       "<div class='f r' style='max-width:50%'>"+
-        ifs(a.tags.supertags.nonEmpty, makeSupertagLinks(a.tags.supertags.map(base.tagByTitle), a)+"<br/>\n")+
-        ifs(a.tags.visible.nonEmpty,   makeTagLinks(a.tags.visible.map(base.tagByTitle))+"<br/>\n")+
+        ifs(a.tags.visible.nonEmpty, makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"<br/>\n")+
         ifs(a.license != null, a.license+"<br/>")+
       "</div>"+
       makeNextPrevLinks(a)+
@@ -762,12 +770,6 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
       ifs(a.similar.nonEmpty,   "<p>"+txl("similar")+"<br/>"  +a.similar.map(s => articleLink(s, s.title)).mkString("<br/>")  +"</p>")+
       ifs(a.backlinks.nonEmpty, "<p>"+txl("backlinks")+"<br/>"+a.backlinks.map(s => articleLink(s, s.title)).mkString("<br/>")+"</p>")+
     "</div>")
-  }
-
-  def makeTagPage(tag: Article, as: Seq[Article]) = {
-    makeTagLink(tag)+"<br/><br/>"+
-    base.find(tag.slug).map(a => decorateText(a)).getOrElse("")+
-    as.map(makeLink).mkString("<br/>")
   }
 
   def makeTagIndex(base: Base) = // TODO difference between tags and supertags
@@ -780,26 +782,26 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
   def makeLink(a: Article) = makeDate(a)+articleLink(a, a.title)
   def makeTitle(a: Article) = makeDate(a)+"<h2>"+articleLink(a, a.title)+"</h2>"
 
-  def makeTagLink(t: Article) =
-    s"""#<i><a href="${rel(absUrlFromSlug(t.slug))}">${t.title}</a></i>"""
+  def makeTagLink(t: Article) = {
+    val html = s"""#<i><a href="${rel(absUrlFromSlug(t.slug))}">${t.title}</a></i>"""
+    if (t.isSupertag) s"<b>$html</b>" else html
+  }
 
   def makeNextPrevLinks(a: Article) =
-    (if (base.prev(a) == null) "" else "«« "+makeLink(base.prev(a))+"<br/>") +
-    (if (base.next(a) == null) "" else "»» "+makeLink(base.next(a))+"<br/>")
+    ifs(base.prev(a), "«« "+makeLink(base.prev(a))+"<br/>") +
+    ifs(base.next(a), "»» "+makeLink(base.next(a))+"<br/>")
 
   def makeNextPrevArrows(a: Article) =
     (if (base.prev(a) == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${rel(absUrl(base.prev(a)))}">«««</a>""")+" "+
     (if (base.next(a) == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${rel(absUrl(base.next(a)))}">»»»</a>""")
 
-  def makeTagLinks(tags: Seq[Article]) =
-    tags.map(makeTagLink).mkString(" ")
-
-  def makeSupertagLinks(tags: Seq[Article], a: Article) =
-    tags.map(t =>
-      s"""<b>${makeTagLink(t)}</b>"""+
-      (if (base.prev(a, t.title) != null) s""" <a href="${rel(absUrl(base.prev(a, t.title)))}">««</a>""" else "")+
-      (if (base.next(a, t.title) != null) s""" <a href="${rel(absUrl(base.next(a, t.title)))}">»»</a>""" else "")
-    ).mkString(" ")
+  def makeTagLinks(tags: Seq[Article], a: Article) =
+    tags.map { t =>
+      makeTagLink(t) + ifs(t.isSupertag,
+        ifs(base.prev(a, t.asTag), s""" <a href="${rel(absUrl(base.prev(a, t.asTag)))}">««</a>""")+
+        ifs(base.next(a, t.asTag), s""" <a href="${rel(absUrl(base.next(a, t.asTag)))}">»»</a>""")
+      )
+    }.mkString(" ")
 
   def year(d: Date) = {
     val calendar = new GregorianCalendar()
@@ -874,10 +876,12 @@ def prepareBlog(): Base = {
     if (rest.nonEmpty) sys.error("hidden and visible articles are mixed up")
   }
 
+  val hiddenSlugs = articles.filter(_.title.startsWith("?")).map(_.asSlug) // this is done ahead of time beucase of article merging
+
   val now = new Date
   articles = articles.filter { a =>
     val isInPast = a.date == null || a.date.before(now)
-    !a.title.startsWith("?") && isInPast
+    !hiddenSlugs.contains(a.asSlug) && isInPast
   }
 
   // slug dupes and article merging
@@ -909,8 +913,7 @@ def prepareBlog(): Base = {
         images  = a.images ++ b.images,
         linkMap = a.linkMap ++ b.linkMap,
         links   = a.links ++ b.links,
-        inFeed  = a.inFeed && b.inFeed,
-        isTag   = a.isTag || b.isTag
+        inFeed  = a.inFeed && b.inFeed
       ) // backlinks, similar, pub, pubBy not yet populated
 
       articleMap(a.slug) = merged
@@ -931,17 +934,17 @@ def prepareBlog(): Base = {
       .groupBy(_._1)
       .map { case (b, bas) => (b, bas.map(_._2).toVector) }
 
-  var tagMap: Map[String, Seq[Article]] =
-    invert(articles.map { a => (a, (a.tags.visible ++ a.tags.supertags).distinct) })
+  var tagMap: Map[Tag, Seq[Article]] =
+    invert(articles.map { a => (a, (a.tags.visible).distinct) })
 
-  val allTagMap: Map[String, Seq[Article]] =
-    invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden ++ a.tags.supertags).distinct) })
+  val allTagMap: Map[Tag, Seq[Article]] =
+    invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) })
 
   val base = Base(articles, tagMap)
   def refs(a: Article, k: String) = a.meta.seq(k) flatMap base.find
 
   val backlinks: Map[Slug, Seq[Article]] =
-    invert(articles.map { a => (a, a.links map { l => resolveLink(l, base, a) } filter isLocalLink map extractSlug) })
+    invert(articles.map { a => (a, slugsOfLinkedArticles(a, base)) })
       .map { case (k, as) => (k, as.distinct) }
 
   val pubsBy: Map[Slug, Article] =
@@ -965,12 +968,31 @@ def prepareBlog(): Base = {
       pub = refs(a, "pub"),
       pubBy = pubBy
     )
-}
+  }
+
 
   if (Blog.sortByDate) { // newest first, articles without date last
     val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
     articles = articles.sortBy(byDate)
     tagMap = tagMap.map { case (t, as) => (t, as.sortBy(byDate)) }
+  }
+
+  tagMap = tagMap.map { case (t, as) =>
+    val tagArticle = base.tagByTitle(t)
+    val key = tagArticle.meta.scalar("sortby")
+
+    if (key == null) { // sort by order linked in article
+      val linked = slugsOfLinkedArticles(tagArticle, base).distinct
+      val tagged = as.map(_.asSlug)
+      val artMap = as.map(a => (a.asSlug, a)).toMap
+      (t, ((linked intersect tagged) ++ (tagged diff linked)).map(artMap))
+
+    } else {
+      (t, as.sortBy { a =>
+        val k = a.meta.scalar(key)
+        if (k == null) 0 else ~k.toInt
+      })
+    }
   }
 
   Base(articles, tagMap)
@@ -1036,47 +1058,37 @@ val (base, indexBase) =
 
 
 val fileIndex = mutable.ArrayBuffer[(String, String)]()
-
-// make index
 val isIndexGallery = base.feed.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
 
 val path = "index.html"
 val l = new FlowLayout(absUrlFromPath(path), base)
-val content = l.makeIndex(indexBase)
-fileIndex += saveFile(path, l.makePage(content, gallery = isIndexGallery))
+val body = l.makeIndex(indexBase)
+fileIndex += saveFile(path, l.makePage(body, gallery = isIndexGallery))
 
-// make articles
 base.articles foreach { a =>
   var l = new FlowLayout(absUrl(a), base)
-  val content = l.makeFullArticle(a, false)
-  fileIndex += saveFile(relUrl(a), l.makePage(content, a.title, gallery = a.images.nonEmpty))
+  val body = l.makeFullArticle(a, false)
+  fileIndex += saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty))
 }
 
-// make tag pages
-base.allTags foreach { case (t, as) =>
-  var l = new FlowLayout(absUrl(t), base)
-  val content = l.makeTagPage(t, as)
-  fileIndex += saveFile(relUrl(t), l.makePage(content, t.title, rss = t.slug+".xml"))
-  fileIndex += saveXml(relUrl(t), makeRSS(as.take(Blog.limitRss), null))
+base.allTags.keys foreach { a =>
+  var l = new FlowLayout(absUrl(a), base)
+  val body = l.makeFullArticle(a, false)
+  fileIndex += saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty, rss = a.slug+".xml"))
+  fileIndex += saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
 }
 
 {
   val path = "tags.html"
   val l = new FlowLayout(absUrlFromPath(path), base)
-  val content = l.makeTagIndex(base)
-  fileIndex += saveFile(path, l.makePage(content))
+  fileIndex += saveFile(path, l.makePage(l.makeTagIndex(base)))
 }
 
-// make RSS
 def mkBody(a: Article) = (new FlowLayout(absUrl(a), base)).makeFullArticle(a, true)
 fileIndex += saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
-
-// make thumbnails
-val images = base.all.flatMap(_.images)
 new File("t").mkdir()
-for (image <- images) {
-
+for (a <- base.all; image <- a.images) {
   val (thumbFile, w, h) =
     if (image.mods == "main" && image.align == ">") {
       (new File(bigThumbnailUrl(image, true)), Blog.bigThumbWidth/2, -1)
@@ -1090,9 +1102,11 @@ for (image <- images) {
   if (!thumbFile.exists) {
     println(s"resizing image ${image.url} -> $thumbFile")
     try {
+      val suffix = image.url.split("\\.").last.toLowerCase
+      val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
       val full = ImageIO.read(new URL(fixPath(image.url)))
       if (full != null) {
-        ImageIO.write(resizeImage(full, w, h), "jpg", thumbFile)
+        ImageIO.write(resizeImage(full, w, h), s, thumbFile)
       } else {
         println(s"ImageIO.read(${image.url}) == null")
       }
@@ -1102,8 +1116,5 @@ for (image <- images) {
   }
 }
 
-// make robots.txt
 fileIndex += saveFile("robots.txt", "User-agent: *\nAllow: /")
-
-// make file index
 saveFile(".files", fileIndex.map { case (file, hash) => file+" "+hash }.mkString("\n"))
