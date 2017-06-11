@@ -48,6 +48,7 @@ object Blog {
   val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean
   val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.collect(kv).toMap
   val dumpAll: Boolean       = cfg.getOrElse("dumpAll", "false").toBoolean // ignore hidden articles, dump everything into main feed TODO
+  val header: String         = cfg.getOrElse("header", "")
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -488,7 +489,7 @@ def parseArticle(lines: Vector[String]): Article = {
   val meta = metas.foldLeft(Meta())(_ merge _)
 
   val isTag = meta.values.contains("supertag") || meta.values.contains("tag") || (slug != null && isTagSlug(slug))
-  val inFeed = xxx == null && !isTag
+  val inFeed = Blog.dumpAll || (xxx == null && !isTag)
   val realSlug =
     if (slug != null && slug != "") slug else
       if (isTag) tagSlug(title)
@@ -647,7 +648,7 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
       }
 
       s2.map {
-        case Heading(txt)   => s"<h3>$txt</h3>"
+        case Heading(txt)   => "<h3>"+paragraph(txt, a)+"</h3>"
         case Hr()           => "<hr/>"
         case Linkref(txt)   => ""
         case Block("html", txt) => txt
@@ -703,16 +704,11 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
   def styles(styleTxt: String, cats: Set[String]) =
     styleTxt.lines.map(_.trim).filter(_.nonEmpty).flatMap(l => style(l, cats)).mkString("")
 
-
   def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String = {
-val body = s"""<body>
-<div class=b>
-<div class=r><b><a href="${rel("index.html")}">${Blog.title}</a></b> [<a href="${rel("rss.xml")}">RSS</a>]</div>
-"""+content+"""
-</div>
-</body>"""
-
-val cats = classesAndTags(body)
+    val defaultHeader = s"""<div class=r><b><a href="${rel("index.html")}">${Blog.title}</a></b> [<a href="${rel("rss.xml")}">RSS</a>]</div>"""
+    val header = if (Blog.header.nonEmpty) Blog.header else defaultHeader
+    val body = "<body><div class=b>"+header+content+"</div></body>"
+    val cats = classesAndTags(body)
 
 s"""<!DOCTYPE html>
 <html>
@@ -876,7 +872,9 @@ def prepareBlog(): Base = {
     if (rest.nonEmpty) sys.error("hidden and visible articles are mixed up")
   }
 
-  val hiddenSlugs = articles.filter(_.title.startsWith("?")).map(_.asSlug) // this is done ahead of time beucase of article merging
+  val hiddenSlugs: Set[Slug] = if (Blog.dumpAll) Set() else {
+    articles.filter(_.title.startsWith("?")).map(_.asSlug).toSet // this is done ahead of time beucase of article merging
+  }
 
   val now = new Date
   articles = articles.filter { a =>
@@ -987,6 +985,9 @@ def prepareBlog(): Base = {
       val artMap = as.map(a => (a.asSlug, a)).toMap
       (t, ((linked intersect tagged) ++ (tagged diff linked)).map(artMap))
 
+    } else if (key == "title") {
+      (t, as.sortBy(_.title))
+
     } else {
       (t, as.sortBy { a =>
         val k = a.meta.scalar(key)
@@ -1003,11 +1004,11 @@ def prepareBlog(): Base = {
 
 def prepareGallery(): (Seq[Article], Seq[Article]) = {
   var dir = args(1)
-  val albumDirs = new File(dir, "albums").listFiles.sortBy(_.getName).reverse
+  val albumDirs = new File(dir, "albums").listFiles.sortBy(_.getName).reverse.toSeq
 
   val dateTitle = """^(?:(\d+)-(\d+)-(\d+)\s*-?\s*)?(.*)$""".r
 
-  (for (albumDir <- albumDirs.toSeq) yield {
+  (for (albumDir <- albumDirs) yield {
     println(albumDir.getName)
 
     val dateTitle(y, m, d, t) = albumDir.getName
