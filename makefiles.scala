@@ -444,9 +444,9 @@ val bracketRegex  = """^\(([^)]+)\)$""".r
 def bracketed(xs: Array[String])   = xs.collect { case bracketRegex(x) => x }
 def unbracketed(xs: Array[String]) = xs.filter { case bracketRegex(x) => false ; case _ => true }
 
-val metaRegex = """(?x) \s+ | \[ | \] | , | \w+:\w+ | [\w/]+ | :""".r
+val metaRegex = """(?x) \s+ | \[ | \] | , | \w+:\w+ | [\w/-]+ | :""".r
 
-def _parseMetaFormat(str: String) = {
+def _parseMeta(str: String) = {
   def build(tokens: Seq[String]): Meta =
     Meta(tokens.dropWhile(_ == ",") match {
       case Seq(k, ":", "[", rest @ _*) =>
@@ -462,7 +462,7 @@ def _parseMetaFormat(str: String) = {
 
 def parseMeta(l: String, prefix: String = "meta: "): Option[Meta] =
   if (l.startsWith(prefix)) {
-    Some(_parseMetaFormat(l.drop(prefix.length)))
+    Some(_parseMeta(l.drop(prefix.length)))
   } else None
 
 def hash(txt: String) = {
@@ -633,21 +633,8 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
       return a.rawText // TODO - resolveLink
     }
 
-    def mkText(txt: Text): String = {
-      var x: Option[Images] = None
-      val s1 = txt.segments.map {
-        case Images(is) if x == None && is.head.mods == "main" && is.head.align == ">" =>
-          x = Some(Images(Seq(is.head)))
-          Images(is.tail)
-        case s => s
-      }
-
-      val s2 = (x ++ s1).toVector match {
-        case xs :+ Hr() => xs :+ Hr()
-        case xs => xs :+ Hr()
-      }
-
-      s2.map {
+    def mkText(txt: Text): String =
+      txt.segments.map {
         case Heading(txt)   => "<h3>"+paragraph(txt, a)+"</h3>"
         case Hr()           => "<hr/>"
         case Linkref(txt)   => ""
@@ -661,9 +648,21 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
         case Paragraph(txt) => "<p>"+paragraph(txt, a)+"</p>"
         case Blockquote(txt) => "<blockquote>"+mkText(txt)+"</blockquote>"
       }.mkString("")//+"<br/>"
+
+    val txt = segmentText(a.rawText)
+
+    var x: Option[Images] = None
+    val s1 = txt.segments.map {
+      case Images(is) if x == None && is.head.mods == "main" && is.head.align == ">" =>
+        x = Some(Images(Seq(is.head)))
+        Images(is.tail)
+      case s => s
     }
 
-    mkText(segmentText(a.rawText))
+    mkText(Text((x ++ s1).toVector match {
+      case xs :+ Hr() => xs :+ Hr()
+      case xs => xs :+ Hr()
+    }))
   }
 
   def imgTag(img: Image, a: Article) = {
