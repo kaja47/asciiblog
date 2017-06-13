@@ -661,8 +661,8 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
     }
 
     mkText(Text((x ++ s1).toVector match {
-      case xs :+ Hr() => xs :+ Hr()
-      case xs => xs :+ Hr()
+      case xs :+ Hr() => xs
+      case xs => xs
     }))
   }
 
@@ -755,6 +755,7 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
       base.allTags(a).filter(a => !linked.contains(a.asSlug)).map(makeLink).mkString("<br/>")+"<br/>"
     })+
     ifs(!compact,
+      "<hr/>"+
       "<div style='font-size:0.9em;'>"+
       "<div class='f r' style='max-width:50%'>"+
         ifs(a.tags.visible.nonEmpty, makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"<br/>\n")+
