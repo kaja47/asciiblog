@@ -47,7 +47,7 @@ object Blog {
   val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean
   val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean
   val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.collect(kv).toMap
-  val dumpAll: Boolean       = cfg.getOrElse("dumpAll", "false").toBoolean // ignore hidden articles, dump everything into main feed TODO
+  val dumpAll: Boolean       = cfg.getOrElse("dumpAll", "false").toBoolean // ignore hidden articles, dump everything into main feed
   val header: String         = cfg.getOrElse("header", "")
 }
 
@@ -164,7 +164,7 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
 case class Article(
   title: String,
   slug: String,
-  date: Date = null,
+  dates: Seq[Date] = Seq(), // publishing date + dates of updates
   tags: Tags = Tags(),
   meta: Meta = Meta(),
   license: String = null,
@@ -178,6 +178,7 @@ case class Article(
   pubBy: Article = null,
   inFeed: Boolean = true
 ) {
+  def date = dates.headOption.getOrElse(null)
   def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy ").format(date)
   override def toString = (if (isTag) "Article[Tag]" else "Article")+s"($prettyDate$title)"
   def asSlug: Slug = Slug(slug)
@@ -510,7 +511,7 @@ def parseArticle(lines: Vector[String]): Article = {
   new Article(
     title   = title.trim,
     slug    = realSlug,
-    date    = dates.headOption.map(_.head).getOrElse(null), // TODO, currently it's using only the first date
+    dates   = dates.flatten,
     tags    = tags.fold(Tags()) { (a, b) => a.merge(b) },
     meta    = meta,
     license = license.headOption.getOrElse(null),
@@ -597,7 +598,7 @@ def segmentText(txt: String): Text = {
   val segments: Seq[Segment] = (for (m <- blockRegex.findAllMatchIn(txt)) yield {
     val block = if (m.group(1) != null) Block(m.group(1), m.group(2)) else Block("comment", m.group(3))
     val res = splitBlocks(txt.substring(prev, m.start)) :+ block
-    prev = m.end+1
+    prev = m.end
     res
   }).toVector.flatten ++ (if (prev > txt.length) Seq() else splitBlocks(txt.substring(prev)))
 
@@ -767,7 +768,7 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
     "</div>")
   }
 
-  def makeTagIndex(base: Base) = // TODO difference between tags and supertags
+  def makeTagIndex(base: Base) =
     base.allTags.toSeq.sortBy(~_._2.size).map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
   def blackout(txt: String) =
@@ -893,7 +894,7 @@ def prepareBlog(): Base = {
       val b = articleMap(a.slug)
 
       if (
-        (a.date != null && b.date != null) ||
+        (a.dates.nonEmpty && b.dates.nonEmpty) ||
         (a.tags != Tags() && b.tags != Tags()) ||
         (a.license != null && b.license != null) ||
         (a.meta != Meta() && b.meta != Meta()) //||
@@ -902,9 +903,9 @@ def prepareBlog(): Base = {
 
 
       val merged = b.copy(
-        date    = if (a.date != null) a.date else b.date,
-        tags    = if (a.tags != Tags()) a.tags else b.tags,
-        meta    = if (a.meta != Meta()) a.meta else b.meta,
+        dates   = a.dates ++ b.dates,
+        tags    = a.tags merge b.tags,
+        meta    = a.meta merge b.meta,
         license = if (a.license != null) a.license else b.license,
         rawText = if (a.rawText.length < b.rawText.length) a.rawText+"\n\n"+b.rawText else b.rawText+"\n\n"+a.rawText,
         images  = a.images ++ b.images,
@@ -959,7 +960,7 @@ def prepareBlog(): Base = {
     }
 
     a.copy(
-      date = if (a.date == null && pubBy != null) pubBy.date else a.date,
+      dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
       backlinks = bs,
       similar = sim.similarByTags(a, count= 5, without = bs),
       pub = refs(a, "pub"),
@@ -1033,7 +1034,7 @@ def prepareGallery(): (Seq[Article], Seq[Article]) = {
     val a = new Article(
       title = if (title.nonEmpty) title else albumDir.getName,
       slug = generateSlug(albumDir.getName),
-      date = date,
+      dates = Seq(date),
       rawText = mkText(imgs),
       images = imgs
     )
