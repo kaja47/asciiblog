@@ -1,11 +1,12 @@
 title [slug-that-will-show-in-a-post-url]
 =====
 2017-01-01
-#[tag 1, tag 2, (hidden tag 1), (hidden tag 2)]
+# tag 1, tag 2, (hidden tag 1), (hidden tag 2)
 
 Body of the post after one empty line.
+Everything except a title is optional.
 
-Everything except title is optional.
+[* main.jpg .[main] *] *** this is main image
 
 In a post body you can use:
 *italics*
@@ -14,6 +15,29 @@ In a post body you can use:
 [|blacked out text|]
 
 > blockquotes
+>
+> (displayed in italics)
+
+<!-- html comments will be deleted -->
+
+lists:
+
+- item 1
+- item 2
+- item 3
+
+numbered lists:
+
+1) item 1
+2) item 2
+3) item 3
+
+sub-heading
+-----------
+
+horizontal row:
+
+---
 
 image galleries:
 
@@ -28,3 +52,9 @@ image galleries:
 =====
 
 Post with titles starting with a ? won't be published
+
+
+XXX side post
+=====
+
+Post with titles starting with a XXX won't be shown on main feed and in RSS
