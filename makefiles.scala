@@ -345,18 +345,6 @@ def resolveLink(link: String, base: Base, a: Article) =
   }
 
 
-def getArticle(lines: Vector[String]): (Article, Vector[String]) = {
-  val underlinePos = lines.indexWhere(l => l.startsWith("==="), 2)
-
-  if (underlinePos == -1) {
-    (parseArticle(lines), Vector())
-  } else {
-    val (art, rest) = lines.splitAt(underlinePos-1)
-    (parseArticle(art), rest)
-  }
-}
-
-
 val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
 val dateRegex     = """^(\d+)-(\d+)-(\d+)(?: (\d+):(\d+)(?::(\d+))?)?$""".r
 
@@ -855,16 +843,12 @@ def saveXml(f: String, content: String): (String, String) =
 
 def prepareBlog(): Base = {
   var articles = Blog.files.flatMap(listFiles).flatMap { f =>
-    var lines = io.Source.fromFile(f).getLines.toVector
-    var articlesList = List[Article]()
+    var ls = io.Source.fromFile(f).getLines.toVector
+    val starts = ls.zipWithIndex.collect { case (l, i) if l.matches("===+") => i-1 }
 
-    while (lines.nonEmpty) {
-      val (a, ls) = getArticle(lines)
-      articlesList ::= a
-      lines = ls
-    }
-
-    articlesList.reverse.toVector
+    (0 until starts.length).map { i =>
+      parseArticle(ls.slice(starts(i), starts.lift(i+1).getOrElse(ls.length)))
+    }.toVector
   }
 
   if (Blog.articlesMustNotBeMixed) {
