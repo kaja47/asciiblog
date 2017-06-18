@@ -593,7 +593,7 @@ def segmentText(txt: String): Text = {
   Text(segments)
 }
 
-class FlowLayout(baseUrl: String, base: Base) extends Layout {
+class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends Layout {
   def rel(url: String): String = relativize(url, baseUrl)
   def txl(s: String) = Blog.translation(s)
   def ifs(c: Boolean, body: => String) = if (c) body else ""
@@ -664,6 +664,11 @@ class FlowLayout(baseUrl: String, base: Base) extends Layout {
       (ifs(img.title, paragraph(img.title, a))+" "+(ifs(img.license)+" "+ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")).trim).trim
     s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="$src"/></a>$desc</span>"""
   }
+
+  def gallerySample(a: Article) =
+    a.images.take(3).map { i =>
+      s"""<a href="${relUrlFromSlug(a.slug)}"><img class=th src="${thumbnailUrl(i)}"/></a>"""
+    }.mkString(" ")
 
   val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
 
@@ -742,12 +747,14 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
       val linked = slugsOfLinkedArticles(a, base).toSet
       base.allTags(a).filter(a => !linked.contains(a.asSlug)).map(makeLink).mkString("<br/>")+"<br/>"
     })+
+    ifs(dumpImages && !compact, a.images.map(img => imgTag(img, a)).mkString(" "))+
+    ifs(dumpImages && compact, gallerySample(a))+
     ifs(!compact,
       "<hr/>"+
       "<div style='font-size:0.9em;'>"+
       "<div class='f r' style='max-width:50%'>"+
         ifs(a.tags.visible.nonEmpty, makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"<br/>\n")+
-        ifs(a.license != null, a.license+"<br/>")+
+        ifs(a.license, a.license+"<br/>")+
       "</div>"+
       makeNextPrevLinks(a)+
       ifs(a.pub.nonEmpty, txl("published")+"<br/>"+ a.pub.map(makeLink).mkString("<br/>")+"<br/>")+
@@ -986,14 +993,13 @@ def prepareBlog(): Base = {
 
 
 
-
-def prepareGallery(): (Seq[Article], Seq[Article]) = {
+def prepareGallery(): Base = {
   var dir = args(1)
   val albumDirs = new File(dir, "albums").listFiles.sortBy(_.getName).reverse.toSeq
 
   val dateTitle = """^(?:(\d+)-(\d+)-(\d+)\s*-?\s*)?(.*)$""".r
 
-  (for (albumDir <- albumDirs) yield {
+  Base(for (albumDir <- albumDirs) yield {
     println(albumDir.getName)
 
     val dateTitle(y, m, d, t) = albumDir.getName
@@ -1005,40 +1011,22 @@ def prepareGallery(): (Seq[Article], Seq[Article]) = {
       Blog.baseUrl+"/albums/"+albumDir.getName+"/"+f
     }
 
-    val imgs = urls.map { url => new Image(url, hash(url)) }
-
-    def mkText(imgs: Seq[Image]) =
-      imgs.map { i => s"[* ${i.url} *]" }.mkString("\n")+"\n"
-
-    def mkSample(a: Article) =
-      s"""<a href="${relUrlFromSlug(a.slug)}">"""+
-      a.images.take(3).map { i =>
-        s"""<img class=th src="${thumbnailUrl(i)}" />"""
-      }.mkString(" ")+"</a>"
-
-    val a = new Article(
+    new Article(
       title = if (title.nonEmpty) title else albumDir.getName,
       slug = generateSlug(albumDir.getName),
       dates = Seq(date),
-      rawText = mkText(imgs),
-      images = imgs
+      images = urls.map { url => new Image(url, hash(url)) }
     )
-
-    (a, a.copy(rawText = mkSample(a)))
-  }).unzip
+  })
 }
 
 
 
-val (base, indexBase) =
+val (base, gallery) =
   Blog.kind match {
-    case "blog" =>
-      val base = prepareBlog()
-      (base, base)
-    case "gallery" =>
-      val (as, is) = prepareGallery()
-      (Base(as), Base(is))
-    case _ => sys.error("wut")
+    case "blog"    => (prepareBlog(), false)
+    case "gallery" => (prepareGallery(), true)
+    case _ => sys.error("unknown kind of blog (should be either 'blog' or 'gallery')")
   }
 
 
@@ -1047,18 +1035,18 @@ val fileIndex = mutable.ArrayBuffer[(String, String)]()
 val isIndexGallery = base.feed.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
 
 val path = "index.html"
-val l = new FlowLayout(absUrlFromPath(path), base)
-val body = l.makeIndex(indexBase)
+val l = new FlowLayout(absUrlFromPath(path), base, gallery)
+val body = l.makeIndex(base)
 fileIndex += saveFile(path, l.makePage(body, gallery = isIndexGallery))
 
 base.articles foreach { a =>
-  var l = new FlowLayout(absUrl(a), base)
+  var l = new FlowLayout(absUrl(a), base, gallery)
   val body = l.makeFullArticle(a, false)
   fileIndex += saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty))
 }
 
 base.allTags.keys foreach { a =>
-  var l = new FlowLayout(absUrl(a), base)
+  var l = new FlowLayout(absUrl(a), base, gallery)
   val body = l.makeFullArticle(a, false)
   fileIndex += saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty, rss = a.slug+".xml"))
   fileIndex += saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
@@ -1066,11 +1054,11 @@ base.allTags.keys foreach { a =>
 
 {
   val path = "tags.html"
-  val l = new FlowLayout(absUrlFromPath(path), base)
+  val l = new FlowLayout(absUrlFromPath(path), base, gallery)
   fileIndex += saveFile(path, l.makePage(l.makeTagIndex(base)))
 }
 
-def mkBody(a: Article) = (new FlowLayout(absUrl(a), base)).makeFullArticle(a, true)
+def mkBody(a: Article) = (new FlowLayout(absUrl(a), base, gallery)).makeFullArticle(a, true)
 fileIndex += saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
 new File("t").mkdir()
