@@ -179,8 +179,8 @@ case class Article(
   inFeed: Boolean = true
 ) {
   def date = dates.headOption.getOrElse(null)
-  def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy ").format(date)
-  override def toString = (if (isTag) "Article[Tag]" else "Article")+s"($prettyDate$title)"
+  def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy").format(date)
+  override def toString = (if (isTag) "Article[Tag]" else "Article")+s"(<$prettyDate>$title)"
   def asSlug: Slug = Slug(slug)
   def format = meta.scalar("format")
   def isSupertag = meta.values.contains("supertag")
@@ -348,7 +348,7 @@ def resolveLink(link: String, base: Base, a: Article) =
 val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
 val dateRegex     = """^(\d+)-(\d+)-(\d+)(?: (\d+):(\d+)(?::(\d+))?)?$""".r
 
-val linkRefRegex      = """(?xm)      ^\[(.*?)\]:\ (.+)$""".r
+val linkRefRegex  = """(?xm)      ^\[(.*?)\]:\ (.+)$""".r
 val boldRegex     = """(?xs)\*\*(.+?)\*\*""".r
 val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*) (.+?) (?<!\*) \* (?!\*) """.r
 val italic2Regex  = """(?xsUu) (?<!:) // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) // """.r
@@ -594,7 +594,7 @@ def segmentText(txt: String): Text = {
 }
 
 class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends Layout {
-  def rel(url: String): String = relativize(url, baseUrl)
+  def rel(url: String): String = if (baseUrl != null) relativize(url, baseUrl) else url
   def txl(s: String) = Blog.translation(s)
   def ifs(c: Boolean, body: => String) = if (c) body else ""
   def ifs(x: Any, body: => String) = if (x != null) body else ""
@@ -636,7 +636,7 @@ class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends Layou
         case Images(images) => images.map(img => imgTag(img, a)).mkString(" ")
         case Paragraph(txt) => "<p>"+paragraph(txt, a)+"</p>"
         case Blockquote(txt) => "<blockquote>"+mkText(txt)+"</blockquote>"
-      }.mkString("")//+"<br/>"
+      }.mkString("")
 
     val txt = segmentText(a.rawText)
 
@@ -655,14 +655,14 @@ class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends Layou
   }
 
   def imgTag(img: Image, a: Article) = {
-    val (cl, src) = img match {
-      case i if i.mods == "main" && i.align == ">" => ("fr", rel(bigThumbnailUrl(img, true)))
-      case i if i.mods == "main" => ("main", rel(bigThumbnailUrl(img, false)))
-      case i => ("thz", rel(thumbnailUrl(img)))
+    val (cl, srcPath) = img match {
+      case i if i.mods == "main" && i.align == ">" => ("fr", bigThumbnailUrl(img, true))
+      case i if i.mods == "main" => ("main", bigThumbnailUrl(img, false))
+      case i => ("thz", thumbnailUrl(img))
     }
     val desc =
       (ifs(img.title, paragraph(img.title, a))+" "+(ifs(img.license)+" "+ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")).trim).trim
-    s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="$src"/></a>$desc</span>"""
+    s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="${rel(absUrlFromPath(srcPath))}"/></a>$desc</span>"""
   }
 
   def gallerySample(a: Article) =
@@ -1058,7 +1058,7 @@ base.allTags.keys foreach { a =>
   fileIndex += saveFile(path, l.makePage(l.makeTagIndex(base)))
 }
 
-def mkBody(a: Article) = (new FlowLayout(absUrl(a), base, gallery)).makeFullArticle(a, true)
+def mkBody(a: Article) = (new FlowLayout(null, base, gallery)).makeFullArticle(a, true)
 fileIndex += saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
 new File("t").mkdir()
