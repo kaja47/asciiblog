@@ -1045,6 +1045,25 @@ val (base, dumpImages) =
   }
 
 
+val checkLinks = false
+
+if (checkLinks) {
+  for {
+    a <- base.all ; l <- a.links
+    url = resolveLink(l, base, a) if !isLocalLink(url)
+  } {
+    val conn = new URL(url).openConnection().asInstanceOf[HttpURLConnection]
+    conn.setRequestMethod("GET")
+    conn.connect()
+    val code = conn.getResponseCode
+    if (code >= 400) {
+      println(code+" "+url)
+    }
+  }
+  sys.exit()
+}
+
+
 
 val fileIndex = mutable.ArrayBuffer[(String, String)]()
 val isIndexGallery = base.feed.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
