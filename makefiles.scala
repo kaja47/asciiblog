@@ -878,6 +878,11 @@ def prepareBlog(): Base = {
     articles.filter(_.title.startsWith("?")).map(_.asSlug).toSet // this is done ahead of time beucase of article merging
   }
 
+  for (a <- articles) {
+    if (hiddenSlugs.contains(a.asSlug) && a.dates.nonEmpty)
+      sys.error(s"hidden and dated article are sharing the same slug '${a.slug}', this is most likely an error")
+  }
+
   val now = new Date
   articles = articles.filter { a =>
     val isInPast = a.date == null || a.date.before(now)
@@ -981,7 +986,7 @@ def prepareBlog(): Base = {
     val tagArticle = base.tagByTitle(t)
     val key = tagArticle.meta.scalar("sortby")
 
-    if (key == null) { // sort by order linked in article
+    if (key == null) { // sort by order linked in article (order for << >> navigation)
       val linked = slugsOfLinkedArticles(tagArticle, base).distinct
       val tagged = as.map(_.asSlug)
       val artMap = as.map(a => (a.asSlug, a)).toMap
