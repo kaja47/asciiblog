@@ -1,7 +1,7 @@
 import java.awt.image.{ BufferedImage, ConvolveOp, Kernel }
 import java.awt.{ AlphaComposite, RenderingHints => RH }
-import java.io.File
-import java.net.{ URL, URI }
+import java.io.{ File, FileWriter }
+import java.net.{ URL, URI, HttpURLConnection }
 import java.text.SimpleDateFormat
 import java.util.{ Date, GregorianCalendar, Calendar, Locale }
 import javax.imageio.ImageIO
@@ -49,6 +49,7 @@ object Blog {
   val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.collect(kv).toMap
   val dumpAll: Boolean       = cfg.getOrElse("dumpAll", "false").toBoolean // ignore hidden articles, dump everything into main feed
   val header: String         = cfg.getOrElse("header", "")
+  val compressFiles: Boolean = cfg.getOrElse("compressFiles", "false").toBoolean
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -832,17 +833,26 @@ else
 
 
 
-def saveFile(f: String, content: String): (String, String) = {
+def saveFile(f: String, content: String): Seq[(String, String)] = {
   val p = new File(f).getParentFile
   if (p != null) p.mkdirs()
 
-  val fw = new java.io.FileWriter(f)
+  val fw = new FileWriter(f)
   fw.write(content)
   fw.close()
-  (f, hash(content))
+
+  val h = hash(content)
+
+  Seq(f -> h) ++ (if (!Blog.compressFiles) Seq() else {
+    val gzf = f+".gz"
+    val out = new java.util.zip.GZIPOutputStream(new java.io.FileOutputStream(gzf))
+    out.write(content.getBytes("utf-8"))
+    out.close()
+    Seq(gzf -> h)
+  })
 }
 
-def saveXml(f: String, content: String): (String, String) =
+def saveXml(f: String, content: String): Seq[(String, String)] =
   saveFile(f+".xml", content)
 
 
@@ -1037,29 +1047,29 @@ val isIndexGallery = base.feed.take(Blog.articlesOnIndex).exists(_.images.nonEmp
 val path = "index.html"
 val l = new FlowLayout(absUrlFromPath(path), base, gallery)
 val body = l.makeIndex(base)
-fileIndex += saveFile(path, l.makePage(body, gallery = isIndexGallery))
+fileIndex ++= saveFile(path, l.makePage(body, gallery = isIndexGallery))
 
 base.articles foreach { a =>
   var l = new FlowLayout(absUrl(a), base, gallery)
   val body = l.makeFullArticle(a, false)
-  fileIndex += saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty))
+  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty))
 }
 
 base.allTags.keys foreach { a =>
   var l = new FlowLayout(absUrl(a), base, gallery)
   val body = l.makeFullArticle(a, false)
-  fileIndex += saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty, rss = a.slug+".xml"))
-  fileIndex += saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
+  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty, rss = a.slug+".xml"))
+  fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
 }
 
 {
   val path = "tags.html"
   val l = new FlowLayout(absUrlFromPath(path), base, gallery)
-  fileIndex += saveFile(path, l.makePage(l.makeTagIndex(base)))
+  fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)))
 }
 
 def mkBody(a: Article) = (new FlowLayout(null, base, gallery)).makeFullArticle(a, true)
-fileIndex += saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
+fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
 new File("t").mkdir()
 for (a <- base.all; image <- a.images) {
@@ -1090,5 +1100,5 @@ for (a <- base.all; image <- a.images) {
   }
 }
 
-fileIndex += saveFile("robots.txt", "User-agent: *\nAllow: /")
+fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /")
 saveFile(".files", fileIndex.map { case (file, hash) => file+" "+hash }.mkString("\n"))
