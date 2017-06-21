@@ -13,7 +13,7 @@ val cfg = io.Source.fromFile(args(0)).getLines.collect(kv).toMap
 
 def kv: PartialFunction[String, (String, String)] = {
   case s if s.split(" ", 2).length == 2 =>
-    val Array(k, v) = s.split(" ", 2); (k, v)
+    val Array(k, v) = s.split(" ", 2); (k, v.replaceAll("""^"|"$""", ""))
 }
 
 def timer[T](label: String)(f: => T) = {
@@ -51,6 +51,7 @@ object Blog {
   val dumpAll: Boolean       = cfg.getOrElse("dumpAll", "false").toBoolean // ignore hidden articles, dump everything into main feed
   val header: String         = cfg.getOrElse("header", "")
   val compressFiles: Boolean = cfg.getOrElse("compressFiles", "false").toBoolean
+  val fileSuffix: String     = cfg.getOrElse("fileSuffix", ".html")
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -295,8 +296,8 @@ def progressiveResize(src: BufferedImage, width: Int, height: Int): BufferedImag
 
 
 def absUrlFromPath(path: String) = Blog.baseUrl + "/" + path
-def absUrlFromSlug(slug: String) = Blog.baseUrl + "/" + slug + ".html"
-def relUrlFromSlug(slug: String) = slug + ".html"
+def absUrlFromSlug(slug: String) = Blog.baseUrl + "/" + slug + Blog.fileSuffix
+def relUrlFromSlug(slug: String) = slug + Blog.fileSuffix
 def absUrl(a: Article) = absUrlFromSlug(a.slug)
 def relUrl(a: Article) = relUrlFromSlug(a.slug)
 def fixPath(path: String) = path.replaceAll(" ", "%20") // TODO hackity hack
@@ -702,7 +703,7 @@ case class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends 
   def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String = {
     val header = {
       if (Blog.header.nonEmpty) { Blog.header } else {
-        s"""<div class=r><b><a href="${rel("index.html")}">${Blog.title}</a></b> [<a href="${rel("rss.xml")}">RSS</a>]</div>"""
+        s"""<div class=r><b><a href="${rel(absUrlFromSlug("index"))}">${Blog.title}</a></b> [<a href="${rel("rss.xml")}">RSS</a>]</div>"""
       }
     }
 
