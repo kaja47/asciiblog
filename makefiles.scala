@@ -36,6 +36,7 @@ object Blog {
   val baseUrl: String        = cfg("baseUrl")
   val files: Seq[String]     = spaceSeparatedStrings(cfg.getOrElse("files", "").trim)
   val articlesOnIndex: Int   = cfg.getOrElse("fullArticlesOnIndex", "5").toInt
+  val groupArchiveBy: String = cfg.getOrElse("groupArchiveBy", "year") // "year", "month" or some number
   val style: String          = cfg.getOrElse("style", "")
   val thumbWidth: Int        = cfg.getOrElse("thumbnailWidth", "150").toInt
   val thumbHeight: Int       = cfg.getOrElse("thumbnailHeight", "100").toInt
@@ -533,7 +534,7 @@ def isTagSlug(tag: String) = tag.startsWith("tag/")
 
 trait Layout {
   def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String
-  def makeIndex(articles: Base): String
+  def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String
   def makeFullArticle(a: Article, compact: Boolean): String
   def makeTagIndex(base: Base): String
 }
@@ -738,10 +739,8 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
 </html>"""
   }
 
-  def makeIndex(articles: Base): String = {
-    val (fulls, links) = articles.feed.splitAt(Blog.articlesOnIndex)
-    fulls.map(a => makeFullArticle(a, true)).mkString("<br/><br/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
-  }
+  def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String =
+    fullArticles.map(makeFullArticle(_, true)).mkString("<br/><br/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
 
   def makeFullArticle(a: Article, compact: Boolean): String = {
     makeTitle(a)+
@@ -800,22 +799,23 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
       )
     }.mkString(" ")
 
-  def year(d: Date) = {
-    val calendar = new GregorianCalendar()
-    calendar.setTime(d)
-    calendar.get(Calendar.YEAR)
-  }
-
-  val thisYear = year(new Date)
-
   def makeDate(a: Article) = a.date match {
     case null => ""
-    case d if year(a.date) == thisYear =>
+    case d if year(a.date) == year(new Date) =>
       new SimpleDateFormat("d. M.").format(d)+" "
     case d =>
       new SimpleDateFormat("d. M. yyyy").format(d)+" "
   }
 }
+
+def calendar(d: Date, field: Int) = {
+  val cal = new GregorianCalendar()
+  cal.setTime(d)
+  cal.get(field)
+}
+
+def year(d: Date) = calendar(d, Calendar.YEAR)
+def yearmonth(d: Date) = (calendar(d, Calendar.YEAR), calendar(d, Calendar.MONTH)+1)
 
 
 
@@ -1072,9 +1072,32 @@ if (checkLinks) {
 val fileIndex = mutable.ArrayBuffer[(String, String)]()
 val isIndexGallery = base.feed.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
 
-val path = "index.html"
-val body = l.makeIndex(base)
+val (fulls, rest) = base.feed.splitAt(Blog.articlesOnIndex)
+
+def chunk[T: Ordering](as: Seq[Article])(g: Date => T)(zero: T)(f: T => Article) =
+  as.groupBy { a => if (a.date == null) zero else g(a.date) }.toSeq.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
+
+val ((_, links) +: archivePages) = Blog.groupArchiveBy match {
+  case "month" => chunk(rest)(yearmonth)((0,0)) { case (y, m) => Article(Blog.translation("archive")+s" $m/$y", s"index-$y-$m") }
+  case "year"  => chunk(rest)(year)     (0)     { case y      => Article(Blog.translation("archive")+s" $y", s"index-$y") }
+  case num if num matches "\\d+" =>
+    val len = num.toInt
+    rest.reverse.grouped(len).toVector.zipWithIndex.map { case (as, i) =>
+      (Article(Blog.translation("archive")+s" #${i*len+1}-${(i+1)*len}", "index-"+(i+1)), as.reverse)
+    }.reverse
+  case _ => Seq((null, rest))
+}
+
+val archiveLinks = archivePages.map { case (a, as) =>
+  val l = FlowLayout(absUrl(a), base, dumpImages)
+  val body = l.makeIndex(Seq(), as)
+  fileIndex ++= saveFile(relUrl(a), l.makePage(body, gallery = isIndexGallery))
+  a
+}
+
+val path = relUrlFromSlug("index")
 val l = FlowLayout(absUrlFromPath(path), base, dumpImages)
+val body = l.makeIndex(fulls, links ++ archiveLinks)
 fileIndex ++= saveFile(path, l.makePage(body, gallery = isIndexGallery))
 
 base.articles foreach { a =>
@@ -1091,7 +1114,7 @@ base.allTags.keys foreach { a =>
 }
 
 {
-  val path = "tags.html"
+  val path = relUrlFromSlug("tags")
   val l = FlowLayout(absUrlFromPath(path), base, dumpImages)
   fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)))
 }
