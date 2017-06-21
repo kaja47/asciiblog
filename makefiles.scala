@@ -594,7 +594,7 @@ def segmentText(txt: String): Text = {
   Text(segments)
 }
 
-class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends Layout {
+case class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends Layout {
   def rel(url: String): String = if (baseUrl != null) relativize(url, baseUrl) else url
   def txl(s: String) = Blog.translation(s)
   def ifs(c: Boolean, body: => String) = if (c) body else ""
@@ -1037,7 +1037,7 @@ def prepareGallery(): Base = {
 
 
 
-val (base, gallery) =
+val (base, dumpImages) =
   Blog.kind match {
     case "blog"    => (prepareBlog(), false)
     case "gallery" => (prepareGallery(), true)
@@ -1050,18 +1050,18 @@ val fileIndex = mutable.ArrayBuffer[(String, String)]()
 val isIndexGallery = base.feed.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
 
 val path = "index.html"
-val l = new FlowLayout(absUrlFromPath(path), base, gallery)
 val body = l.makeIndex(base)
+val l = FlowLayout(absUrlFromPath(path), base, dumpImages)
 fileIndex ++= saveFile(path, l.makePage(body, gallery = isIndexGallery))
 
 base.articles foreach { a =>
-  var l = new FlowLayout(absUrl(a), base, gallery)
+  var l = FlowLayout(absUrl(a), base, dumpImages)
   val body = l.makeFullArticle(a, false)
   fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty))
 }
 
 base.allTags.keys foreach { a =>
-  var l = new FlowLayout(absUrl(a), base, gallery)
+  var l = FlowLayout(absUrl(a), base, dumpImages)
   val body = l.makeFullArticle(a, false)
   fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty, rss = a.slug+".xml"))
   fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
@@ -1069,11 +1069,11 @@ base.allTags.keys foreach { a =>
 
 {
   val path = "tags.html"
-  val l = new FlowLayout(absUrlFromPath(path), base, gallery)
+  val l = FlowLayout(absUrlFromPath(path), base, dumpImages)
   fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)))
 }
 
-def mkBody(a: Article) = (new FlowLayout(null, base, gallery)).makeFullArticle(a, true)
+def mkBody(a: Article) = (FlowLayout(null, base, dumpImages)).makeFullArticle(a, true)
 fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
 new File("t").mkdir()
