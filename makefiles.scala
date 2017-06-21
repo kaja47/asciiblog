@@ -699,8 +699,12 @@ case class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends 
     styleTxt.lines.map(_.trim).filter(_.nonEmpty).flatMap(l => style(l, cats)).mkString("")
 
   def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String = {
-    val defaultHeader = s"""<div class=r><b><a href="${rel("index.html")}">${Blog.title}</a></b> [<a href="${rel("rss.xml")}">RSS</a>]</div>"""
-    val header = if (Blog.header.nonEmpty) Blog.header else defaultHeader
+    val header = {
+      if (Blog.header.nonEmpty) { Blog.header } else {
+        s"""<div class=r><b><a href="${rel("index.html")}">${Blog.title}</a></b> [<a href="${rel("rss.xml")}">RSS</a>]</div>"""
+      }
+    }
+
     val body = "<body><div class=b>"+header+content+"</div></body>"
     val cats = classesAndTags(body)
 
