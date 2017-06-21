@@ -11,7 +11,7 @@ val source = new File(args(0))
 val target = new File(args(1))
 
 def parseFileIndex(lines: Iterator[String]): Map[String, String] =
-  lines.map { l => val Array(f, h) = l.split(" ", 2) ; (f, h) }.toMap
+  lines.map { l => val Array(h, f) = l.split(" ", 2) ; (f, h) }.toMap
 
 // [file -> hash]
 def readFileIndex(f: File): Map[String, String] =

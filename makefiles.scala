@@ -1101,4 +1101,4 @@ for (a <- base.all; image <- a.images) {
 }
 
 fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /")
-saveFile(".files", fileIndex.map { case (file, hash) => file+" "+hash }.mkString("\n"))
+saveFile(".files", fileIndex.map { case (file, hash) => hash+" "+file }.mkString("\n"))
