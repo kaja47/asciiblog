@@ -130,7 +130,8 @@ case class Base(all: Seq[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
 }
 
 class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
-  private val arts: Array[Article] = tagMap.values.flatten.toArray.distinct
+  private val articlesReferencedByRel = base.all.flatMap(_.meta.seq("rel").flatMap(base.find))
+  private val arts: Array[Article] = (tagMap.values.flatten ++ articlesReferencedByRel).toArray.distinct
   private val artMap: Map[Article, Int] = arts.zipWithIndex.toMap
   private val tm: Map[Tag, Array[Int]] = tagMap.map { case (t, as) => (t, as.map(artMap).toArray) }
 
