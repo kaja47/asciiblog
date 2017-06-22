@@ -1,9 +1,9 @@
-import java.awt.image.{ BufferedImage, ConvolveOp, Kernel }
+import java.awt.image.BufferedImage
 import java.awt.{ AlphaComposite, RenderingHints => RH }
-import java.io.{ File, FileWriter }
+import java.io.{ File, FileWriter, FileOutputStream }
 import java.net.{ URL, URI, HttpURLConnection }
 import java.text.SimpleDateFormat
-import java.util.{ Date, GregorianCalendar, Calendar, Locale }
+import java.util.{ Date, GregorianCalendar, Calendar, Locale, zip }
 import javax.imageio.ImageIO
 import scala.collection.{ mutable, immutable }
 import scala.util.matching.Regex
@@ -851,7 +851,7 @@ def saveFile(f: String, content: String): Seq[(String, String)] = {
 
   Seq(f -> h) ++ (if (!Blog.compressFiles) Seq() else {
     val gzf = f+".gz"
-    val out = new java.util.zip.GZIPOutputStream(new java.io.FileOutputStream(gzf))
+    val out = new zip.GZIPOutputStream(new FileOutputStream(gzf))
     out.write(content.getBytes("utf-8"))
     out.close()
     Seq(gzf -> h)
@@ -1051,7 +1051,7 @@ val (base, dumpImages) =
   }
 
 
-val checkLinks = false
+val checkLinks = false // TODO
 
 if (checkLinks) {
   for {
