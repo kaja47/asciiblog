@@ -52,6 +52,7 @@ object Blog {
   val header: String         = cfg.getOrElse("header", "")
   val compressFiles: Boolean = cfg.getOrElse("compressFiles", "false").toBoolean
   val fileSuffix: String     = cfg.getOrElse("fileSuffix", ".html")
+  val imageMarker: String    = cfg.getOrElse("imageMarker", "")
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -782,7 +783,7 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
   def blackout(txt: String) =
     blackoutRegex.replaceAllIn(txt, m => m.group(0).replaceAll("(?s).", "█").grouped(5).mkString("<wbr>"))
 
-  def articleLink(a: Article, title: String) = s"""<i><a href="${rel(absUrl(a))}">${title}</a></i>"""
+  def articleLink(a: Article, title: String) = s"""<i><a href="${rel(absUrl(a))}">${title}</a></i>"""+ifs(a.images.nonEmpty, Blog.imageMarker)
   def makeLink(a: Article) = makeDate(a)+articleLink(a, a.title)
   def makeTitle(a: Article) = makeDate(a)+"<h2>"+articleLink(a, a.title)+"</h2>"
 
