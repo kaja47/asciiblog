@@ -91,7 +91,7 @@ def listFiles(pattern: String): Array[File] = ((pattern match {
   }): Array[File]).filter(f => !f.getName.startsWith("."))
 
 
-case class Base(all: Seq[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
+case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
   private lazy val extraTags: Seq[Article] = {
     val direct = all.collect { case a if a.isTag => a.asTag }.toSet
     tagMap.collect { case (t, as) if !direct.contains(t) => Article(t.title, tagSlug(t.title), meta = Meta(Map("tag" -> null))) }.toSeq
@@ -871,14 +871,14 @@ def saveXml(f: String, content: String): Seq[(String, String)] =
 
 
 def prepareBlog(): Base = {
-  var articles = Blog.files.flatMap(listFiles).flatMap { f =>
+  var articles: Vector[Article] = Blog.files.flatMap(listFiles).flatMap { f =>
     var ls = io.Source.fromFile(f).getLines.toVector
     val starts = ls.zipWithIndex.collect { case (l, i) if l.matches("===+") => i-1 }
 
     (0 until starts.length).map { i =>
       parseArticle(ls.slice(starts(i), starts.lift(i+1).getOrElse(ls.length)))
-    }.toVector
-  }
+    }
+  }.toVector
 
   if (Blog.articlesMustNotBeMixed) {
     val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
@@ -937,7 +937,7 @@ def prepareBlog(): Base = {
     }
   }
 
-  articles = slugOrder.map(articleMap)
+  articles = slugOrder.map(articleMap).toVector
 
   // ordered by date
   if (Blog.articlesMustBeSorted) {
@@ -1026,7 +1026,7 @@ def prepareGallery(): Base = {
 
   val dateTitle = """^(?:(\d+)-(\d+)-(\d+)\s*-?\s*)?(.*)$""".r
 
-  Base(for (albumDir <- albumDirs) yield {
+  Base(for (albumDir <- albumDirs.toVector) yield {
     println(albumDir.getName)
 
     val dateTitle(y, m, d, t) = albumDir.getName
@@ -1082,10 +1082,10 @@ val isIndexGallery = base.feed.take(Blog.articlesOnIndex).exists(_.images.nonEmp
 
 val (fulls, rest) = base.feed.splitAt(Blog.articlesOnIndex)
 
-def chunk[T: Ordering](as: Seq[Article])(g: Date => T)(zero: T)(f: T => Article) =
-  as.groupBy { a => if (a.date == null) zero else g(a.date) }.toSeq.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
+def chunk[T: Ordering](as: Vector[Article])(g: Date => T)(zero: T)(f: T => Article): Vector[(Article, Vector[Article])] =
+  as.groupBy { a => if (a.date == null) zero else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
 
-val ((_, links) +: archivePages) = Blog.groupArchiveBy match {
+val (links, archivePages) = (Blog.groupArchiveBy match {
   case "month" => chunk(rest)(yearmonth)((0,0)) { case (y, m) => Article(Blog.translation("archive")+s" $m/$y", s"index-$y-$m") }
   case "year"  => chunk(rest)(year)     (0)     { case y      => Article(Blog.translation("archive")+s" $y", s"index-$y") }
   case num if num matches "\\d+" =>
@@ -1093,7 +1093,10 @@ val ((_, links) +: archivePages) = Blog.groupArchiveBy match {
     rest.reverse.grouped(len).toVector.zipWithIndex.map { case (as, i) =>
       (Article(Blog.translation("archive")+s" #${i*len+1}-${(i+1)*len}", "index-"+(i+1)), as.reverse)
     }.reverse
-  case _ => Seq((null, rest))
+  case _ => Vector((null, rest))
+}) match {
+  case (_, links) +: archivePages => (links, archivePages)
+  case _ => (Vector(), Vector())
 }
 
 val archiveLinks = archivePages.map { case (a, as) =>
