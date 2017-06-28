@@ -220,7 +220,9 @@ case class Slug(id: String)
 case class Tags(visible: Seq[Tag] = Seq(), hidden: Seq[Tag] = Seq()) {
   def merge(t: Tags) = Tags(visible ++ t.visible, hidden ++ t.hidden)
 }
-case class Tag(title: String, supertag: Boolean = false)
+case class Tag(title: String, supertag: Boolean = false) {
+  override def toString = "Tag("+(if (supertag)"!"else"#")+title+")"
+}
 case class Sim(article: Article, commonTags: Int)
 
 def resizeImage(src: BufferedImage, _width: Int, _height: Int = -1): BufferedImage = {
