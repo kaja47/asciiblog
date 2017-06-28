@@ -608,9 +608,9 @@ case class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends 
     var txt = _txt
     txt = blackout(txt)
     txt = altRegex.replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
-    txt = ahrefRegex.replaceAllIn(txt, m => rel(resolveLink(m.group(1), base, a)))
+    txt = ahrefRegex.replaceAllIn(txt, m => Regex.quoteReplacement(rel(resolveLink(m.group(1), base, a))))
     txt = linkRegex.replaceAllIn(txt, m => {
-      s"""<a href="${rel(resolveLink(m.group(2), base, a))}">${m.group(1)}</a>"""
+      Regex.quoteReplacement(s"""<a href="${rel(resolveLink(m.group(2), base, a))}">${m.group(1)}</a>""")
     })
     txt = txt.replaceAll("""(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n|\d+\)\ )) """, "$1$2<br/>") // lists
     txt = txt.replaceAll("""(?xm) ^(\d+\)\ )(?!\ )(.*?)(?=\n(?:\d+\)\ |\n\n)) """, "$1$2<br/>") // lists
@@ -711,7 +711,7 @@ case class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends 
   def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String = {
     val defaultHeader = s"""<div class=r><b><a href="index">${Blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
     val protoHeader = if (Blog.header.nonEmpty) Blog.header else defaultHeader
-    val header = ahrefRegex.replaceAllIn(protoHeader, m => rel(resolveGlobalLink(m.group(1), base)))
+    val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
     val body = "<body><div class=b>"+header+content+"</div></body>"
     val cats = classesAndTags(body)
 
