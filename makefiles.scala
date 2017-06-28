@@ -701,13 +701,17 @@ case class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends 
   def styles(styleTxt: String, cats: Set[String]) =
     styleTxt.lines.map(_.trim).filter(_.nonEmpty).flatMap(l => style(l, cats)).mkString("")
 
-  def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String = {
-    val header = {
-      if (Blog.header.nonEmpty) { Blog.header } else {
-        s"""<div class=r><b><a href="${rel(absUrlFromSlug("index"))}">${Blog.title}</a></b> [<a href="${rel("rss.xml")}">RSS</a>]</div>"""
-      }
-    }
+  def resolveGlobalLink(link: String, base: Base) = link match {
+    case l if isAbsolute(l) => l
+    case l if base.isValidId(l) => absUrlFromSlug(base.canonicSlug(l))
+    case l if l.contains('.') => l // rss.xml, index.html
+    case l => absUrlFromSlug(l)    // index or just slug
+  }
 
+  def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String = {
+    val defaultHeader = s"""<div class=r><b><a href="index">${Blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
+    val protoHeader = if (Blog.header.nonEmpty) Blog.header else defaultHeader
+    val header = ahrefRegex.replaceAllIn(protoHeader, m => rel(resolveGlobalLink(m.group(1), base)))
     val body = "<body><div class=b>"+header+content+"</div></body>"
     val cats = classesAndTags(body)
 
