@@ -13,7 +13,7 @@ val cfg = io.Source.fromFile(args(0)).getLines.collect(kv).toMap
 
 def kv: PartialFunction[String, (String, String)] = {
   case s if s.split(" ", 2).length == 2 =>
-    val Array(k, v) = s.split(" ", 2); (k, v.replaceAll("""^"|"$""", ""))
+    val Array(k, v) = s.split(" ", 2); (k, v/*.replaceAll("""^"|"$""", "")*/)
 }
 
 def timer[T](label: String)(f: => T) = {
@@ -749,7 +749,7 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
   }
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String =
-    fullArticles.map(makeFullArticle(_, true)).mkString("<br/><br/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
+    fullArticles.map(makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
 
   def makeFullArticle(a: Article, compact: Boolean): String = {
     makeTitle(a)+
