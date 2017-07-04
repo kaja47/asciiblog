@@ -92,7 +92,10 @@ def listFiles(pattern: String): Array[File] = ((pattern match {
   }): Array[File]).filter(f => !f.getName.startsWith("."))
 
 
-case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
+case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
+  lazy val imgTags: Seq[Tag] = all.flatMap(_.images).flatMap(_.tags.visible)
+  lazy val tagMap: Map[Tag, Seq[Article]] = imgTags.map(_ -> Seq()).toMap ++ _tagMap
+
   private lazy val extraTags: Seq[Article] = {
     val direct = all.collect { case a if a.isTag => a.asTag }.toSet
     tagMap.collect { case (t, as) if !direct.contains(t) => Article(t.title, tagSlug(t.title), meta = Meta(Map("tag" -> null))) }.toSeq
@@ -214,7 +217,8 @@ case class Image(
   align: String = null,
   title: String = null,
   license: String = null,
-  source: String = null
+  source: String = null,
+  tags: Tags = Tags()
 )
 
 case class Slug(id: String)
@@ -385,23 +389,25 @@ val imgLicenseRegex = """(?x) (.*?) \s* (?: \( (?:(CC\ [\w-]+)\s+)? \s* ([^\ ]*)
 val licenses = Set("CC by", "CC by-nc", "CC by-nd", "CC by-sa", "CC by-nc-nd", "CC by-nc-sa")
 
 def mkImage: PartialFunction[String, Image] = {
-  case imgRegex(url, mod, alt1, alt2, align, link, title) =>
+  case imgRegex(url, mod, alt1, alt2, align, link, rawTitle) =>
     val u = if (link != null) link else url // ???
-    val (t, license, source) = title match {
+    val (t, license, source) = rawTitle match {
       case imgLicenseRegex(t, l, s) if licenses.contains(l) => (t, l, s)
       case imgLicenseRegex(t, null, s) => (t, null, s)
-      case t => (t, null, null)
+      case null => ("", null, null)
+      case t    => (t,  null, null)
     }
-
+    val (title, tags) = peelOffTags(t)
     Image(
       url = if (isAbsolute(u)) u else Blog.imageRoot + u,
       thumb = hash(url),
       alt  = if (alt1 != null) alt1 else alt2,
       mods = mod,
       align = if (align == "*") null else align,
-      title = t,
+      title = title,
       license = license,
-      source = source
+      source = source,
+      tags = tags
     )
 }
 
@@ -666,9 +672,10 @@ case class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends 
       case i if i.mods == "main" => ("main", bigThumbnailUrl(img, false))
       case i => ("thz", thumbnailUrl(img))
     }
+    val tags = makeTagLinks(img.tags.visible.map(base.tagByTitle), a)
     val desc =
       (ifs(img.title, paragraph(img.title, a))+" "+(ifs(img.license)+" "+ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")).trim).trim
-    s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="${rel(absUrlFromPath(srcPath))}"/></a>$desc</span>"""
+    s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="${rel(absUrlFromPath(srcPath))}"/></a>$desc $tags</span>"""
   }
 
   def gallerySample(a: Article) =
