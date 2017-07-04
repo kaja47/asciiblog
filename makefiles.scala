@@ -222,7 +222,7 @@ case class Tags(visible: Seq[Tag] = Seq(), hidden: Seq[Tag] = Seq()) {
   def merge(t: Tags) = Tags(visible ++ t.visible, hidden ++ t.hidden)
 }
 case class Tag(title: String, supertag: Boolean = false) {
-  override def toString = "Tag("+(if (supertag)"!"else"#")+title+")"
+  override def toString = "Tag("+(if (supertag)"##"else"#")+title+")"
 }
 case class Sim(article: Article, commonTags: Int)
 
@@ -425,19 +425,19 @@ val bracketRegex  = """^\(([^)]+)\)$""".r
 def bracketed(xs: Array[String])   = xs.collect { case bracketRegex(x) => x }
 def unbracketed(xs: Array[String]) = xs.filter { case bracketRegex(x) => false ; case _ => true }
 
-val tagsRegex     = """^((?:#|\?|!).+)$""".r
-val tagBlockRegex = """(##|#|\?|!)(.+?)(?=( |^)(##|#|\?|!)|$)""".r
-def splitTags(s: String) =
+val tagsRegex     = """^((?:#).+)$""".r
+val tagBlockRegex = """(##|#)(.+?)(?=( |^)(##|#)|$)""".r
+def getTags(s: String) =
   tagBlockRegex.findAllMatchIn(s).foldLeft(Tags()) { (t, m) =>
     val tags = m.group(2).split("\\s*,\\s*").map(_.trim)
     val (vis, hid): (Seq[Tag], Seq[Tag]) = (m.group(1) match {
-      case "!"|"##" => (tags.map(Tag(_, true)), Seq())
-      case "#"      => (unbracketed(tags).map(Tag(_)), bracketed(tags).map(Tag(_)))
-      case "?"      => (Seq(), tags.map(Tag(_)))
+      case "##" => (tags.map(Tag(_, true)), Seq())
+      case "#"  => (unbracketed(tags).map(Tag(_)), bracketed(tags).map(Tag(_)))
     })
     t.copy(visible = t.visible ++ vis, hidden = t.hidden ++ hid)
   }
-val parseTags: PartialFunction[String, Tags] = { case tagsRegex(s) => splitTags(s) }
+def peelOffTags(s: String): (String, Tags) = (tagBlockRegex.replaceAllIn(s, "").trim, getTags(s))
+val parseTags: PartialFunction[String, Tags] = { case tagsRegex(s) => getTags(s) }
 
 val metaRegex = """(?x) \s+ | \[ | \] | , | \w+:\w+ | [\w/-]+ | :""".r
 
