@@ -421,24 +421,23 @@ def parseDate(l: String): Option[Seq[Date]] = {
 def parseLicense(l: String): Option[String] =
   if (licenses.contains(l)) Some(l) else None
 
-val tagsRegex     = """^((?:#|\?|!).+)$""".r
-val tagBlockRegex = """(##|#|\?|!)(.+?)(?=( |^)(##|#|\?|!)|$)""".r
-val parseTags: PartialFunction[String, Tags] = {
-  case tagsRegex(s) =>
-    tagBlockRegex.findAllMatchIn(s).foldLeft(Tags()) { (t, m) =>
-      val tags = m.group(2).split("\\s*,\\s*").map(_.trim)
-      val (vis, hid): (Seq[Tag], Seq[Tag]) = (m.group(1) match {
-        case "!"|"##" => (tags.map(Tag(_, true)), Seq())
-        case "#"      => (unbracketed(tags).map(Tag(_)), bracketed(tags).map(Tag(_)))
-        case "?"      => (Seq(), tags.map(Tag(_)))
-      })
-      t.copy(visible = t.visible ++ vis, hidden = t.hidden ++ hid)
-    }
-}
-
 val bracketRegex  = """^\(([^)]+)\)$""".r
 def bracketed(xs: Array[String])   = xs.collect { case bracketRegex(x) => x }
 def unbracketed(xs: Array[String]) = xs.filter { case bracketRegex(x) => false ; case _ => true }
+
+val tagsRegex     = """^((?:#|\?|!).+)$""".r
+val tagBlockRegex = """(##|#|\?|!)(.+?)(?=( |^)(##|#|\?|!)|$)""".r
+def splitTags(s: String) =
+  tagBlockRegex.findAllMatchIn(s).foldLeft(Tags()) { (t, m) =>
+    val tags = m.group(2).split("\\s*,\\s*").map(_.trim)
+    val (vis, hid): (Seq[Tag], Seq[Tag]) = (m.group(1) match {
+      case "!"|"##" => (tags.map(Tag(_, true)), Seq())
+      case "#"      => (unbracketed(tags).map(Tag(_)), bracketed(tags).map(Tag(_)))
+      case "?"      => (Seq(), tags.map(Tag(_)))
+    })
+    t.copy(visible = t.visible ++ vis, hidden = t.hidden ++ hid)
+  }
+val parseTags: PartialFunction[String, Tags] = { case tagsRegex(s) => splitTags(s) }
 
 val metaRegex = """(?x) \s+ | \[ | \] | , | \w+:\w+ | [\w/-]+ | :""".r
 
