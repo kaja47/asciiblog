@@ -772,9 +772,7 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String =
     fullArticles.map(makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
 
-  def makeFullArticle(a: Article, compact: Boolean): String = _makeFullArticle(a, compact, false)
-
-  private def _makeFullArticle(a: Article, compact: Boolean, sample: Boolean): String = {
+  def makeFullArticle(a: Article, compact: Boolean): String = {
     makeTitle(a)+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     "<br/>\n"+
