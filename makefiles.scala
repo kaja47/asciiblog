@@ -96,7 +96,10 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   private lazy val imgTags: Seq[Tag] = all.flatMap(_.images).flatMap(_.tags.visible)
   lazy val tagMap: Map[Tag, Seq[Article]] = imgTags.map(_ -> Seq()).toMap ++ _tagMap
 
-  private lazy val extraTags: Seq[Article] = {
+  private lazy val imageTagMap: Map[Tag, Seq[(Image, Article)]] = invert(all.flatMap(a => a.images.map(i => ((i, a), i.tags.visible.distinct))))
+  private def taggedImages(t: Tag) = imageTagMap.getOrElse(t, Seq()).map { case (i, a) => i.copy(inText = false, localSource = a) }
+
+  private lazy val extraTags: Seq[Article] = { // tags that have no particular article
     val direct = all.collect { case a if a.isTag => a.asTag }.toSet
     tagMap.collect { case (t, as) if !direct.contains(t) => Article(t.title, tagSlug(t.title), meta = Meta(Map("tag" -> null))) }.toSeq
   }
@@ -108,7 +111,7 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   lazy val feed = all.filter(a => a.inFeed && !a.isTag)
 
   lazy val allTags: Map[Article, Seq[Article]] =
-    (all ++ extraTags).filter(_.isTag).map { t => (t, tagMap.getOrElse(t.asTag, Seq())) }.toMap
+    (all ++ extraTags).filter(_.isTag).map { t => (t.copy(images = t.images ++ taggedImages(t.asTag)), tagMap.getOrElse(t.asTag, Seq())) }.toMap
 
   lazy val tagByTitle: Map[Tag, Article] = allTags.map { case (t, _) => (t.asTag, t) }
 
@@ -132,6 +135,12 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   def next(a: Article, tag: Tag) = move(a, tag, +1)
   def prev(a: Article, tag: Tag) = move(a, tag, -1)
 }
+
+def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] =
+  m.flatMap { case (a, bs) => bs.map { b => (b, a) }  }
+    .groupBy(_._1)
+    .map { case (b, bas) => (b, bas.map(_._2).toVector) }
+
 
 class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
   private val articlesReferencedByRel = base.all.flatMap(_.meta.seq("rel").flatMap(base.find))
@@ -193,7 +202,8 @@ case class Article(
   def format = meta.scalar("format")
   def isSupertag = meta.values.contains("supertag")
   def isTag      = meta.values.contains("tag") || isSupertag
-  def asTag = if (isTag) Tag(title, isSupertag) else null
+  def asTag      = if (isTag) Tag(title, isSupertag) else null
+  def extraImages = images.filter(!_.inText)
 }
 
 case class Meta(values: Map[String, Meta] = Map()) {
@@ -218,7 +228,9 @@ case class Image(
   title: String = null,
   license: String = null,
   source: String = null,
-  tags: Tags = Tags()
+  tags: Tags = Tags(),
+  inText: Boolean = true, // is this image specified in article text or is it part of a gallery
+  localSource: Article = null
 )
 
 case class Slug(id: String)
@@ -543,7 +555,7 @@ def isTagSlug(tag: String) = tag.startsWith("tag/")
 
 
 trait Layout {
-  def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String
+  def makePage(content: String, title: String = null, containImages: Boolean = false, rss: String = null): String
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String
   def makeFullArticle(a: Article, compact: Boolean): String
   def makeTagIndex(base: Base): String
@@ -605,7 +617,7 @@ def segmentText(txt: String): Text = {
   Text(segments)
 }
 
-case class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends Layout {
+case class FlowLayout(baseUrl: String, base: Base) extends Layout {
   def rel(url: String): String = if (baseUrl != null) relativize(url, baseUrl) else url
   def txl(s: String) = Blog.translation(s)
   def ifs(c: Boolean, body: => String) = if (c) body else ""
@@ -672,10 +684,13 @@ case class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends 
       case i if i.mods == "main" => ("main", bigThumbnailUrl(img, false))
       case i => ("thz", thumbnailUrl(img))
     }
-    val tags = makeTagLinks(img.tags.visible.map(base.tagByTitle), a)
-    val desc =
-      (ifs(img.title, paragraph(img.title, a))+" "+(ifs(img.license)+" "+ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")).trim).trim
-    s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="${rel(absUrlFromPath(srcPath))}"/></a>$desc $tags</span>"""
+    val title   = ifs(img.title, paragraph(img.title, a)).trim
+    val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle), a).trim
+    val source  = ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")
+    val license = (ifs(img.license)+" "+source).trim
+    val locSrc  = ifs(img.localSource, articleLink(img.localSource, img.localSource.title))
+    val desc = Seq(title, tags, license, locSrc).mkString(" ")
+    s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="${rel(absUrlFromPath(srcPath))}"/></a>$desc</span>"""
   }
 
   def gallerySample(a: Article) =
@@ -717,7 +732,7 @@ case class FlowLayout(baseUrl: String, base: Base, dumpImages: Boolean) extends 
     case l => absUrlFromSlug(l)    // index or just slug
   }
 
-  def makePage(content: String, title: String = null, gallery: Boolean = false, rss: String = null): String = {
+  def makePage(content: String, title: String = null, containImages: Boolean = false, rss: String = null): String = {
     val defaultHeader = s"""<div class=r><b><a href="index">${Blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
     val protoHeader = if (Blog.header.nonEmpty) Blog.header else defaultHeader
     val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
@@ -749,7 +764,7 @@ hr { border: 0px dashed gray; border-top-width: 1px; margin: 0.5em 4em; }
 p { margin: 1.4em 0; }
 """, cats)}
 ${Blog.style}</style>
-${if (gallery) { s"<script>$galleryScript</script>" } else ""}
+${if (containImages) { s"<script>$galleryScript</script>" } else ""}
 </head>$body
 </html>"""
   }
@@ -757,7 +772,9 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String =
     fullArticles.map(makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
 
-  def makeFullArticle(a: Article, compact: Boolean): String = {
+  def makeFullArticle(a: Article, compact: Boolean): String = _makeFullArticle(a, compact, false)
+
+  private def _makeFullArticle(a: Article, compact: Boolean, sample: Boolean): String = {
     makeTitle(a)+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     "<br/>\n"+
@@ -766,8 +783,8 @@ ${if (gallery) { s"<script>$galleryScript</script>" } else ""}
       val linked = slugsOfLinkedArticles(a, base).toSet
       base.allTags(a).filter(a => !linked.contains(a.asSlug)).map(makeLink).mkString("<br/>")+"<br/>"
     })+
-    ifs(dumpImages && !compact, a.images.map(img => imgTag(img, a)).mkString(" "))+
-    ifs(dumpImages && compact, gallerySample(a))+
+    ifs(!compact, a.extraImages.map(img => imgTag(img, a)).mkString(" "))+
+    ifs(compact && a.extraImages.nonEmpty, gallerySample(a))+
     ifs(!compact,
       "<hr/>"+
       "<div style='font-size:0.9em;'>"+
@@ -953,11 +970,6 @@ def prepareBlog(): Base = {
     if (!ordered) sys.error("articles are not ordered by date")
   }
 
-  def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] =
-    m.flatMap { case (a, bs) => bs.map { b => (b, a) }  }
-      .groupBy(_._1)
-      .map { case (b, bas) => (b, bas.map(_._2).toVector) }
-
   var tagMap: Map[Tag, Seq[Article]] =
     invert(articles.map { a => (a, (a.tags.visible).distinct) })
 
@@ -1049,19 +1061,18 @@ def prepareGallery(): Base = {
       title = if (title.nonEmpty) title else albumDir.getName,
       slug = generateSlug(albumDir.getName),
       dates = Seq(date),
-      images = urls.map { url => new Image(url, hash(url)) }
+      images = urls.map { url => new Image(url, hash(url), inText = false) },
     )
   })
 }
 
 
 
-val (base, dumpImages) =
-  Blog.kind match {
-    case "blog"    => (prepareBlog(), false)
-    case "gallery" => (prepareGallery(), true)
-    case _ => sys.error("unknown kind of blog (should be either 'blog' or 'gallery')")
-  }
+val base = Blog.kind match {
+  case "blog"    => prepareBlog()
+  case "gallery" => prepareGallery()
+  case _ => sys.error("unknown kind of blog (should be either 'blog' or 'gallery')")
+}
 
 
 val checkLinks = false // TODO
@@ -1107,37 +1118,37 @@ val (links, archivePages) = (Blog.groupArchiveBy match {
 }
 
 val archiveLinks = archivePages.map { case (a, as) =>
-  val l = FlowLayout(absUrl(a), base, dumpImages)
+  val l = FlowLayout(absUrl(a), base)
   val body = l.makeIndex(Seq(), as)
-  fileIndex ++= saveFile(relUrl(a), l.makePage(body, gallery = isIndexGallery))
+  fileIndex ++= saveFile(relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */))
   a
 }
 
 val path = relUrlFromSlug("index")
-val l = FlowLayout(absUrlFromPath(path), base, dumpImages)
+val l = FlowLayout(absUrlFromPath(path), base)
 val body = l.makeIndex(fulls, links ++ archiveLinks)
-fileIndex ++= saveFile(path, l.makePage(body, gallery = isIndexGallery))
+fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery))
 
 base.articles foreach { a =>
-  var l = FlowLayout(absUrl(a), base, dumpImages)
+  var l = FlowLayout(absUrl(a), base)
   val body = l.makeFullArticle(a, false)
-  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty))
+  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty))
 }
 
 base.allTags.keys foreach { a =>
-  var l = FlowLayout(absUrl(a), base, dumpImages)
+  var l = FlowLayout(absUrl(a), base)
   val body = l.makeFullArticle(a, false)
-  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, gallery = a.images.nonEmpty, rss = a.slug+".xml"))
+  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, rss = a.slug+".xml"))
   fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
 }
 
 {
   val path = relUrlFromSlug("tags")
-  val l = FlowLayout(absUrlFromPath(path), base, dumpImages)
+  val l = FlowLayout(absUrlFromPath(path), base)
   fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)))
 }
 
-def mkBody(a: Article) = (FlowLayout(null, base, dumpImages)).makeFullArticle(a, true)
+def mkBody(a: Article) = (FlowLayout(null, base)).makeFullArticle(a, true)
 fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
 new File("t").mkdir()
