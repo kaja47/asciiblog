@@ -93,7 +93,7 @@ def listFiles(pattern: String): Array[File] = ((pattern match {
 
 
 case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
-  lazy val imgTags: Seq[Tag] = all.flatMap(_.images).flatMap(_.tags.visible)
+  private lazy val imgTags: Seq[Tag] = all.flatMap(_.images).flatMap(_.tags.visible)
   lazy val tagMap: Map[Tag, Seq[Article]] = imgTags.map(_ -> Seq()).toMap ++ _tagMap
 
   private lazy val extraTags: Seq[Article] = {
@@ -101,8 +101,8 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
     tagMap.collect { case (t, as) if !direct.contains(t) => Article(t.title, tagSlug(t.title), meta = Meta(Map("tag" -> null))) }.toSeq
   }
 
-  lazy val bySlug: Map[String, Article] = (all ++ extraTags).map(a => (a.slug, a)).toMap
-  lazy val byMeta: Map[String, Article] = (all ++ extraTags).flatMap(a => a.meta.scalars collect { case m: String => (m, a) }).toMap
+  private lazy val bySlug: Map[String, Article] = (all ++ extraTags).map(a => (a.slug, a)).toMap
+  private lazy val byMeta: Map[String, Article] = (all ++ extraTags).flatMap(a => a.meta.scalars collect { case m: String => (m, a) }).toMap
 
   lazy val articles = all.filter(a => !a.isTag)
   lazy val feed = all.filter(a => a.inFeed && !a.isTag)
