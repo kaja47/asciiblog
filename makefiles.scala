@@ -866,7 +866,7 @@ else
 
 
 
-def saveFile(f: String, content: String): Seq[(String, String)] = {
+def saveFile(f: String, content: String): Seq[(String, String)] = { // filename -> hash
   val p = new File(f).getParentFile
   if (p != null) p.mkdirs()
 
