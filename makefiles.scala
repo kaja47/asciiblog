@@ -382,6 +382,7 @@ val altRegex      = """(?xm) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
 val linkRegex     = """(?x)  " ([^"]+?) " : \[ ([^\]\n]+?) \]""".r
 val ahrefRegex    = """(?x) (?<= href=") (.*?) (?=") """.r
 val blockRegex    = """(?xs) /---(\w+)[^\n]*\n (.*?) \\--- | \<!-- (.*?) --\>  """.r
+val emRegex       = """---""".r
 
 val imgRegexFragment = """
 \s*  \[\*  \s+
@@ -635,6 +636,7 @@ case class FlowLayout(baseUrl: String, base: Base) extends Layout {
     txt = boldRegex.replaceAllIn(txt, """<b>$1</b>""")
     txt = italicRegex.replaceAllIn(txt, """<i>$1</i>""")
     txt = italic2Regex.replaceAllIn(txt, """<i>$1</i>""")
+    txt = emRegex.replaceAllIn(txt, "&mdash;")
     txt
   }
 
