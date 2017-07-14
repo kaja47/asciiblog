@@ -2,6 +2,7 @@ import java.awt.image.BufferedImage
 import java.awt.{ AlphaComposite, RenderingHints => RH }
 import java.io.{ File, FileWriter, FileOutputStream }
 import java.net.{ URL, URI, HttpURLConnection }
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.{ Date, GregorianCalendar, Calendar, Locale, zip }
 import javax.imageio.ImageIO
@@ -478,13 +479,9 @@ def parseMeta(l: String, prefix: String = "meta: "): Option[Meta] =
     Some(_parseMeta(l.drop(prefix.length)))
   } else None
 
-def hash(txt: String) = {
-  val md5 = java.security.MessageDigest.getInstance("MD5")
-  md5.reset()
-  val digest = md5.digest(txt.getBytes("utf-8"))
-  val bigInt = new java.math.BigInteger(1, digest)
-  bigInt.toString(16).reverse.padTo(32, '0').reverse
-}
+def hash(txt: String): String = hash(txt.getBytes("utf-8"))
+def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
+def _md5(bytes: Array[Byte]) = MessageDigest.getInstance("MD5").digest(bytes)
 
 def parseArticle(lines: Vector[String]): Article = {
   val ls = lines.map(_.replaceAll("\\s*$", ""))
