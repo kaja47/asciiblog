@@ -801,7 +801,7 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
     base.allTags.toSeq.sortBy(~_._2.size).map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
   def blackout(txt: String) =
-    blackoutRegex.replaceAllIn(txt, m => m.group(0).replaceAll("(?s).", "█").grouped(5).mkString("<wbr>"))
+    blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(5).mkString("<wbr>"))
 
   def articleLink(a: Article, title: String) = s"""<i><a href="${rel(absUrl(a))}">${title}</a></i>"""+ifs(a.images.nonEmpty, Blog.imageMarker)
   def makeLink(a: Article) = makeDate(a)+articleLink(a, a.title)
