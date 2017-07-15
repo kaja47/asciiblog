@@ -222,7 +222,6 @@ case class Meta(values: Map[String, Meta] = Map()) {
 
 case class Image(
   url: String,
-  thumb: String,
   alt: String = null,
   mods: String = null,
   align: String = null,
@@ -232,7 +231,9 @@ case class Image(
   tags: Tags = Tags(),
   inText: Boolean = true, // is this image specified in article text or is it part of a gallery
   localSource: Article = null
-)
+) {
+  val thumb = hash(url)
+}
 
 case class Slug(id: String)
 case class Tags(visible: Seq[Tag] = Seq(), hidden: Seq[Tag] = Seq()) {
@@ -414,7 +415,6 @@ def mkImage: PartialFunction[String, Image] = {
     val (title, tags) = peelOffTags(t)
     Image(
       url = if (isAbsolute(u)) u else Blog.imageRoot + u,
-      thumb = hash(url),
       alt  = if (alt1 != null) alt1 else alt2,
       mods = mod,
       align = if (align == "*") null else align,
