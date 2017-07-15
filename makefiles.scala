@@ -5,7 +5,7 @@ import java.net.{ URL, URI, HttpURLConnection }
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.{ Date, GregorianCalendar, Calendar, Locale, zip }
-import javax.imageio.ImageIO
+import javax.imageio.{ ImageIO, IIOException }
 import scala.collection.{ mutable, immutable }
 import scala.util.matching.Regex
 
@@ -1148,33 +1148,28 @@ base.allTags.keys foreach { a =>
 def mkBody(a: Article) = (FlowLayout(null, base)).makeFullArticle(a, true)
 fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
-new File("t").mkdir()
-for (a <- base.all; image <- a.images) {
-  val (thumbFile, w, h) =
-    if (image.mods == "main" && image.align == ">") {
-      (new File(bigThumbnailUrl(image, true)), Blog.bigThumbWidth/2, -1)
-    } else if (image.mods == "main") {
-      (new File(bigThumbnailUrl(image, false)), Blog.bigThumbWidth, -1)
-    } else {
-      val (w, h) = (Blog.thumbWidth, Blog.thumbHeight)
-      (new File(thumbnailUrl(image)), w, h)
-    }
 
-  if (!thumbFile.exists) {
-    println(s"resizing image ${image.url} -> $thumbFile")
-    try {
-      val suffix = image.url.split("\\.").last.toLowerCase
-      val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
-      val full = ImageIO.read(new URL(fixPath(image.url)))
-      if (full != null) {
-        ImageIO.write(resizeImage(full, w, h), s, thumbFile)
-      } else {
-        println(s"ImageIO.read(${image.url}) == null")
-      }
-    } catch { case e: javax.imageio.IIOException =>
-      println(e)
+def smallThumbJob(img: Image) = (img, new File(thumbnailUrl(img)), Blog.thumbWidth, Blog.thumbHeight)
+def mainThumbJob(img: Image)  = (img, new File(bigThumbnailUrl(img, false)), Blog.bigThumbWidth, -1)
+def rightThumbJob(img: Image) = (img, new File(bigThumbnailUrl(img, true)), Blog.bigThumbWidth/2, -1)
+
+val resizeJobs = base.all.flatMap(_.images).flatMap {
+  case i if i.mods == "main" && i.align == ">" => Seq(smallThumbJob(i), rightThumbJob(i))
+  case i if i.mods == "main"                   => Seq(smallThumbJob(i), mainThumbJob(i))
+  case i                                       => Seq(smallThumbJob(i))
+}
+
+new File("t").mkdir()
+for ((image, thumbFile, w, h) <- resizeJobs if !thumbFile.exists) {
+  println(s"resizing image ${image.url} -> $thumbFile")
+  try {
+    val suffix = image.url.split("\\.").last.toLowerCase
+    val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
+    ImageIO.read(new URL(fixPath(image.url))) match {
+      case null => println(s"ImageIO.read(${image.url}) == null")
+      case full => ImageIO.write(resizeImage(full, w, h), s, thumbFile)
     }
-  }
+  } catch { case e: IIOException => println(e) }
 }
 
 fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /")
