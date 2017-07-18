@@ -9,6 +9,10 @@ import javax.imageio.{ ImageIO, IIOException }
 import scala.collection.{ mutable, immutable }
 import scala.util.matching.Regex
 
+if (args.length < 1) {
+  println("config file not specified")
+  sys.exit()
+}
 
 val cfg = io.Source.fromFile(args(0)).getLines.collect(kv).toMap
 
