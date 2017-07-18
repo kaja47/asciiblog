@@ -36,7 +36,6 @@ val galleryScript =
     .replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "") // rather crude and incorrect minifier
 
 object Blog {
-  val kind: String           = cfg.getOrElse("type", "blog")
   val title: String          = cfg("title")
   val baseUrl: String        = cfg("baseUrl")
   val files: Seq[String]     = spaceSeparatedStrings(cfg.getOrElse("files", "").trim)
@@ -58,6 +57,7 @@ object Blog {
   val compressFiles: Boolean = cfg.getOrElse("compressFiles", "false").toBoolean
   val fileSuffix: String     = cfg.getOrElse("fileSuffix", ".html")
   val imageMarker: String    = cfg.getOrElse("imageMarker", "")
+  val albumsDir: String      = cfg.getOrElse("albumsDir", "")
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -894,16 +894,45 @@ def saveXml(f: String, content: String): Seq[(String, String)] =
 
 
 
+def readGallery(): Vector[Article] = {
+  if (Blog.albumsDir.isEmpty) return Vector()
 
-def prepareBlog(): Base = {
-  var articles: Vector[Article] = Blog.files.flatMap(listFiles).flatMap { f =>
+  val albumDirs = new File(Blog.albumDir, "albums").listFiles.sortBy(_.getName).reverse.toSeq
+  val dateTitle = """^(?:(\d+)-(\d+)-(\d+)\s*-?\s*)?(.*)$""".r
+
+  for (albumDir <- albumDirs.toVector) yield {
+    println(albumDir.getName)
+
+    val dateTitle(y, m, d, t) = albumDir.getName
+    val (date, title) =
+      if (y == null) (null, t)
+      else (new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime, t)
+
+    val imgUrls = albumDir.list collect { case f if f.toLowerCase.endsWith(".jpg") =>
+      Blog.baseUrl+"/albums/"+albumDir.getName+"/"+f
+    }
+
+    new Article(
+      title  = if (title.nonEmpty) title else albumDir.getName,
+      slug   = generateSlug(albumDir.getName),
+      dates  = Seq(date),
+      images = imgUrls.map { url => new Image(url, inText = false) }
+    )
+  }
+}
+
+def readPosts(): Vector[Article] =
+  Blog.files.flatMap(listFiles).flatMap { f =>
     var ls = io.Source.fromFile(f).getLines.toVector
     val starts = ls.zipWithIndex.collect { case (l, i) if l.matches("===+") => i-1 }
-
     (0 until starts.length).map { i =>
       parseArticle(ls.slice(starts(i), starts.lift(i+1).getOrElse(ls.length)))
     }
   }.toVector
+
+
+val base: Base = {
+  var articles: Vector[Article] = readGallery() ++ readPosts()
 
   if (Blog.articlesMustNotBeMixed) {
     val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
@@ -1038,42 +1067,6 @@ def prepareBlog(): Base = {
   Base(articles, tagMap)
 }
 
-
-
-def prepareGallery(): Base = {
-  var dir = args(1)
-  val albumDirs = new File(dir, "albums").listFiles.sortBy(_.getName).reverse.toSeq
-
-  val dateTitle = """^(?:(\d+)-(\d+)-(\d+)\s*-?\s*)?(.*)$""".r
-
-  Base(for (albumDir <- albumDirs.toVector) yield {
-    println(albumDir.getName)
-
-    val dateTitle(y, m, d, t) = albumDir.getName
-    val (date, title) =
-      if (y == null) (null, t)
-      else (new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime, t)
-
-    val urls = albumDir.list collect { case f if f.toLowerCase.endsWith(".jpg") =>
-      Blog.baseUrl+"/albums/"+albumDir.getName+"/"+f
-    }
-
-    new Article(
-      title = if (title.nonEmpty) title else albumDir.getName,
-      slug = generateSlug(albumDir.getName),
-      dates = Seq(date),
-      images = urls.map { url => new Image(url, hash(url), inText = false) },
-    )
-  })
-}
-
-
-
-val base = Blog.kind match {
-  case "blog"    => prepareBlog()
-  case "gallery" => prepareGallery()
-  case _ => sys.error("unknown kind of blog (should be either 'blog' or 'gallery')")
-}
 
 
 val checkLinks = false // TODO
