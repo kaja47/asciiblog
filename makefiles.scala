@@ -148,7 +148,7 @@ def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] =
 
 
 class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
-  private val articlesReferencedByRel = base.all.flatMap(_.meta.seq("rel").flatMap(base.find))
+  private val articlesReferencedByRel = base.all.flatMap { a => a.rel.flatMap { rel => base.find(rel).orElse { undefId(rel, a); None } } }
   private val arts: Array[Article] = (tagMap.values.flatten ++ articlesReferencedByRel).toArray.distinct
   private val artMap: Map[Article, Int] = arts.zipWithIndex.toMap
   private val tm: Map[Tag, Array[Int]] = tagMap.map { case (t, as) => (t, as.map(artMap).toArray) }
@@ -169,7 +169,7 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
       }
     }
 
-    for (i <- a.meta.seq("rel").flatMap(base.find).flatMap(artMap.get)) {
+    for (i <- a.rel.flatMap(base.find).flatMap(artMap.get)) {
       freq(i) += 64
     }
 
@@ -209,6 +209,7 @@ case class Article(
   def isTag      = meta.values.contains("tag") || isSupertag
   def asTag      = if (isTag) Tag(title, isSupertag) else null
   def extraImages = images.filter(!_.inText)
+  def rel: Seq[String] = meta.seq("rel")
 }
 
 case class Meta(values: Map[String, Meta] = Map()) {
