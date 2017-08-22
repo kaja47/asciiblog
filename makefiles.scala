@@ -379,9 +379,10 @@ val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
 val dateRegex     = """^(\d+)-(\d+)-(\d+)(?: (\d+):(\d+)(?::(\d+))?)?$""".r
 
 val linkRefRegex  = """(?xm)      ^\[(.*?)\]:\ (.+)$""".r
-val boldRegex     = """(?xs)\*\*(.+?)\*\*""".r
-val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*) (.+?) (?<!\*) \* (?!\*) """.r
-val italic2Regex  = """(?xsUu) (?<!:) // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) // """.r
+val codeRegex     = """(?xs) `    (.+?) `    """.r
+val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
+val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*)    (.+?) (?<!\*)           \*  (?!\*) """.r
+val italic2Regex  = """(?xsUu) (?<!:)  // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) //         """.r
 val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r
 val hrRegex       = """(?xm) ---+|\*\*\*+ """.r
 val altRegex      = """(?xm) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
@@ -639,6 +640,7 @@ case class FlowLayout(baseUrl: String, base: Base) extends Layout {
     txt = txt.replaceAll("""(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n|\d+\)\ )) """, "$1$2<br/>") // lists
     txt = txt.replaceAll("""(?xm) ^(\d+\)\ )(?!\ )(.*?)(?=\n(?:\d+\)\ |\n\n)) """, "$1$2<br/>") // lists
     txt = txt.replaceAll("""(?xs) \<!--.*?--\>""", "")
+    txt = codeRegex.replaceAllIn(txt, """<code>$1</code>""")
     txt = boldRegex.replaceAllIn(txt, """<b>$1</b>""")
     txt = italicRegex.replaceAllIn(txt, """<i>$1</i>""")
     txt = italic2Regex.replaceAllIn(txt, """<i>$1</i>""")
