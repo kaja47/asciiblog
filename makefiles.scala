@@ -624,6 +624,7 @@ case class FlowLayout(baseUrl: String, base: Base) extends Layout {
   def rel(url: String): String = if (baseUrl != null) relativize(url, baseUrl) else url
   def txl(s: String) = Blog.translation(s)
   def ifs(c: Boolean, body: => String) = if (c) body else ""
+  def ifs(x: String, body: => String) = if (x != null && x.nonEmpty) body else ""
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
 
@@ -693,8 +694,8 @@ case class FlowLayout(baseUrl: String, base: Base) extends Layout {
     val source  = ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")
     val license = (ifs(img.license)+" "+source).trim
     val locSrc  = ifs(img.localSource, articleLink(img.localSource, img.localSource.title))
-    val desc = Seq(title, tags, license, locSrc).mkString(" ")
-    s"""<span class=$cl><a href="${img.url}"><img class=thz title="${ifs(img.alt)}" src="${rel(absUrlFromPath(srcPath))}"/></a>$desc</span>"""
+    val desc = Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
+    s"""<span class=$cl><a href="${img.url}"><img class=thz ${ifs(img.alt, s"""title="${img.alt}" """) }src="${rel(absUrlFromPath(srcPath))}"/></a>$desc</span>"""
   }
 
   def gallerySample(a: Article) =
