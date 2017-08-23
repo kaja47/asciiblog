@@ -1134,7 +1134,7 @@ base.articles foreach { a =>
 base.allTags.keys foreach { a =>
   var l = FlowLayout(absUrl(a), base)
   val body = l.makeFullArticle(a, false)
-  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, rss = a.slug+".xml"))
+  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = true /* TODO images in tagged full articles */, rss = a.slug+".xml"))
   fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
 }
 
