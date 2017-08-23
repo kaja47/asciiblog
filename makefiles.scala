@@ -781,12 +781,15 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
     fullArticles.map(makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
 
   def makeFullArticle(a: Article, compact: Boolean): String = {
-    makeTitle(a)+
+    (if(!a.isTag) makeTitle(a) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     "<br/>\n"+
     decorateText(a)+
     ifs(a.isTag, {
       val linked = slugsOfLinkedArticles(a, base).toSet
+      //val rest = base.allTags(a).filter(a => !linked.contains(a.asSlug))
+      //val (fulls, links) = rest.splitAt(Blog.articlesOnIndex)
+      //makeIndex(fulls, links)
       base.allTags(a).filter(a => !linked.contains(a.asSlug)).map(makeLink).mkString("<br/>")+"<br/>"
     })+
     ifs(!compact, a.extraImages.map(img => imgTag(img, a)).mkString(" "))+
