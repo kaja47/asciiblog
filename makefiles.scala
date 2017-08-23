@@ -153,7 +153,9 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
   private val artMap: Map[Article, Int] = arts.zipWithIndex.toMap
   private val tm: Map[Tag, Array[Int]] = tagMap.map { case (t, as) => (t, as.map(artMap).toArray) }
 
-  def similarByTags(a: Article): Seq[Sim] = {
+  private case class Sim(article: Article, commonTags: Int)
+
+  private def _similarByTags(a: Article): Seq[Sim] = {
     def dateDiff(a: Article, b: Article): Long = {
       (a.date, b.date) match {
         case (null, null) => 0
@@ -180,7 +182,7 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
   }
 
   def similarByTags(a: Article, count: Int, without: Seq[Article]): Seq[Article] =
-    similarByTags(a).filter(s => !without.contains(s.article)).take(count).map(_.article)
+    _similarByTags(a).filter(s => !without.contains(s.article)).take(count).map(_.article)
 }
 
 case class Article(
@@ -247,7 +249,6 @@ case class Tags(visible: Seq[Tag] = Seq(), hidden: Seq[Tag] = Seq()) {
 case class Tag(title: String, supertag: Boolean = false) {
   override def toString = "Tag("+(if (supertag)"##"else"#")+title+")"
 }
-case class Sim(article: Article, commonTags: Int)
 
 def resizeImage(src: BufferedImage, _width: Int, _height: Int = -1): BufferedImage = {
   val (width, height) =
