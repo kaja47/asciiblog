@@ -902,7 +902,7 @@ def saveXml(f: String, content: String): Seq[(String, String)] =
 def readGallery(): Vector[Article] = {
   if (Blog.albumsDir.isEmpty) return Vector()
 
-  val albumDirs = new File(Blog.albumDir, "albums").listFiles.sortBy(_.getName).reverse.toSeq
+  val albumDirs = new File(Blog.albumsDir, "albums").listFiles.sortBy(_.getName).reverse.toSeq
   val dateTitle = """^(?:(\d+)-(\d+)-(\d+)\s*-?\s*)?(.*)$""".r
 
   for (albumDir <- albumDirs.toVector) yield {
