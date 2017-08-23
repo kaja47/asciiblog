@@ -240,6 +240,7 @@ case class Image(
   localSource: Article = null
 ) {
   val thumb = hash(url)
+  def asSmallThumbnail = copy(mods = "", align = "")
 }
 
 case class Slug(id: String)
@@ -792,7 +793,7 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
       //makeIndex(fulls, links)
       base.allTags(a).filter(a => !linked.contains(a.asSlug)).map(makeLink).mkString("<br/>")+"<br/>"
     })+
-    ifs(!compact, a.extraImages.map(img => imgTag(img, a)).mkString(" "))+
+    ifs(!compact, a.extraImages.map(img => imgTag(img.asSmallThumbnail, a)).mkString(" "))+
     ifs(compact && a.extraImages.nonEmpty, gallerySample(a))+
     ifs(!compact,
       "<hr/>"+
