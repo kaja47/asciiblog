@@ -1005,13 +1005,10 @@ val base: Base = {
     if (!ordered) sys.error("articles are not ordered by date")
   }
 
-  var tagMap: Map[Tag, Seq[Article]] =
-    invert(articles.map { a => (a, (a.tags.visible).distinct) })
-
-  val allTagMap: Map[Tag, Seq[Article]] =
-    invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) })
-
+  var tagMap   : Map[Tag, Seq[Article]] = invert(articles.map { a => (a, (a.tags.visible).distinct) })
+  val allTagMap: Map[Tag, Seq[Article]] = invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) })
   val base = Base(articles, tagMap)
+  val sim = new Similarities(base, allTagMap)
   def refs(a: Article, k: String) = a.meta.seq(k) flatMap base.find
 
   val backlinks: Map[Slug, Seq[Article]] =
@@ -1022,7 +1019,6 @@ val base: Base = {
     invert(articles.map { a => (a, refs(a, "pub").map(_.asSlug)) })
       .map { case (k, vs) => (k, vs.sortBy(_.date).head) }
 
-  val sim = new Similarities(base, allTagMap)
 
   articles = articles map { a =>
     val bs = backlinks.getOrElse(a.asSlug, Seq())
@@ -1041,6 +1037,7 @@ val base: Base = {
     )
   }
 
+  tagMap = invert(articles.map { a => (a, (a.tags.visible).distinct) }) // ??? recompute tag map
 
   if (Blog.sortByDate) { // newest first, articles without date last
     val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
