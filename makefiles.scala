@@ -71,7 +71,6 @@ def spaceSeparatedStrings(str: String): Seq[String] = str match {
 }
 
 
-
 val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
 def listFiles(pattern: String): Array[File] = ((pattern match {
   case p if p.endsWith("*") =>
@@ -123,8 +122,8 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   private lazy val art2ord = feed.zipWithIndex.toMap
 
   def find(id: String): Option[Article] = bySlug.get(id).orElse(byMeta.get(id))
-  def isValidId(id: String) = find(id).nonEmpty
-  def canonicSlug(id: String) = find(id).get.slug
+  def isValidId(id: String): Boolean = find(id).nonEmpty
+  def canonicSlug(id: String): String = find(id).get.slug
 
   def next(a: Article) = art2ord.get(a).flatMap { ord => feed.lift(ord+1) }.getOrElse(null)
   def prev(a: Article) = art2ord.get(a).flatMap { ord => feed.lift(ord-1) }.getOrElse(null)
@@ -243,7 +242,7 @@ case class Image(
   def asSmallThumbnail = copy(mods = "", align = "")
 }
 
-case class Slug(id: String)
+case class Slug(/*blog: Blog, */id: String)
 case class Tags(visible: Seq[Tag] = Seq(), hidden: Seq[Tag] = Seq()) {
   def merge(t: Tags) = Tags(visible ++ t.visible, hidden ++ t.hidden)
 }
@@ -623,9 +622,9 @@ def segmentText(txt: String): Text = {
   Text(segments)
 }
 
-case class FlowLayout(baseUrl: String, base: Base) extends Layout {
+case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layout {
   def rel(url: String): String = if (baseUrl != null) relativize(url, baseUrl) else url
-  def txl(s: String) = Blog.translation(s)
+  def txl(s: String) = blog.translation(s)
   def ifs(c: Boolean, body: => String) = if (c) body else ""
   def ifs(x: String, body: => String) = if (x != null && x.nonEmpty) body else ""
   def ifs(x: Any, body: => String) = if (x != null) body else ""
@@ -742,8 +741,8 @@ case class FlowLayout(baseUrl: String, base: Base) extends Layout {
   }
 
   def makePage(content: String, title: String = null, containImages: Boolean = false, rss: String = null): String = {
-    val defaultHeader = s"""<div class=r><b><a href="index">${Blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
-    val protoHeader = if (Blog.header.nonEmpty) Blog.header else defaultHeader
+    val defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
+    val protoHeader = if (blog.header.nonEmpty) blog.header else defaultHeader
     val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
     val body = "<body><div class=b>"+header+content+"</div></body>"
     val cats = classesAndTags(body)
@@ -752,7 +751,7 @@ s"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
-<title>${(if (title != null) title+" | " else "")+Blog.title}</title>
+<title>${(if (title != null) title+" | " else "")+blog.title}</title>
 <link rel="alternate" type="application/rss+xml" href="${rel("rss.xml")}"/>
 ${if (rss != null) s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>""" else ""}
 <style>${styles(s"""
@@ -764,7 +763,7 @@ blockquote{margin:0;padding:0;font-style:italic;}
 .about{text-decoration: underline red;}
 img.th,img.thz{}
 .thz,.fr,.main{font-size:0.8em}
-span.thz {width:${Blog.thumbWidth}px;display:inline-block;vertical-align:top}
+span.thz {width:${blog.thumbWidth}px;display:inline-block;vertical-align:top}
 span.fr {text-align:right; max-width:45%; float:right;}
 span.main {text-align:right; display:block; margin-bottom:0.5em;}
 span.main img, span.fr img {max-width:100%}
@@ -772,7 +771,7 @@ h2 {display:inline;margin:none;font-size:1em }
 hr { border: 0px dashed gray; border-top-width: 1px; margin: 0.5em 4em; }
 p { margin: 1.4em 0; }
 """, cats)}
-${Blog.style}</style>
+${blog.style}</style>
 ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
 </head>$body
 </html>"""
@@ -789,7 +788,7 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
     ifs(a.isTag, {
       val linked = slugsOfLinkedArticles(a, base).toSet
       //val rest = base.allTags(a).filter(a => !linked.contains(a.asSlug))
-      //val (fulls, links) = rest.splitAt(Blog.articlesOnIndex)
+      //val (fulls, links) = rest.splitAt(blog.articlesOnIndex)
       //makeIndex(fulls, links)
       base.allTags(a).filter(a => !linked.contains(a.asSlug)).map(makeLink).mkString("<br/>")+"<br/>"
     })+
@@ -816,7 +815,7 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
   def blackout(txt: String) =
     blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(5).mkString("<wbr>"))
 
-  def articleLink(a: Article, title: String) = s"""<i><a href="${rel(absUrl(a))}">${title}</a></i>"""+ifs(a.images.nonEmpty, Blog.imageMarker)
+  def articleLink(a: Article, title: String) = s"""<i><a href="${rel(absUrl(a))}">${title}</a></i>"""+ifs(a.images.nonEmpty, blog.imageMarker)
   def makeLink(a: Article) = makeDate(a)+articleLink(a, a.title)
   def makeTitle(a: Article) = makeDate(a)+"<h2>"+articleLink(a, a.title)+"</h2>"
 
@@ -1076,7 +1075,6 @@ val base: Base = {
 
 
 val checkLinks = false // TODO
-
 if (checkLinks) {
   for {
     a <- base.all ; l <- a.links
@@ -1118,25 +1116,25 @@ val (links, archivePages) = (Blog.groupArchiveBy match {
 }
 
 val archiveLinks = archivePages.map { case (a, as) =>
-  val l = FlowLayout(absUrl(a), base)
+  val l = FlowLayout(absUrl(a), base, Blog)
   val body = l.makeIndex(Seq(), as)
   fileIndex ++= saveFile(relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */))
   a
 }
 
 val path = relUrlFromSlug("index")
-val l = FlowLayout(absUrlFromPath(path), base)
+val l = FlowLayout(absUrlFromPath(path), base, Blog)
 val body = l.makeIndex(fulls, links ++ archiveLinks)
 fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery))
 
 base.articles foreach { a =>
-  var l = FlowLayout(absUrl(a), base)
+  var l = FlowLayout(absUrl(a), base, Blog)
   val body = l.makeFullArticle(a, false)
   fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty))
 }
 
 base.allTags.keys foreach { a =>
-  var l = FlowLayout(absUrl(a), base)
+  var l = FlowLayout(absUrl(a), base, Blog)
   val body = l.makeFullArticle(a, false)
   fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = true /* TODO images in tagged full articles */, rss = a.slug+".xml"))
   fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
@@ -1144,11 +1142,11 @@ base.allTags.keys foreach { a =>
 
 {
   val path = relUrlFromSlug("tags")
-  val l = FlowLayout(absUrlFromPath(path), base)
+  val l = FlowLayout(absUrlFromPath(path), base, Blog)
   fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)))
 }
 
-def mkBody(a: Article) = (FlowLayout(null, base)).makeFullArticle(a, true)
+def mkBody(a: Article) = (FlowLayout(null, base, Blog)).makeFullArticle(a, true)
 fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
 
