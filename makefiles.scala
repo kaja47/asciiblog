@@ -780,10 +780,8 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String =
     fullArticles.map(makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
 
-  def makeFullArticle(a: Article, compact: Boolean): String = {
-    (if(!a.isTag) makeTitle(a) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
-    ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
-    "<br/>\n"+
+  // bare article body, it's used in RSS feed
+  def makeArticleBody(a: Article, compact: Boolean): String = {
     decorateText(a)+
     ifs(a.isTag, {
       val linked = slugsOfLinkedArticles(a, base).toSet
@@ -792,7 +790,14 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
       //makeIndex(fulls, links)
       base.allTags(a).filter(a => !linked.contains(a.asSlug)).map(makeLink).mkString("<br/>")+"<br/>"
     })+
-    ifs(!compact, a.extraImages.map(img => imgTag(img.asSmallThumbnail, a)).mkString(" "))+
+    ifs(!compact, a.extraImages.map(img => imgTag(img.asSmallThumbnail, a)).mkString(" "))
+  }
+
+  def makeFullArticle(a: Article, compact: Boolean): String = {
+    (if(!a.isTag) makeTitle(a) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
+    ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
+    "<br/>\n"+
+    makeArticleBody(a, compact)+
     ifs(compact && a.extraImages.nonEmpty, gallerySample(a))+
     ifs(!compact,
       "<hr/>"+
@@ -1146,7 +1151,7 @@ base.allTags.keys foreach { a =>
   fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)))
 }
 
-def mkBody(a: Article) = (FlowLayout(null, base, Blog)).makeFullArticle(a, true)
+def mkBody(a: Article) = (FlowLayout(null, base, Blog)).makeArticleBody(a, true)
 fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
 
