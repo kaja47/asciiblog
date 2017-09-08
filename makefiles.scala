@@ -35,6 +35,9 @@ val galleryScript =
   io.Source.fromFile(thisDir+"/gallery.js").mkString
     .replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "") // rather crude and incorrect minifier
 
+val commentsScript =
+  io.Source.fromFile(thisDir+"/comments.php").mkString
+
 object Blog {
   val title: String          = cfg("title")
   val baseUrl: String        = cfg("baseUrl")
@@ -58,6 +61,7 @@ object Blog {
   val fileSuffix: String     = cfg.getOrElse("fileSuffix", ".html")
   val imageMarker: String    = cfg.getOrElse("imageMarker", "")
   val albumsDir: String      = cfg.getOrElse("albumsDir", "")
+  val allowComments: Boolean = cfg.getOrElse("allowComments", "false").toBoolean
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -800,6 +804,7 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
     makeArticleBody(a, compact)+
     ifs(compact && a.extraImages.nonEmpty, gallerySample(a))+
     ifs(!compact,
+      ifs(blog.allowComments && !a.isTag, s"<hr/><b><a href='comments.php?url=${relUrlFromSlug(a.slug)}'>${txl("comments.enter")}</a></b> ")+
       "<hr/>"+
       "<div style='font-size:0.9em;'>"+
       "<div class='f r' style='max-width:50%'>"+
@@ -1176,6 +1181,20 @@ for ((image, thumbFile, w, h) <- resizeJobs if !thumbFile.exists) {
       case full => ImageIO.write(resizeImage(full, w, h), s, thumbFile)
     }
   } catch { case e: IIOException => println(e) }
+}
+
+
+if (Blog.allowComments) {
+  fileIndex ++= saveFile("comments.php", {
+    val replaces = Blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v } + ("{comments.title}" -> Blog.title)
+    var cs = commentsScript
+    for ((from, to) <- replaces) {
+      cs = cs.replace(from, to)
+    }
+    cs
+  })
+  new File(".comments").mkdirs()
+  fileIndex ++= saveFile(".comments/.htaccess", "Deny from all")
 }
 
 fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /")

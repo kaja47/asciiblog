@@ -5,3 +5,9 @@ similar příbuzné články:
 backlinks sem odkazují:
 archive archiv
 tagged texty označené
+comments.enter vstoupit do diskuze
+comments.text Text komentáře
+comments.name Jméno
+comments.mail Email
+comments.web Web
+comments.submit Komentovat
