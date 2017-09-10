@@ -83,14 +83,12 @@ if (isset($_POST['text'])) {
 		'ip'   => (string) $_SERVER['REMOTE_ADDR'],
 	);
 
-	if ($comment->name === '') {
-		$comment->name = 'Anonymous';
-	}
-
-	if ($comment->text === '') {
-		echo "Text field is required. Without it it would not be proper comment.";
-		exit;
-	}
+	if ($comment->text === '') throw new \Exception("Text field is required.");
+	if (strlen($comment->name) > 60) throw new \Exception("Name is too long.");
+	if (strlen($comment->mail) > 60) throw new \Exception("Mail is too long.");
+	if (strlen($comment->web)  > 60) throw new \Exception("Web is too long.");
+	if (strlen($comment->text) > 2000) throw new \Exception("Text is too long.");
+	if ($comment->name === '') { $comment->name = 'Anonymous'; }
 
 	$commentSection->addComment($url, $comment);
 	header('Location: '.$requestUrl);
