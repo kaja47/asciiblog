@@ -564,7 +564,7 @@ def isTagSlug(tag: String) = tag.startsWith("tag/")
 
 
 trait Layout {
-  def makePage(content: String, title: String = null, containImages: Boolean = false, rss: String = null): String
+  def makePage(content: String, title: String = null, containImages: Boolean = false, rss: String = null, includeCompleteStyle: Boolean = false): String
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String
   def makeFullArticle(a: Article, compact: Boolean): String
   def makeTagIndex(base: Base): String
@@ -720,12 +720,12 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
   }
 
   val selectorRegex = """^(\w+)?(\.\w+)?$""".r
-  def style(styleLine: String, cats: Set[String]): Option[String] = {
+  def style(styleLine: String, cats: String => Boolean): Option[String] = {
     val (selectorList, rule) = styleLine.span(_ != '{')
     val matchingSelectors = selectorList.split(",").map(_.trim).flatMap { selector =>
       val matches = selector.split(" ").forall { s =>
         selectorRegex.findFirstMatchIn(s) match {
-          case Some(m) => (Option(m.group(1)) ++ Option(m.group(2))).forall(cats.contains)
+          case Some(m) => (Option(m.group(1)) ++ Option(m.group(2))).forall(cats)
           case None => true
         }
       }
@@ -734,7 +734,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
     if (matchingSelectors.nonEmpty) Some(matchingSelectors.mkString(",")+rule) else None
   }
 
-  def styles(styleTxt: String, cats: Set[String]) =
+  def styles(styleTxt: String, cats: String => Boolean) =
     styleTxt.lines.map(_.trim).filter(_.nonEmpty).flatMap(l => style(l, cats)).mkString("")
 
   def resolveGlobalLink(link: String, base: Base) = link match {
@@ -744,12 +744,12 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
     case l => absUrlFromSlug(l)    // index or just slug
   }
 
-  def makePage(content: String, title: String = null, containImages: Boolean = false, rss: String = null): String = {
+  def makePage(content: String, title: String = null, containImages: Boolean = false, rss: String = null, includeCompleteStyle: Boolean = false): String = {
     val defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
     val protoHeader = if (blog.header.nonEmpty) blog.header else defaultHeader
     val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
     val body = "<body><div class=b>"+header+content+"</div></body>"
-    val cats = classesAndTags(body)
+    val cats: String => Boolean = if (includeCompleteStyle) _ => true else classesAndTags(body)
 
 s"""<!DOCTYPE html>
 <html>
@@ -804,10 +804,10 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
     makeArticleBody(a, compact)+
     ifs(compact && a.extraImages.nonEmpty, gallerySample(a))+
     ifs(!compact,
-      ifs(blog.allowComments && !a.isTag, s"<hr/><b><a href='comments.php?url=${relUrlFromSlug(a.slug)}'>${txl("comments.enter")}</a></b> ")+
+      ifs(blog.allowComments && !a.isTag, s"""<hr/><b><a href="comments.php?url=${relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b> """)+
       "<hr/>"+
-      "<div style='font-size:0.9em;'>"+
-      "<div class='f r' style='max-width:50%'>"+
+      """<div style="font-size:0.9em;">"""+
+      """<div class="f r" style="max-width:50%">"""+
         ifs(a.tags.visible.nonEmpty, makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"<br/>\n")+
         ifs(a.license, a.license+"<br/>")+
       "</div>"+
@@ -1185,8 +1185,16 @@ for ((image, thumbFile, w, h) <- resizeJobs if !thumbFile.exists) {
 
 
 if (Blog.allowComments) {
+  val l = FlowLayout(absUrlFromPath("comments.php"), base, Blog)
+  val p = l.makePage("{comments.body}", null, false,  null, includeCompleteStyle = true)
+  val Array(pre, post) = p.split(Regex.quote("{comments.body}"))
+
   fileIndex ++= saveFile("comments.php", {
-    val replaces = Blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v } + ("{comments.title}" -> Blog.title)
+    val replaces = Blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v } ++ Seq(
+      "{comments.prebody}"  -> pre,
+      "{comments.postbody}" -> post,
+      """href="rss.xml""""  -> """href="'.escapeHtmlAttr($requestUrl).'&amp;rss"""" // this is a bit ugly trick
+    )
     var cs = commentsScript
     for ((from, to) <- replaces) {
       cs = cs.replace(from, to)

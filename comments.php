@@ -95,7 +95,6 @@ if (isset($_POST['text'])) {
 	exit;
 
 } elseif (isset($_GET['rss'])) {
-
 	$block = $commentSection->getComments($url);
 
 	$rss = new \SimpleXMLElement('<rss version="2.0"></rss>');
@@ -112,25 +111,13 @@ if (isset($_POST['text'])) {
 
 	header("Content-Type: application/xml; charset=UTF-8");
 	echo $rss->asXML();
+	exit;
 
 } else {
-
-echo '<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8" />
-<title>{comments.title}</title>
-<link rel="alternate" type="application/rss+xml" href="'.$requestUrl.'&rss"/>
-
-<style>a{color:inherit}.r{text-align:right}.b{max-width:46em;font-family:monospace;line-height:1.3}blockquote{margin:0;padding:0;font-style:italic;}img.thz{}.thz,.main{font-size:0.8em}span.thz{width:150px;display:inline-block;vertical-align:top}span.main{text-align:right; display:block; margin-bottom:0.5em;}span.main img{max-width:100%}h2{display:inline;margin:none;font-size:1em }hr{ border: 0px dashed gray; border-top-width: 1px; margin: 0.5em 4em; }p{ margin: 1.4em 0; }
-</style>
-
-</head><body><div class=b>
-';
-
 	$block = $commentSection->getComments($url);
 
-	echo "<a href='", escapeHtmlAttr($block->path) , "'><h2>", escapeHtml($block->title), "</h2></a><br/></br/>";
+	echo '{comments.prebody}';
+	echo "{comments.commentsTo} <h2><a href='", escapeHtmlAttr($block->path) , "'>", escapeHtml($block->title), "</a></h2><br/></br/>";
 
 	foreach ($block->comments as $c) {
 		if ($c->web) {
@@ -147,37 +134,38 @@ echo '<!DOCTYPE html>
 <style>
 textarea { width: 100%; height: 6em; }
 input { padding: 1px 2px; margin: 0em; border:1px solid gray; width: 7em; }
-.l { float: left; margin-left: 0.5em }
+form div { float: left; margin-left: 0.5em }
 </style>
 
-<form action="'.$requestUrl.'" method="post">
+<form action="'.escapeHtmlAttr($requestUrl).'" method="post">
 	<legend>{comments.text}</legend>
 	<textarea name="text" required></textarea>
 	<br/>
 
-<div class=l>
-	<label for="name">{comments.name}</label>
-	<input type="text" maxlength="60" name="name" id="name">
-</div>
+	<div>
+		<label for="name">{comments.name}</label>
+		<input type="text" maxlength="60" name="name" id="name">
+	</div>
 
-<div class=l>
-	<label for="mail">{comments.mail}</label>
-	<input type="email" maxlength="60" name="mail" id="mail">
-</div>
+	<div>
+		<label for="mail">{comments.mail}</label>
+		<input type="email" maxlength="60" name="mail" id="mail">
+	</div>
 
-<div class=l>
-	<label for="web">{comments.web}</label>
-	<input type="url" maxlength="60" name="web" id="web">
-</div>
+	<div>
+		<label for="web">{comments.web}</label>
+		<input type="url" maxlength="60" name="web" id="web">
+	</div>
 
-<div class=l>
-	<input type="submit" name="send" value="{comments.submit}">
-</div>
+	<div>
+		<input type="submit" name="send" value="{comments.submit}">
+	</div>
+	<br clear=all />
 
 </form>';
 
-	echo '</div></body></html>';
-
+	echo '{comments.postbody}';
+	exit;
 }
 
 } catch (Exception $e) {

@@ -6,6 +6,7 @@ backlinks sem odkazují:
 archive archiv
 tagged texty označené
 comments.enter vstoupit do diskuze
+comments.commentsTo komentáře článku
 comments.text Text komentáře
 comments.name Jméno
 comments.mail Email
