@@ -79,7 +79,7 @@ if (isset($_POST['text'])) {
 		'mail' => (string) $_POST['mail'],
 		'web'  => (string) $_POST['web'],
 		'text' => (string) $_POST['text'],
-		'date' => time(),
+		'date' => date("Y-m-d H:i:s", time()),
 		'ip'   => (string) $_SERVER['REMOTE_ADDR'],
 	);
 
@@ -106,7 +106,7 @@ if (isset($_POST['text'])) {
 		$item->title = $block->title.' - '.$c->name;
 		$item->description = $c->text;
 		//$item->guid  = $block->url."#".$c->date;
-		$item->pubDate = date(DATE_RSS, $c->date);
+		$item->pubDate = date(DATE_RSS, strtotime($c->date));
 	}
 
 	header("Content-Type: application/xml; charset=UTF-8");
@@ -118,17 +118,6 @@ if (isset($_POST['text'])) {
 
 	echo '{comments.prebody}';
 	echo "{comments.commentsTo} <h2><a href='", escapeHtmlAttr($block->path) , "'>", escapeHtml($block->title), "</a></h2><br/></br/>";
-
-	foreach ($block->comments as $c) {
-		if ($c->web) {
-			echo "<a href='", escapeHtmlAttr($c->web), "'><i>", escapeHtml($c->name), "</i></a> ";
-		} else {
-			echo                                         "<i>", escapeHtml($c->name), "</i> ";
-		}
-		echo "<span style='color: gray;'>(", date("Y-m-d H:i", $c->date), ")</span><br/>";
-		echo escapeHtml($c->text);
-		echo "<br/><br/>";
-	}
 
 	echo '
 <style>
@@ -163,6 +152,17 @@ form div { float: left; margin-left: 0.5em }
 	<br clear=all />
 
 </form>';
+
+	foreach ($block->comments as $c) {
+		if ($c->web) {
+			echo "<a href='", escapeHtmlAttr($c->web), "'><i>", escapeHtml($c->name), "</i></a> ";
+		} else {
+			echo                                         "<i>", escapeHtml($c->name), "</i> ";
+		}
+		echo "<span style='color: gray;'>(", date("Y-m-d H:i", strtotime($c->date)), ")</span><br/>";
+		echo escapeHtml($c->text);
+		echo "<br/><br/>";
+	}
 
 	echo '{comments.postbody}';
 	exit;
