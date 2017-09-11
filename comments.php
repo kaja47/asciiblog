@@ -91,6 +91,7 @@ if (isset($_POST['text'])) {
 	if ($comment->name === '') { $comment->name = 'Anonymous'; }
 
 	$commentSection->addComment($url, $comment);
+	setcookie('user', json_encode(array($comment->name, $comment->mail, $comment->web)), time()+3600*24*30);
 	header('Location: '.$requestUrl);
 	exit;
 
@@ -115,6 +116,7 @@ if (isset($_POST['text'])) {
 
 } else {
 	$block = $commentSection->getComments($url);
+	@list($name, $mail, $web) = isset($_COOKIE['user']) ? array_map('strval', json_decode((string)$_COOKIE['user'])) : array('', '', '');
 
 	echo '{comments.prebody}';
 	echo "{comments.commentsTo} <h2><a href='", escapeHtmlAttr($block->path) , "'>", escapeHtml($block->title), "</a></h2><br/></br/>";
@@ -133,17 +135,17 @@ form div { float: left; margin-left: 0.5em }
 
 	<div>
 		<label for="name">{comments.name}</label>
-		<input type="text" maxlength="60" name="name" id="name">
+		<input type="text" maxlength="60" name="name" id="name" value="'.escapeHtmlAttr($name).'">
 	</div>
 
 	<div>
 		<label for="mail">{comments.mail}</label>
-		<input type="email" maxlength="60" name="mail" id="mail">
+		<input type="email" maxlength="60" name="mail" id="mail" value="'.escapeHtmlAttr($mail).'">
 	</div>
 
 	<div>
 		<label for="web">{comments.web}</label>
-		<input type="url" maxlength="60" name="web" id="web">
+		<input type="url" maxlength="60" name="web" id="web" value="'.escapeHtmlAttr($web).'">
 	</div>
 
 	<div>
@@ -151,7 +153,9 @@ form div { float: left; margin-left: 0.5em }
 	</div>
 	<br clear=all />
 
-</form>';
+</form>
+<br/><br/>
+';
 
 	foreach ($block->comments as $c) {
 		if ($c->web) {
