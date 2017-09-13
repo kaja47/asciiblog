@@ -66,6 +66,10 @@ class CommentSection {
 	}
 }
 
+function mkText($txt) {
+	return str_replace("\n", "<br/>", $txt);
+}
+
 
 try {
 
@@ -164,7 +168,7 @@ form div { float: left; margin-left: 0.5em }
 			echo                                         "<i>", escapeHtml($c->name), "</i> ";
 		}
 		echo "<span style='color: gray;'>(", date("Y-m-d H:i", strtotime($c->date)), ")</span><br/>";
-		echo escapeHtml($c->text);
+		echo mkText(escapeHtml($c->text));
 		echo "<br/><br/>";
 	}
 
