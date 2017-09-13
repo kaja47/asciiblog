@@ -13,11 +13,7 @@ function escapeHtmlAttr($s) {
 
 class CommentSection {
 	private $baseDir = ".comments";
-	private $pathPattern;
-
-	function __construct($pathPattern) {
-		list($this->pathPattern) = func_get_args();
-	}
+	private $pathRegex = '~.*\.html~';
 
 	private function getFile($path) {
 		 return $this->baseDir.'/'.str_replace("/", "_", $path);
@@ -37,10 +33,7 @@ class CommentSection {
 	}
 
 	private function openFile($path) {
-		if ($path[0] == '/' || strpos($path, '..') !== false) {
-			throw new \Exception("invalid path");
-		}
-		if ($this->urlPattern && !preg_match($this->urlPattern, $path)) {
+		if ($path[0] === '/' || strpos($path, '..') !== false || !preg_match($this->pathRegex, $path)) {
 			throw new \Exception("invalid path");
 		}
 		$f = $this->getFile($path);
@@ -73,7 +66,7 @@ function mkText($txt) {
 
 try {
 
-$commentSection = new CommentSection('~.*\.html~');
+$commentSection = new CommentSection;
 $requestUrl = $_SERVER['REQUEST_URI'];
 $url = (string) $_GET['url'];
 
