@@ -62,6 +62,10 @@ object Blog {
   val imageMarker: String    = cfg.getOrElse("imageMarker", "")
   val albumsDir: String      = cfg.getOrElse("albumsDir", "")
   val allowComments: Boolean = cfg.getOrElse("allowComments", "false").toBoolean
+
+  val openGraph: Boolean     = cfg.getOrElse("openGraph", "false").toBoolean
+  val twitterSite: String    = cfg.getOrElse("twitter.site", "")
+  val twitterCreator: String = cfg.getOrElse("twitter.creator", "")
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -564,7 +568,7 @@ def isTagSlug(tag: String) = tag.startsWith("tag/")
 
 
 trait Layout {
-  def makePage(content: String, title: String = null, containImages: Boolean = false, rss: String = null, includeCompleteStyle: Boolean = false): String
+  def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String
   def makeFullArticle(a: Article, compact: Boolean): String
   def makeTagIndex(base: Base): String
@@ -690,6 +694,14 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
     }))
   }
 
+  private def plaintextDescription(a: Article): String =
+    paragraph(segmentText(a.rawText).segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), a)
+      .replaceAll("\\<.*?\\>", "").replaceAll("\\n", " ") // TODO less crude way to strip tags
+
+  private def articleImages(a: Article) = segmentText(a.rawText).segments.collect { case Images(imgs) => imgs }.flatten
+  private def mainImageUrl(a: Article): String  = articleImages(a).find(_.mods == "main").map(_.url).getOrElse(null)
+  private def otherImageUrl(a: Article): String = articleImages(a).map(_.url).headOption.getOrElse(null)
+
   def imgTag(img: Image, a: Article) = {
     val (cl, srcPath) = img match {
       case i if i.mods == "main" && i.align == ">" => ("fr", bigThumbnailUrl(img, true))
@@ -744,7 +756,26 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
     case l => absUrlFromSlug(l)    // index or just slug
   }
 
-  def makePage(content: String, title: String = null, containImages: Boolean = false, rss: String = null, includeCompleteStyle: Boolean = false): String = {
+  def rssLink(rss: String) =
+    s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>"""
+
+  def ogTags(a: Article): String =
+    if (blog.twitterSite.nonEmpty || blog.twitterCreator.nonEmpty || blog.openGraph) {
+      val mainImg  = mainImageUrl(a)
+      val otherImg = otherImageUrl(a)
+      val (tpe, img) = if (mainImg != null) ("summary_large_image", mainImg) else ("summary", otherImg)
+
+      <meta name="twitter:card" content={tpe}/> + "" +
+      <meta property="og:type" content="article"/> +
+      <meta property="og:url" content={baseUrl}/> +
+      <meta property="og:title" content={a.title}/> +
+      <meta property="og:description" content={plaintextDescription(a).take(250)}/> +
+      ifs(img, <meta property="og:image" content={img}/>.toString) +
+      ifs(blog.twitterSite,    <meta name="twitter:site" content={blog.twitterSite}/>.toString) +
+      ifs(blog.twitterCreator, <meta name="twitter:creator" content={blog.twitterCreator}/>.toString)
+    } else ""
+
+  def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String = {
     val defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
     val protoHeader = if (blog.header.nonEmpty) blog.header else defaultHeader
     val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
@@ -752,12 +783,12 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
     val cats: String => Boolean = if (includeCompleteStyle) _ => true else classesAndTags(body)
 
 s"""<!DOCTYPE html>
-<html>
+<html prefix="og: http://ogp.me/ns#">
 <head>
 <meta charset="utf-8" />
 <title>${(if (title != null) title+" | " else "")+blog.title}</title>
-<link rel="alternate" type="application/rss+xml" href="${rel("rss.xml")}"/>
-${if (rss != null) s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>""" else ""}
+${rssLink("rss.xml")}
+${ifs(headers)}
 <style>${styles(s"""
 a{color:inherit}
 .r{text-align:right}
@@ -1140,13 +1171,13 @@ fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery))
 base.articles foreach { a =>
   var l = FlowLayout(absUrl(a), base, Blog)
   val body = l.makeFullArticle(a, false)
-  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty))
+  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)))
 }
 
 base.allTags.keys foreach { a =>
   var l = FlowLayout(absUrl(a), base, Blog)
   val body = l.makeFullArticle(a, false)
-  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = true /* TODO images in tagged full articles */, rss = a.slug+".xml"))
+  fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = true /* TODO images in tagged full articles */, headers = l.rssLink(a.slug+".xml")))
   fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
 }
 
