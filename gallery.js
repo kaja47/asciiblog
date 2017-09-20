@@ -3,8 +3,8 @@ box.style = 'display:none; position:fixed; top:0px; left:0px; background-color:r
 let img = document.createElement('img');
 img.style = 'display:block; margin:auto; max-width:100%; max-height:100%';
 let x = document.createElement('div');
-x.style = 'position:fixed;top:0px;right:0px;font-size:1.5em;padding:0.5em;background:rgba(255,255,255,0.7);';
-x.textContent = "X";
+x.style = 'position:fixed;top:0px;right:0px;font-size:1.5em;padding:0.5em;background:rgba(255,255,255,0.7);cursor:pointer';
+x.textContent = "❌";
 box.appendChild(img);
 box.appendChild(x);
 box.addEventListener('click', function(e) { hide(); });
