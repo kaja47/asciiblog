@@ -803,7 +803,7 @@ span.fr {text-align:right; max-width:45%; float:right;}
 span.main {text-align:right; display:block; margin-bottom:0.5em;}
 span.main img, span.fr img {max-width:100%}
 h2 {display:inline;margin:none;font-size:1em }
-hr { border: 0px dashed gray; border-top-width: 1px; margin: 0.5em 4em; }
+hr { border: 0px dotted gray; border-top-width: 1px; margin: 0.8em 4em; }
 p { margin: 1.4em 0; }
 """, cats)}
 ${blog.style}</style>
@@ -1187,7 +1187,7 @@ base.allTags.keys foreach { a =>
   fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)))
 }
 
-def mkBody(a: Article) = (FlowLayout(null, base, Blog)).makeArticleBody(a, true)
+def mkBody(a: Article) = FlowLayout(null, base, Blog).makeArticleBody(a, true)
 fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
 
 
