@@ -120,13 +120,14 @@ if (isset($_POST['text'])) {
 
 	$rss = new \SimpleXMLElement('<rss version="2.0"></rss>');
 	$rss->channel->title = $block->title;
-	//$rss->channel->link  = $block->url;
+	$rss->channel->link  = "{comments.baseUrl}/comments.php?url=".escapeHtmlAttr($block->path);
 
 	foreach ($block->comments as $c) {
 		$item = $rss->channel->addChild("item");
-		$item->title = $block->title.' - '.$c->name;
+		$item->title = "$block->title - $c->name";
 		$item->description = $c->text;
-		//$item->guid  = $block->path."#".$c->id;
+		$item->guid  = "{comments.baseUrl}/comments.php?url=".escapeHtmlAttr($block->path)."#".$c->id;
+		$item->guid["isPermalink"] = "true";
 		$item->pubDate = date(DATE_RSS, strtotime($c->date));
 	}
 
@@ -179,9 +180,9 @@ form div { float: left; margin-left: 0.5em }
 
 	foreach ($block->comments as $c) {
 		if ($c->web) {
-			echo "<a href='", escapeHtmlAttr($c->web), "'><i>", escapeHtml($c->name), "</i></a> ";
+			echo "<a href='", escapeHtmlAttr($c->web), "'><i id='{$c->id}'>", escapeHtml($c->name), "</i></a> ";
 		} else {
-			echo                                         "<i>", escapeHtml($c->name), "</i> ";
+			echo                                         "<i id='{$c->id}'>", escapeHtml($c->name), "</i> ";
 		}
 		echo "<span style='color: gray;'>(", date("Y-m-d H:i", strtotime($c->date)), ")</span><br/>";
 		echo mkText(escapeHtml($c->text));

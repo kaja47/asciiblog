@@ -1224,6 +1224,7 @@ if (Blog.allowComments) {
     val replaces = Blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v } ++ Seq(
       "{comments.prebody}"  -> pre,
       "{comments.postbody}" -> post,
+      "{comments.baseUrl}"  -> Blog.baseUrl,
       """href="rss.xml""""  -> """href="'.escapeHtmlAttr($requestUrl).'&amp;rss"""" // this is a bit ugly trick
     )
     var cs = commentsScript
