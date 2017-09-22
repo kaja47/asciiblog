@@ -12,27 +12,41 @@ function escapeHtmlAttr($s) {
 }
 
 class CommentSection {
-	private $baseDir = ".comments";
-	private $pathRegex = '~.*\.html~';
+	private $baseDir    = '.comments';
+	private $pathRegex  = '~.*\.html~';
+	private $globalPath = 'global.rss.html';
+
+	function addComment($path, $comment) {
+		$this->append($this->openFileFor($path), $comment);
+		$this->append($this->openFileGlobal(),   $comment);
+	}
+
+	function getComments($path) {
+		$lines = array_map('json_decode', array_map('trim', file($this->openFileFor($path))));
+		$block = $lines[0];
+		$block->comments = array_slice($lines, 1); // TODO nested comments
+		return $block;
+	}
+
+	function getCommentsGlobal() {
+		$block = $this->getComments($this->globalPath);
+		$block->title = '{comments.commentsTo}';
+		return $block;
+	}
+
+	private function openFileFor($path) {
+		return $this->openFile($path, array($this, 'getTitle'));
+	}
+
+	private function openFileGlobal() {
+		return $this->openFile($this->globalPath, null);
+	}
 
 	private function getFile($path) {
 		 return $this->baseDir.'/'.str_replace("/", "_", $path);
 	}
 
-	function addComment($path, $comment) {
-		$this->openFile($path);
-		file_put_contents($this->getFile($path), json_encode($comment)."\n", FILE_APPEND | LOCK_EX);
-	}
-
-	function getComments($path) {
-		$this->openFile($path);
-		$lines = array_map('trim', file($this->getFile($path)));
-		$block = json_decode($lines[0]);
-		$block->comments = array_map('json_decode', array_slice($lines, 1));
-		return $block;
-	}
-
-	private function openFile($path) {
+	private function openFile($path, $getTitle) {
 		if ($path[0] === '/' || strpos($path, '..') !== false || !preg_match($this->pathRegex, $path)) {
 			throw new \Exception("invalid path");
 		}
@@ -41,21 +55,29 @@ class CommentSection {
 			if (!file_exists($this->baseDir)) {
 				mkdir($this->baseDir);
 			}
-			$html = @file_get_contents($path);
-			if ($html === false) {
-				throw new \Exception("page '$path' cannot be found");
-			}
-			$dom = new \DOMDocument('1.0', 'UTF-8');
-			$html = mb_convert_encoding($html, 'HTML-ENTITIES', "UTF-8");
-			$ok = @ $dom->loadHTML($html);
-			if ($ok === false) {
-				throw new \Exception("page '$path' cannot be found");
-			}
-			$xpath = new \DOMXPath($dom);
-			$title = $xpath->query('//h2')->item(0)->nodeValue;
-			$line = json_encode(array('path' => $path, 'title' => $title))."\n";
-			file_put_contents($f, $line);
+			$header = array('path' => $path, 'title' => $getTitle ? $getTitle($path) : null);
+			$this->append($f, $header);
 		}
+		return $f;
+	}
+
+	private function getTitle($path) {
+		$html = @file_get_contents($path);
+		if ($html === false) {
+			throw new \Exception("page '$path' cannot be found");
+		}
+		$dom = new \DOMDocument('1.0', 'UTF-8');
+		$html = mb_convert_encoding($html, 'HTML-ENTITIES', "UTF-8");
+		$ok = @ $dom->loadHTML($html);
+		if ($ok === false) {
+			throw new \Exception("page '$path' cannot be found");
+		}
+		$xpath = new \DOMXPath($dom);
+		return $xpath->query('//h2')->item(0)->nodeValue;
+	}
+
+	private function append($file, $data) {
+		file_put_contents($file, json_encode($data)."\n", FILE_APPEND | LOCK_EX);
 	}
 }
 
@@ -72,6 +94,7 @@ $url = (string) $_GET['url'];
 
 if (isset($_POST['text'])) {
 	$comment = (object) array(
+		'id'   => mt_rand(),
 		'name' => (string) $_POST['name'],
 		'mail' => (string) $_POST['mail'],
 		'web'  => (string) $_POST['web'],
@@ -93,7 +116,7 @@ if (isset($_POST['text'])) {
 	exit;
 
 } elseif (isset($_GET['rss'])) {
-	$block = $commentSection->getComments($url);
+	$block = $url ? $commentSection->getComments($url) : $commentSection->getCommentsGlobal();
 
 	$rss = new \SimpleXMLElement('<rss version="2.0"></rss>');
 	$rss->channel->title = $block->title;
@@ -103,7 +126,7 @@ if (isset($_POST['text'])) {
 		$item = $rss->channel->addChild("item");
 		$item->title = $block->title.' - '.$c->name;
 		$item->description = $c->text;
-		//$item->guid  = $block->url."#".$c->date;
+		//$item->guid  = $block->path."#".$c->id;
 		$item->pubDate = date(DATE_RSS, strtotime($c->date));
 	}
 
