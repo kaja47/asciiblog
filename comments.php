@@ -21,15 +21,28 @@ class CommentSection {
 		$this->append($this->openFileGlobal(),   $comment);
 	}
 
-	function getComments($path) {
+	function getComments($path, $flat = false) {
 		$lines = array_map('json_decode', array_map('trim', file($this->openFileFor($path))));
 		$block = $lines[0];
-		$block->comments = array_slice($lines, 1); // TODO nested comments
+		$cs = [];
+		foreach (array_slice($lines, 1) as $c) {
+			$cs[$c->id] = $c;
+		}
+		if (!$flat) {
+			foreach (array_reverse($cs) as $c) {
+				if (isset($c->replyTo) && $cs[$c->replyTo]) {
+					if (!isset($cs[$c->replyTo]->replies)) $cs[$c->replyTo]->replies = array();
+					array_unshift($cs[$c->replyTo]->replies, $c);
+					unset($cs[$c->id]);
+				}
+			}
+		}
+		$block->comments = $cs;
 		return $block;
 	}
 
 	function getCommentsGlobal() {
-		$block = $this->getComments($this->globalPath);
+		$block = $this->getComments($this->globalPath, true);
 		$block->title = '{comments.commentsTo}';
 		return $block;
 	}
@@ -178,16 +191,26 @@ form div { float: left; margin-left: 0.5em }
 <br/><br/>
 ';
 
-	foreach ($block->comments as $c) {
-		if ($c->web) {
-			echo "<a href='", escapeHtmlAttr($c->web), "'><i id='{$c->id}'>", escapeHtml($c->name), "</i></a> ";
-		} else {
-			echo                                         "<i id='{$c->id}'>", escapeHtml($c->name), "</i> ";
+	function printComments($comments) {
+		foreach ($comments as $c) {
+			if ($c->web) {
+				echo "<a href='", escapeHtmlAttr($c->web), "'><i id='{$c->id}'>", escapeHtml($c->name), "</i></a> ";
+			} else {
+				echo                                         "<i id='{$c->id}'>", escapeHtml($c->name), "</i> ";
+			}
+			echo "<span style='color: gray;'>(", date("Y-m-d H:i", strtotime($c->date)), ")</span><br/>";
+			echo mkText(escapeHtml($c->text));
+			echo "<br/><br/>";
+
+			if (isset($c->replies)) {
+				echo "<div style='margin-left:2em;'>";
+				printComments($c->replies);
+				echo "</div>";
+			}
 		}
-		echo "<span style='color: gray;'>(", date("Y-m-d H:i", strtotime($c->date)), ")</span><br/>";
-		echo mkText(escapeHtml($c->text));
-		echo "<br/><br/>";
 	}
+
+	printComments($block->comments);
 
 	echo '{comments.postbody}';
 	exit;
