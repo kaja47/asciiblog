@@ -24,7 +24,7 @@ class CommentSection {
 	function getComments($path, $flat = false) {
 		$lines = array_map('json_decode', array_map('trim', file($this->openFileFor($path))));
 		$block = $lines[0];
-		$cs = [];
+		$cs = array();
 		foreach (array_slice($lines, 1) as $c) {
 			$cs[$c->id] = $c;
 		}
@@ -48,27 +48,30 @@ class CommentSection {
 	}
 
 	private function openFileFor($path) {
-		return $this->openFile($path, array($this, 'getTitle'));
+		return $this->openFile($path, true);
 	}
 
 	private function openFileGlobal() {
-		return $this->openFile($this->globalPath, null);
+		return $this->openFile($this->globalPath, false);
 	}
 
 	private function getFile($path) {
 		 return $this->baseDir.'/'.str_replace("/", "_", $path);
 	}
 
-	private function openFile($path, $getTitle) {
-		if ($path[0] === '/' || strpos($path, '..') !== false || !preg_match($this->pathRegex, $path)) {
+	private function checkPath($path) {
+		if ($path[0] === '/' || strpos($path, '..') !== false || !preg_match($this->pathRegex, $path))
 			throw new \Exception("invalid path");
-		}
+	}
+
+	private function openFile($path, $fetchTitle) {
+		$this->checkPath($path);
 		$f = $this->getFile($path);
 		if (!file_exists($f)) {
 			if (!file_exists($this->baseDir)) {
 				mkdir($this->baseDir);
 			}
-			$header = array('path' => $path, 'title' => $getTitle ? $getTitle($path) : null);
+			$header = array('path' => $path, 'title' => $fetchTitle ? $this->getTitle($path) : null);
 			$this->append($f, $header);
 		}
 		return $f;
