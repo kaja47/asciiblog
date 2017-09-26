@@ -1,7 +1,7 @@
 import java.awt.image.BufferedImage
 import java.awt.{ AlphaComposite, RenderingHints => RH }
 import java.io.{ File, FileWriter, FileOutputStream }
-import java.net.{ URL, URI, HttpURLConnection }
+import java.net.{ URL, URI, HttpURLConnection, UnknownHostException }
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.{ Date, GregorianCalendar, Calendar, Locale, zip }
@@ -1115,23 +1115,23 @@ val base: Base = {
 
 
 
-val checkLinks = false // TODO
-if (checkLinks) {
+if (args.length == 2 && args(1) == "checkLinks") {
   for {
     a <- base.all ; l <- a.links
     url = resolveLink(l, base, a) if !isLocalLink(url)
   } {
-    val conn = new URL(url).openConnection().asInstanceOf[HttpURLConnection]
-    conn.setRequestMethod("GET")
-    conn.connect()
-    val code = conn.getResponseCode
-    if (code >= 400) {
-      println(code+" "+url)
+    try {
+      val conn = new URL(url).openConnection().asInstanceOf[HttpURLConnection]
+      conn.setRequestMethod("GET")
+      conn.connect()
+      val code = conn.getResponseCode
+      if (code >= 400) { println(code+" "+url) }
+    } catch {
+      case e: UnknownHostException => println("unknown host "+url)
     }
   }
   sys.exit()
 }
-
 
 
 val fileIndex = mutable.ArrayBuffer[(String, String)]()
