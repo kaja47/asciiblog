@@ -198,6 +198,7 @@ case class Article(
   dates: Seq[Date] = Seq(), // publishing date + dates of updates
   tags: Tags = Tags(),
   meta: Meta = Meta(),
+  link: String = null,
   license: String = null,
   rawText: String = "",
   images: Seq[Image] = Seq(),
@@ -495,6 +496,11 @@ def parseMeta(l: String, prefix: String = "meta: "): Option[Meta] =
     Some(_parseMeta(l.drop(prefix.length)))
   } else None
 
+def parseLink(l: String): Option[String] =
+  if (l.startsWith("link:")) {
+    Some(l.drop("link:".length).trim)
+  } else None
+
 def hash(txt: String): String = hash(txt.getBytes("utf-8"))
 def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
 def _md5(bytes: Array[Byte]) = MessageDigest.getInstance("MD5").digest(bytes)
@@ -511,6 +517,7 @@ def parseArticle(lines: Vector[String]): Article = {
   val dates   = metaLines.flatMap(parseDate _      andThen (_.toSeq))
   val tags    = metaLines.flatMap(parseTags.lift   andThen (_.toSeq))
   val license = metaLines.flatMap(parseLicense _   andThen (_.toSeq))
+  val links   = metaLines.flatMap(parseLink _      andThen (_.toSeq))
   val metas   = metaLines.flatMap(l => parseMeta(l, "meta: ").toSeq)
   val meta = metas.foldLeft(Meta())(_ merge _)
 
@@ -521,9 +528,10 @@ def parseArticle(lines: Vector[String]): Article = {
       if (isTag) tagSlug(title)
       else generateSlug(title)
 
-  if ((dates ++ tags ++ license ++ metas).size < metaLines.size)
+  if ((dates ++ tags ++ license ++ links ++ metas).size < metaLines.size)
     sys.error("some metainformation was not processed: "+metaLines)
 
+  links.foreach(l => require(isAbsolute(l), s"urls in link: field mu be absolute ($realSlug)"))
   val txt = segmentText(body.mkString("\n"))
   val linkRefs = txt.linkRefs
   if (linkRefs.map(_._1).toSet.size != linkRefs.size) {
@@ -539,6 +547,7 @@ def parseArticle(lines: Vector[String]): Article = {
     dates   = dates.flatten,
     tags    = tags.fold(Tags()) { (a, b) => a.merge(b) },
     meta    = meta,
+    link    = links.headOption.getOrElse(null),
     license = license.headOption.getOrElse(null),
     rawText = body.mkString("\n"),
     images  = txt.images,
@@ -856,7 +865,7 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
   def blackout(txt: String) =
     blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(5).mkString("<wbr>"))
 
-  def articleLink(a: Article, title: String) = s"""<i><a href="${rel(absUrl(a))}">${title}</a></i>"""+ifs(a.images.nonEmpty, blog.imageMarker)
+  def articleLink(a: Article, title: String) = s"""<i><a href="${if (a.link != null) a.link else rel(absUrl(a))}">${title}</a></i>"""+ifs(a.images.nonEmpty, blog.imageMarker)
   def makeLink(a: Article) = makeDate(a)+articleLink(a, a.title)
   def makeTitle(a: Article) = makeDate(a)+"<h2>"+articleLink(a, a.title)+"</h2>"
 
