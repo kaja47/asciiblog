@@ -44,7 +44,8 @@ object Blog {
   val files: Seq[String]     = spaceSeparatedStrings(cfg.getOrElse("files", "").trim)
   val articlesOnIndex: Int   = cfg.getOrElse("fullArticlesOnIndex", "5").toInt
   val groupArchiveBy: String = cfg.getOrElse("groupArchiveBy", "year") // "year", "month" or some number
-  val style: String          = cfg.getOrElse("style", "")
+  val cssStyle: String       = cfg.getOrElse("style", "")
+  val cssFile: String        = cfg.getOrElse("cssFile", "")
   val header: String         = cfg.getOrElse("header", "")
   val thumbWidth: Int        = cfg.getOrElse("thumbnailWidth", "150").toInt
   val thumbHeight: Int       = cfg.getOrElse("thumbnailHeight", "100").toInt
@@ -798,7 +799,8 @@ s"""<!DOCTYPE html>
 <title>${(if (title != null) title+" | " else "")+blog.title}</title>
 ${rssLink("rss.xml")}
 ${ifs(headers)}
-<style>${styles(s"""
+${if (blog.cssFile.isEmpty) {
+s"""<style>${styles(s"""
 a{color:inherit}
 .r{text-align:right}
 .f{float:right}
@@ -814,8 +816,11 @@ span.main img, span.fr img {max-width:100%}
 h2 {display:inline;margin:none;font-size:1em }
 hr { border: 0px dotted gray; border-top-width: 1px; margin: 0.8em 4em; }
 p { margin: 1.4em 0; }
-""", cats)}
-${blog.style}</style>
+""", cats)}${blog.cssStyle}</style>"""
+  } else {
+s"""<link rel="stylesheet" href="${rel("style.css")}" type="text/css" />"""
+  }
+}
 ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
 </head>$body
 </html>"""
@@ -1244,6 +1249,10 @@ if (Blog.allowComments) {
   })
   new File(".comments").mkdirs()
   fileIndex ++= saveFile(".comments/.htaccess", "Deny from all")
+}
+
+if (Blog.cssFile.nonEmpty) {
+  fileIndex ++= saveFile("style.css", io.Source.fromFile(Blog.cssFile).mkString)
 }
 
 fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /")
