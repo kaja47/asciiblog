@@ -363,7 +363,7 @@ def relativize(url: String, baseUrl: String) = {
 }
 def isLocalLink(url: String) = url.startsWith(Blog.baseUrl+"/")
 def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
-def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(5)) else sys.error("not local url")
+def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(Blog.fileSuffix.length)) else sys.error("not local url")
 def slugsOfLinkedArticles(a: Article, base: Base): Seq[Slug] =
     a.links.map(l => resolveLink(l, base, a)).filter(isLocalLink).map(extractSlug)
 def thumbnailUrl(img: Image) = s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"
