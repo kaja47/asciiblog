@@ -52,6 +52,7 @@ object Blog {
   val bigThumbWidth: Int     = cfg.getOrElse("bigThumbnailWidth", "800").toInt
   val limitRss: Int          = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
   val articlesInRss: Boolean = cfg.getOrElse("fullArticlesInRss", "false").toBoolean
+  val limitSimilar: Int      = cfg.getOrElse("limitSimilarLinks", "5").toInt
   val sortByDate: Boolean    = cfg.getOrElse("sortByDate", "false").toBoolean
   val imageRoot: String      = cfg.getOrElse("imageRoot", "")
   val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean
@@ -1089,7 +1090,7 @@ val base: Base = {
     a.copy(
       dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
       backlinks = bs,
-      similar = sim.similarByTags(a, count= 5, without = bs),
+      similar = sim.similarByTags(a, count = Blog.limitSimilar, without = bs),
       pub = refs(a, "pub"),
       pubBy = pubBy
     )
