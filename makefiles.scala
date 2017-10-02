@@ -689,20 +689,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
         case Blockquote(txt) => "<blockquote>"+mkText(txt)+"</blockquote>"
       }.mkString("")
 
-    val txt = segmentText(a.rawText)
-
-    var x: Option[Images] = None
-    val s1 = txt.segments.map {
-      case Images(is) if x == None && is.head.mods == "main" && is.head.align == ">" =>
-        x = Some(Images(Seq(is.head)))
-        Images(is.tail)
-      case s => s
-    }
-
-    mkText(Text((x ++ s1).toVector match {
-      case xs :+ Hr() => xs
-      case xs => xs
-    }))
+    val segments = segmentText(a.rawText).segments
+    mkText(Text(if (segments.last == Hr()) segments.init else segments))
   }
 
   private def plaintextDescription(a: Article): String =
