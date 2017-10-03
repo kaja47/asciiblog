@@ -1023,8 +1023,8 @@ val base: Base = {
     articles.filter(_.title.startsWith("?")).map(_.asSlug).toSet // this is done ahead of time beucase of article merging
   }
 
-  for (a <- articles) { // TODO single article which is ??? and dated triggers this check
-    if (hiddenSlugs.contains(a.asSlug) && a.dates.nonEmpty)
+  for (a <- articles) {
+    if (hiddenSlugs.contains(a.asSlug) && a.dates.nonEmpty && articles.count(_.slug == a.slug) > 1)
       sys.error(s"hidden and dated article are sharing the same slug '${a.slug}', this is most likely an error")
   }
 
