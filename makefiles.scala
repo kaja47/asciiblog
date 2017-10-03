@@ -60,7 +60,7 @@ object Blog {
   val imageRoot: String      = cfg.getOrElse("imageRoot", "")
   val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean
   val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean
-  val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.collect(kv).toMap // TODO
+  val language: String       = cfg.getOrElse("language", "en")
   val dumpAll: Boolean       = cfg.getOrElse("dumpAll", "false").toBoolean // ignore hidden articles, dump everything into main feed
   val compressFiles: Boolean = cfg.getOrElse("compressFiles", "false").toBoolean
   val fileSuffix: String     = cfg.getOrElse("fileSuffix", ".html")
@@ -71,6 +71,9 @@ object Blog {
   val openGraph: Boolean     = cfg.getOrElse("openGraph", "false").toBoolean
   val twitterSite: String    = cfg.getOrElse("twitter.site", "")
   val twitterCreator: String = cfg.getOrElse("twitter.creator", "")
+
+  val translation: Map[String, String] =
+    io.Source.fromFile(thisDir+"/lang."+language).getLines.collect(kv).toMap
 }
 
 def spaceSeparatedStrings(str: String): Seq[String] = str match {
