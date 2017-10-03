@@ -1,7 +1,7 @@
 let box = document.createElement('div');
-box.style = 'display:none; position:fixed; top:0px; left:0px; background-color:rgba(0,0,0,0.7); width:100%; height:100%';
+box.style = 'display:none;position:fixed;top:0px;left:0px;background-color:rgba(0,0,0,0.7);width:100%;height:100%';
 let img = document.createElement('img');
-img.style = 'display:block; margin:auto; max-width:100%; max-height:100%';
+img.style = 'display:block;margin:auto;max-width:100%;max-height:100%';
 let x = document.createElement('div');
 x.style = 'position:fixed;top:0px;right:0px;font-size:1.5em;padding:0.5em;background:rgba(255,255,255,0.7);cursor:pointer';
 x.textContent = "❌";
@@ -26,7 +26,7 @@ function show(i) {
 	}
 }
 
-window.addEventListener('load', function (e) {
+document.addEventListener('load', function (e) {
 	imgs = document.querySelectorAll('img.thz');
 	for (let i = 0; i < imgs.length; i++) {
 		imgs[i].addEventListener('click', function (e) {
