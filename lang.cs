@@ -5,6 +5,7 @@ similar příbuzné články:
 backlinks sem odkazují:
 archive archiv
 tagged texty označené
+continueReading celý článek →
 comments.enter vstoupit do diskuze
 comments.commentsTo komentáře článku
 comments.text Text komentáře

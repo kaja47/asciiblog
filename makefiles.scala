@@ -44,6 +44,8 @@ object Blog {
   val files: Seq[String]     = spaceSeparatedStrings(cfg.getOrElse("files", "").trim)
   val articlesOnIndex: Int   = cfg.getOrElse("fullArticlesOnIndex", "5").toInt
   val groupArchiveBy: String = cfg.getOrElse("groupArchiveBy", "year") // "year", "month" or some number
+  val archiveFormat: String  = cfg.getOrElse("archiveFormat", "link").ensuring(f => f == "link" || f == "short")
+  val tagFormat: String      = cfg.getOrElse("tagFormat", "link").ensuring(f => f == "link" || f == "short")
   val cssStyle: String       = cfg.getOrElse("style", "")
   val cssFile: String        = cfg.getOrElse("cssFile", "")
   val header: String         = cfg.getOrElse("header", "")
@@ -58,7 +60,7 @@ object Blog {
   val imageRoot: String      = cfg.getOrElse("imageRoot", "")
   val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean
   val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean
-  val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.collect(kv).toMap
+  val translation: Map[String, String] = io.Source.fromFile(thisDir+"/lang.cs").getLines.collect(kv).toMap // TODO
   val dumpAll: Boolean       = cfg.getOrElse("dumpAll", "false").toBoolean // ignore hidden articles, dump everything into main feed
   val compressFiles: Boolean = cfg.getOrElse("compressFiles", "false").toBoolean
   val fileSuffix: String     = cfg.getOrElse("fileSuffix", ".html")
@@ -391,7 +393,7 @@ def resolveLink(link: String, base: Base, a: Article) =
 val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
 val dateRegex     = """^(\d+)-(\d+)-(\d+)(?: (\d+):(\d+)(?::(\d+))?)?$""".r
 
-val linkRefRegex  = """(?xm)      ^\[(.*?)\]:\ (.+)$""".r
+val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
 val codeRegex     = """(?xs) `    (.+?) `    """.r
 val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
 val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*)    (.+?) (?<!\*)           \*  (?!\*) """.r
@@ -535,13 +537,14 @@ def parseArticle(lines: Vector[String]): Article = {
     sys.error("some metainformation was not processed: "+metaLines)
 
   links.foreach(l => require(isAbsolute(l), s"urls in link: field mu be absolute ($realSlug)"))
+
   val txt = segmentText(body.mkString("\n"))
   val linkRefs = txt.linkRefs
   if (linkRefs.map(_._1).toSet.size != linkRefs.size) {
-    //sys.error(s"duplicate link refs in article '$realSlug'")
+    sys.error(s"duplicate link refs in article '$realSlug'")
   }
   if (linkRefs.exists { case (r, url) => url.trim.startsWith("???") }) {
-    //sys.error(s"undefined linkRef url in article '$realSlug'")
+    sys.error(s"undefined linkRef url in article '$realSlug'")
   }
 
   new Article(
@@ -582,7 +585,7 @@ def isTagSlug(tag: String) = tag.startsWith("tag/")
 trait Layout {
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String
-  def makeFullArticle(a: Article, compact: Boolean): String
+  def makeFullArticle(a: Article): String
   def makeTagIndex(base: Base): String
 }
 
@@ -649,6 +652,12 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
   def ifs(x: String, body: => String) = if (x != null && x.nonEmpty) body else ""
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
+  def stripTags(html: String, except: Seq[String] = Seq()) = {
+    val exceptRegex = (if (except.isEmpty) "" else "(?!"+except.mkString("|")+")")
+    html.replaceAll(s"\\<$exceptRegex.*?\\>", "") // TODO less crude way to strip tags
+  }
+  def truncate(txt: String, len: Int, append: String = "\u2026"): String =
+    if (txt.length <= len) txt else txt.take(len).replaceAll("""\s(\w+)?$""", "")+append
 
   def paragraph(_txt: String, a: Article) = {
     var txt = _txt
@@ -695,8 +704,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
   }
 
   private def plaintextDescription(a: Article): String =
-    paragraph(segmentText(a.rawText).segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), a)
-      .replaceAll("\\<.*?\\>", "").replaceAll("\\n", " ") // TODO less crude way to strip tags
+    stripTags(paragraph(segmentText(a.rawText).segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), a))
+      .replaceAll("\\n", " ")
 
   private def articleImages(a: Article) = segmentText(a.rawText).segments.collect { case Images(imgs) => imgs }.flatten
   private def mainImageUrl(a: Article): String  = articleImages(a).find(_.mods == "main").map(_.url).getOrElse(null)
@@ -718,7 +727,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
   }
 
   def gallerySample(a: Article) =
-    a.images.take(3).map { i =>
+    a.extraImages.take(3).map { i =>
       s"""<a href="${relUrlFromSlug(a.slug)}"><img class=th src="${thumbnailUrl(i)}"/></a>"""
     }.mkString(" ")
 
@@ -818,27 +827,39 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
   }
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String =
-    fullArticles.map(makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n") ++ links.map(makeLink).mkString("<br/>\n") + "<br/>"
+    fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n")+listOfLinks(links, blog.archiveFormat == "short")+"<br/>"
 
-  // bare article body, it's used in RSS feed
+  def makeFullArticle(a: Article): String = _makeFullArticle(a, false)
+
+  // Bare article body, no title, no links to related articles, no tags. This method is used in RSS feeds.
   def makeArticleBody(a: Article, compact: Boolean): String = {
     decorateText(a)+
     ifs(a.isTag, {
       val linked = slugsOfLinkedArticles(a, base).toSet
-      //val rest = base.allTags(a).filter(a => !linked.contains(a.asSlug))
-      //val (fulls, links) = rest.splitAt(blog.articlesOnIndex)
-      //makeIndex(fulls, links)
-      base.allTags(a).filter(a => !linked.contains(a.asSlug)).map(makeLink).mkString("<br/>")+"<br/>"
+      listOfLinks(base.allTags(a).filter(a => !linked.contains(a.asSlug)), blog.tagFormat == "short")
     })+
-    ifs(!compact, a.extraImages.map(img => imgTag(img.asSmallThumbnail, a)).mkString(" "))
+    ifs(!compact, a.extraImages.map(img => imgTag(img.asSmallThumbnail, a)).mkString(" "))+
+    ifs( compact, gallerySample(a))
   }
 
-  def makeFullArticle(a: Article, compact: Boolean): String = {
+  def makeShortArticleBody(a: Article): String = {
+    val tag = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a)).getOrElse("")
+    val txt = truncate(stripTags(decorateText(a), Seq("wbr")), 300)
+    s"""<div style="float:left;margin:0 0.5em 0 0;">$tag</div> $txt """+articleLink(a, txl("continueReading"))
+  }
+
+  def listOfLinks(list: Seq[Article], shortArticles: Boolean) =
+    if (shortArticles) list.map(makeShortArticle).mkString+"<br/>&nbsp;"
+    else               list.map(makeLink).mkString("<br/>")+"<br/>"
+
+  def makeShortArticle(a: Article): String = "<div style='float:left;clear:both;margin:0.7em 0'>"+makeTitle(a)+"<br/>"+makeShortArticleBody(a)+"</div>"
+
+
+  private def _makeFullArticle(a: Article, compact: Boolean): String = {
     (if(!a.isTag) makeTitle(a) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     "<br/>\n"+
     makeArticleBody(a, compact)+
-    ifs(compact && a.extraImages.nonEmpty, gallerySample(a))+
     ifs(!compact,
       ifs(blog.allowComments && !a.isTag, s"""<hr/><b><a href="comments.php?url=${relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b> """)+
       "<hr/>"+
@@ -847,12 +868,13 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
         ifs(a.tags.visible.nonEmpty, makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"<br/>\n")+
         ifs(a.license, a.license+"<br/>")+
       "</div>"+
-      makeNextPrevLinks(a)+
+      "<p>"+makeNextPrevLinks(a)+"</p>"+
       ifs(a.pub.nonEmpty, txl("published")+"<br/>"+ a.pub.map(makeLink).mkString("<br/>")+"<br/>")+
       ifs(a.pubBy != null, txl("publishedBy")+" "+articleLink(a.pubBy, makeDate(a))+"<br/>")+
       ifs(a.similar.nonEmpty,   "<p>"+txl("similar")+"<br/>"  +a.similar.map(s => articleLink(s, s.title)).mkString("<br/>")  +"</p>")+
       ifs(a.backlinks.nonEmpty, "<p>"+txl("backlinks")+"<br/>"+a.backlinks.map(s => articleLink(s, s.title)).mkString("<br/>")+"</p>")+
-    "</div>")
+      "</div>"
+    )
   }
 
   def makeTagIndex(base: Base) =
@@ -871,8 +893,8 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
   }
 
   def makeNextPrevLinks(a: Article) =
-    ifs(base.prev(a), "«« "+makeLink(base.prev(a))+"<br/>") +
-    ifs(base.next(a), "»» "+makeLink(base.next(a))+"<br/>")
+    ifs(base.prev(a), "««« "+makeLink(base.prev(a))+"<br/>") +
+    ifs(base.next(a), "»»» "+makeLink(base.next(a))+"<br/>")
 
   def makeNextPrevArrows(a: Article) =
     (if (base.prev(a) == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${rel(absUrl(base.prev(a)))}">«««</a>""")+" "+
@@ -1175,13 +1197,13 @@ fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery))
 
 base.articles foreach { a =>
   var l = FlowLayout(absUrl(a), base, Blog)
-  val body = l.makeFullArticle(a, false)
+  val body = l.makeFullArticle(a)
   fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)))
 }
 
 base.allTags.keys foreach { a =>
   var l = FlowLayout(absUrl(a), base, Blog)
-  val body = l.makeFullArticle(a, false)
+  val body = l.makeFullArticle(a)
   fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = true /* TODO images in tagged full articles */, headers = l.rssLink(a.slug+".xml")))
   fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
 }
