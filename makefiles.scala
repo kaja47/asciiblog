@@ -71,6 +71,7 @@ object Blog {
   val openGraph: Boolean     = cfg.getOrElse("openGraph", "false").toBoolean
   val twitterSite: String    = cfg.getOrElse("twitter.site", "")
   val twitterCreator: String = cfg.getOrElse("twitter.creator", "")
+  def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
 
   val translation: Map[String, String] =
     io.Source.fromFile(thisDir+"/lang."+language).getLines.collect(kv).toMap
@@ -354,16 +355,12 @@ def relativize(url: String, baseUrl: String) = {
 
   if (u.getHost != null && u.getHost != b.getHost) {
     url
-
   } else if (u.getPath == null) { // mailto: links
     url
-
   } else {
     val us = u.getPath.split("/").filter(_.nonEmpty)
     val bs = b.getPath.split("/").filter(_.nonEmpty)
-
     val prefixLen = (us zip bs).takeWhile { case (u, b) => u == b }.length
-
     val backLevels = bs.length - prefixLen - 1
     (Seq.fill(backLevels)("..") ++ us.drop(prefixLen)).mkString("/")
   }
@@ -660,7 +657,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
     html.replaceAll(s"\\<$exceptRegex.*?\\>", "") // TODO less crude way to strip tags
   }
   def truncate(txt: String, len: Int, append: String = "\u2026"): String =
-    if (txt.length <= len) txt else txt.take(len).replaceAll("""\s(\w+)?$""", "")+append
+    if (txt.length <= len) txt else txt.take(len).replaceAll("""\s+(\w+)?$|\<\w+$""", "")+append
 
   def paragraph(_txt: String, a: Article) = {
     var txt = _txt
@@ -772,7 +769,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
     s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>"""
 
   def ogTags(a: Article): String =
-    if (blog.twitterSite.nonEmpty || blog.twitterCreator.nonEmpty || blog.openGraph) {
+    if (blog.hasOgTags) {
       val mainImg  = mainImageUrl(a)
       val otherImg = otherImageUrl(a)
       val (tpe, img) = if (mainImg != null) ("summary_large_image", mainImg) else ("summary", otherImg)
@@ -781,7 +778,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
       <meta property="og:type" content="article"/> +
       <meta property="og:url" content={baseUrl}/> +
       <meta property="og:title" content={a.title}/> +
-      <meta property="og:description" content={plaintextDescription(a).take(250)}/> +
+      <meta property="og:description" content={truncate(plaintextDescription(a), 200)}/> +
       ifs(img, <meta property="og:image" content={img}/>.toString) +
       ifs(blog.twitterSite,    <meta name="twitter:site" content={blog.twitterSite}/>.toString) +
       ifs(blog.twitterCreator, <meta name="twitter:creator" content={blog.twitterCreator}/>.toString)
@@ -795,36 +792,35 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
     val body = "<body><div class=b>"+header+content+footer+"</div></body>"
     val cats: String => Boolean = if (includeCompleteStyle) _ => true else classesAndTags(body)
 
-s"""<!DOCTYPE html>
-<html prefix="og: http://ogp.me/ns#">
-<head>
-<meta charset="utf-8" />
-<title>${(if (title != null) title+" | " else "")+blog.title}</title>
-${rssLink("rss.xml")}
-${ifs(headers)}
-${if (blog.cssFile.isEmpty) {
-s"""<style>${styles(s"""
+    def inlineStyles = styles(s"""
 a{color:inherit}
 .r{text-align:right}
 .f{float:right}
 .b{max-width:46em;font-family:monospace;line-height:1.3}
-blockquote{margin:0;padding:0;font-style:italic;}
-.about{text-decoration: underline red;}
-img.th,img.thz{}
+blockquote{margin:0;padding:0;font-style:italic}
+.about{text-decoration:underline red}
 .thz,.fr,.main{font-size:0.8em}
 span.thz {width:${blog.thumbWidth}px;display:inline-block;vertical-align:top}
-span.fr {text-align:right; max-width:45%; float:right;}
-span.main {text-align:right; display:block; margin-bottom:0.5em;}
+span.fr {text-align:right;max-width:45%;float:right}
+span.main {text-align:right;display:block;margin-bottom:0.5em}
 span.main img, span.fr img {max-width:100%}
-h2 {display:inline;margin:none;font-size:1em }
-hr { border: 0px dotted gray; border-top-width: 1px; margin: 0.8em 4em; }
-p { margin: 1.4em 0; }
-""", cats)}${blog.cssStyle}</style>"""
-  } else {
-s"""<link rel="stylesheet" href="${rel("style.css")}" type="text/css" />"""
-  }
-}
-${if (containImages) { s"<script>$galleryScript</script>" } else ""}
+h2 {display:inline;margin:none;font-size:1em}
+hr {border:0px dotted gray;border-top-width:1px;margin:0.8em 4em}
+p {margin:1.4em 0}
+.sh {float:left;clear:both;margin:0.7em 0}
+.shimg {float:left;margin:0 0.5em 0 0}
+""", cats)+blog.cssStyle
+
+s"""<!DOCTYPE html>
+<html${ifs(blog.hasOgTags, s""" prefix="og: http://ogp.me/ns#"""")}>
+<head>
+<meta charset="utf-8" />
+<title>${ifs(title, title+" | ")+blog.title}</title>
+${rssLink("rss.xml")}
+${ifs(headers)}
+${if (blog.cssFile.isEmpty) { s"""<style>$inlineStyles</style>""" }
+  else { s"""<link rel="stylesheet" href="${rel("style.css")}" type="text/css"/>""" } }
+${ifs(containImages, s"<script>$galleryScript</script>")}
 </head>$body
 </html>"""
   }
@@ -846,16 +842,16 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
   }
 
   def makeShortArticleBody(a: Article): String = {
-    val tag = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a)).getOrElse("")
+    val img = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a)).getOrElse("")
     val txt = truncate(stripTags(decorateText(a), Seq("wbr")), 300)
-    s"""<div style="float:left;margin:0 0.5em 0 0;">$tag</div> $txt """+articleLink(a, txl("continueReading"))
+    ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
   }
 
   def listOfLinks(list: Seq[Article], shortArticles: Boolean) =
     if (shortArticles) list.map(makeShortArticle).mkString+"<br/>&nbsp;"
     else               list.map(makeLink).mkString("<br/>")+"<br/>"
 
-  def makeShortArticle(a: Article): String = "<div style='float:left;clear:both;margin:0.7em 0'>"+makeTitle(a)+"<br/>"+makeShortArticleBody(a)+"</div>"
+  def makeShortArticle(a: Article): String = "<div class=sh>"+makeTitle(a)+"<br/>"+makeShortArticleBody(a)+"</div>"
 
 
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
@@ -884,7 +880,7 @@ ${if (containImages) { s"<script>$galleryScript</script>" } else ""}
     base.allTags.toSeq.sortBy(~_._2.size).map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
   def blackout(txt: String) =
-    blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(5).mkString("<wbr>"))
+    blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(7).mkString("<wbr>"))
 
   def articleLink(a: Article, title: String) = s"""<i><a href="${if (a.link != null) a.link else rel(absUrl(a))}">${title}</a></i>"""+ifs(a.images.nonEmpty, blog.imageMarker)
   def makeLink(a: Article) = makeDate(a)+articleLink(a, a.title)
