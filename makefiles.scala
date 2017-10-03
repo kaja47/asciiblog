@@ -47,6 +47,7 @@ object Blog {
   val cssStyle: String       = cfg.getOrElse("style", "")
   val cssFile: String        = cfg.getOrElse("cssFile", "")
   val header: String         = cfg.getOrElse("header", "")
+  val footer: String         = cfg.getOrElse("footer", "")
   val thumbWidth: Int        = cfg.getOrElse("thumbnailWidth", "150").toInt
   val thumbHeight: Int       = cfg.getOrElse("thumbnailHeight", "100").toInt
   val bigThumbWidth: Int     = cfg.getOrElse("bigThumbnailWidth", "800").toInt
@@ -778,7 +779,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type) extends Layo
     val defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
     val protoHeader = if (blog.header.nonEmpty) blog.header else defaultHeader
     val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
-    val body = "<body><div class=b>"+header+content+"</div></body>"
+    val footer = ahrefRegex.replaceAllIn(blog.footer, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
+    val body = "<body><div class=b>"+header+content+footer+"</div></body>"
     val cats: String => Boolean = if (includeCompleteStyle) _ => true else classesAndTags(body)
 
 s"""<!DOCTYPE html>
