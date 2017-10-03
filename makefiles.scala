@@ -370,8 +370,14 @@ def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
 def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(Blog.fileSuffix.length)) else sys.error("not local url")
 def slugsOfLinkedArticles(a: Article, base: Base): Seq[Slug] =
     a.links.map(l => resolveLink(l, base, a)).filter(isLocalLink).map(extractSlug)
-def thumbnailUrl(img: Image) = s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"
-def bigThumbnailUrl(img: Image, half: Boolean) = s"t/${img.thumb}-${Blog.bigThumbWidth / (if (half) 2 else 1)}"
+def thumbnailUrl(img: Image) = s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"+imgSuffix(img)
+def bigThumbnailUrl(img: Image, half: Boolean) = s"t/${img.thumb}-${Blog.bigThumbWidth / (if (half) 2 else 1)}"+imgSuffix(img)
+
+def imgSuffix(img: Image) = {
+  val imageSuffixes = Set("jpg", "jpeg", "png")
+  val suffix = img.url.split("\\.").last.toLowerCase
+  if (imageSuffixes.contains(suffix)) "."+suffix else ""
+}
 
 def undefRefError(ref: String, a: Article) =
   println(s"link reference [$ref] is not defined in article '${a.title} [${a.slug}]'")
