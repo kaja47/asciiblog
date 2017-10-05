@@ -26,7 +26,7 @@ function show(i) {
 	}
 }
 
-document.addEventListener('load', function (e) {
+window.addEventListener('load', function (e) {
 	imgs = document.querySelectorAll('img.thz');
 	for (let i = 0; i < imgs.length; i++) {
 		imgs[i].addEventListener('click', function (e) {
