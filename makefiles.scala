@@ -549,8 +549,10 @@ def parseArticle(lines: Vector[String]): Article = {
   if (linkRefs.map(_._1).toSet.size != linkRefs.size) {
     sys.error(s"duplicate link refs in article '$realSlug'")
   }
-  if (linkRefs.exists { case (r, url) => url.trim.startsWith("???") }) {
-    sys.error(s"undefined linkRef url in article '$realSlug'")
+  linkRefs.foreach { case (r, url) =>
+    if (url.trim.startsWith("???")) {
+      sys.error(s"undefined linkRef $r -> $url in article '$realSlug (link prefixed by ??? in considered placeholder for missing url)'")
+    }
   }
 
   new Article(
