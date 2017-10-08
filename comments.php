@@ -117,6 +117,7 @@ if (isset($_POST['text'])) {
 		'text' => (string) $_POST['text'],
 		'date' => date("Y-m-d H:i:s", time()),
 		'ip'   => (string) $_SERVER['REMOTE_ADDR'],
+		'path' => $url,
 	);
 
 	if ($comment->text === '') throw new \Exception("Text field is required.");
@@ -142,7 +143,7 @@ if (isset($_POST['text'])) {
 		$item = $rss->channel->addChild("item");
 		$item->title = "$block->title - $c->name";
 		$item->description = $c->text;
-		$item->guid  = "{comments.baseUrl}/comments.php?url=".escapeHtmlAttr($block->path)."#".$c->id;
+		$item->guid  = "{comments.baseUrl}/comments.php?url=".escapeHtmlAttr(isset($c->path) ? $c->path : $block->path)."#".$c->id;
 		$item->guid["isPermalink"] = "true";
 		$item->pubDate = date(DATE_RSS, strtotime($c->date));
 	}
