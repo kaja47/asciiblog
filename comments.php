@@ -17,12 +17,22 @@ class CommentSection {
 	private $globalPath = 'global.rss.html';
 
 	function addComment($path, $comment) {
-		$this->append($this->openFileFor($path), $comment);
-		$this->append($this->openFileGlobal(),   $comment);
+		$this->append($this->openFile($path), $comment);
+		$this->append($this->openFile($this->globalPath, false), $comment);
 	}
 
-	function getComments($path, $flat = false) {
-		$lines = array_map('json_decode', array_map('trim', file($this->openFileFor($path))));
+	function getComments($path) {
+		return $this->_getComments($this->openFile($path), false);
+	}
+
+	function getCommentsGlobal() {
+		$block = $this->_getComments($this->openFile($this->globalPath, false), true);
+		$block->title = '{comments.commentsTo}';
+		return $block;
+	}
+
+	private function _getComments($file, $flat = false) {
+		$lines = array_map('json_decode', array_map('trim', file($file)));
 		$block = $lines[0];
 		$cs = array();
 		foreach (array_slice($lines, 1) as $c) {
@@ -41,40 +51,19 @@ class CommentSection {
 		return $block;
 	}
 
-	function getCommentsGlobal() {
-		$block = $this->getComments($this->globalPath, true);
-		$block->title = '{comments.commentsTo}';
-		return $block;
-	}
-
-	private function openFileFor($path) {
-		return $this->openFile($path, true);
-	}
-
-	private function openFileGlobal() {
-		return $this->openFile($this->globalPath, false);
-	}
-
-	private function getFile($path) {
-		 return $this->baseDir.'/'.str_replace("/", "_", $path);
-	}
-
-	private function checkPath($path) {
+	private function openFile($path, $fetchTitle = true) {
 		if ($path[0] === '/' || strpos($path, '..') !== false || !preg_match($this->pathRegex, $path))
 			throw new \Exception("invalid path");
-	}
 
-	private function openFile($path, $fetchTitle) {
-		$this->checkPath($path);
-		$f = $this->getFile($path);
-		if (!file_exists($f)) {
+		$file = $this->baseDir.'/'.str_replace("/", "_", $path);
+		if (!file_exists($file)) {
 			if (!file_exists($this->baseDir)) {
 				mkdir($this->baseDir);
 			}
 			$header = array('path' => $path, 'title' => $fetchTitle ? $this->getTitle($path) : null);
-			$this->append($f, $header);
+			$this->append($file, $header);
 		}
-		return $f;
+		return $file;
 	}
 
 	private function getTitle($path) {
