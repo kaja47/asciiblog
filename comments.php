@@ -21,8 +21,8 @@ class CommentSection {
 		$this->append($this->openFile($this->globalPath, false), $comment);
 	}
 
-	function getComments($path) {
-		return $this->_getComments($this->openFile($path), false);
+	function getComments($path, $flat = false) {
+		return $this->_getComments($this->openFile($path), $flat);
 	}
 
 	function getCommentsGlobal() {
@@ -115,6 +115,20 @@ if (isset($_POST['text'])) {
 	if (strlen($comment->web)  > 60) throw new \Exception("Web is too long.");
 	if (strlen($comment->text) > 2000) throw new \Exception("Text is too long.");
 	if ($comment->name === '') { $comment->name = 'Anonymous'; }
+
+	if ($_POST['replyTo']) {
+		$replyTo = (int) $_POST['replyTo'];
+		$valid = false;
+		foreach ($commentSection->getComments($url, true) as $c) {
+			if ($c->id == $replyTo) $valid = true;
+		}
+
+		if (!$valid || $c->replyTo == $c->id) {
+			throw new \Exception("Replying to invalid comment.");
+		}
+
+		$comment->replyTo = $replyTo;
+	}
 
 	$commentSection->addComment($url, $comment);
 	setcookie('user', json_encode(array($comment->name, $comment->mail, $comment->web)), time()+3600*24*30);
