@@ -544,7 +544,7 @@ def parseArticle(lines: Vector[String]): Article = {
   if ((dates ++ tags ++ license ++ links ++ metas).size < metaLines.size)
     sys.error("some metainformation was not processed: "+metaLines)
 
-  links.foreach(l => require(isAbsolute(l), s"urls in link: field mu be absolute ($realSlug)"))
+  links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
 
   val txt = segmentText(body.mkString("\n"))
   val linkRefs = txt.linkRefs
@@ -553,7 +553,7 @@ def parseArticle(lines: Vector[String]): Article = {
   }
   linkRefs.foreach { case (r, url) =>
     if (url.trim.startsWith("???")) {
-      sys.error(s"undefined linkRef $r -> $url in article '$realSlug (link prefixed by ??? in considered placeholder for missing url)'")
+      //sys.error(s"undefined linkRef $r -> $url in article '$realSlug (link prefixed by ??? in considered placeholder for missing url)'")
     }
   }
 
@@ -1043,6 +1043,7 @@ val base: Base = {
   // slug dupes and article merging
   val articleMap = mutable.Map[String, Article]()
   val slugOrder  = mutable.ArrayBuffer[String]()
+
   for (a <- articles) {
     if (!articleMap.contains(a.slug)) {
       articleMap += ((a.slug, a))
