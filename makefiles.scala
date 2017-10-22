@@ -399,7 +399,7 @@ def resolveLink(link: String, base: Base, a: Article) =
 
 
 val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
-val dateRegex     = """^(\d+)-(\d+)-(\d+)(?: (\d+):(\d+)(?::(\d+))?)?$""".r
+val dateRegex     = """^(\d+)-(\d+)-(\d+)(?: (\d+):(\d+)(?::(\d+))?)?""".r
 
 val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
 val codeRegex     = """(?xs) `    (.+?) `    """.r
@@ -454,17 +454,19 @@ def mkImage: PartialFunction[String, Image] = {
     )
 }
 
-def parseDate(l: String): Option[Seq[Date]] = {
-  val dates = l.split(",").map(_.trim) map {
-    case dateRegex(y, m, d, null, null, null) =>
-      Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime)
-    case dateRegex(y, m, d, h, mi, null) =>
-      Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt, h.toInt, mi.toInt, 0).getTime)
-    case dateRegex(y, m, d, h, mi, s) =>
-      Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt, h.toInt, mi.toInt, s.toInt).getTime)
-    case _ => None
-  }
+def parseDates(l: String): Option[Seq[Date]] = {
+  val dates = l.split(",").map(l => parseDate(l.trim))
   if (dates.nonEmpty && dates.forall(_.isDefined)) Some(dates.map(_.get)) else None
+}
+
+def parseDate(l: String) = l match {
+  case dateRegex(y, m, d, null, null, null) =>
+    Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime)
+  case dateRegex(y, m, d, h, mi, null) =>
+    Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt, h.toInt, mi.toInt, 0).getTime)
+  case dateRegex(y, m, d, h, mi, s) =>
+    Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt, h.toInt, mi.toInt, s.toInt).getTime)
+  case _ => None
 }
 
 def parseLicense(l: String): Option[String] =
@@ -527,7 +529,7 @@ def parseArticle(lines: Vector[String]): Article = {
   val (metaLines, _body) = ls.drop(2).span(l => l.nonEmpty)
   val body = _body.dropWhile(l => l.isEmpty).reverse.dropWhile(l => l.isEmpty).reverse
 
-  val dates   = metaLines.flatMap(parseDate _      andThen (_.toSeq))
+  val dates   = metaLines.flatMap(parseDates _     )
   val tags    = metaLines.flatMap(parseTags.lift   andThen (_.toSeq))
   val license = metaLines.flatMap(parseLicense _   andThen (_.toSeq))
   val links   = metaLines.flatMap(parseLink _      andThen (_.toSeq))
