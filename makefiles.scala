@@ -9,6 +9,9 @@ import javax.imageio.{ ImageIO, IIOException }
 import scala.collection.{ mutable, immutable }
 import scala.util.matching.Regex
 
+
+object MakeFiles extends App {
+
 if (args.length < 1) {
   println("config file not specified")
   sys.exit()
@@ -28,8 +31,7 @@ def timer[T](label: String)(f: => T) = {
   res
 }
 
-val thisDir =
-  new File(System.getProperty("sun.java.command").split(" ").find(_.endsWith("makefiles.scala")).get).getParent
+val thisDir = new File(System.getProperty("java.class.path")).getParent
 
 val galleryScript =
   io.Source.fromFile(thisDir+"/gallery.js").mkString
@@ -1277,3 +1279,5 @@ if (Blog.cssFile.nonEmpty) {
 
 fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /")
 saveFile(".files", fileIndex.map { case (file, hash) => hash+" "+file }.mkString("\n"))
+
+}

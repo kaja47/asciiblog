@@ -2,6 +2,8 @@ import java.io.File
 import java.nio.file.StandardCopyOption._
 import java.nio.file.Files
 
+object Upload extends App {
+
 if (args.length != 2) {
   println("usage scala upload.scala source-directory destination-directory")
   sys.exit()
@@ -53,4 +55,6 @@ for (s <- thumbSource.listFiles) {
     println(s"copying $s -> $t")
     Files.copy(s.toPath, t.toPath, REPLACE_EXISTING)
   }
+}
+
 }
