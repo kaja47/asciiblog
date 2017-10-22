@@ -820,7 +820,7 @@ p {margin:1.4em 0}
 """, cats)+blog.cssStyle
 
 s"""<!DOCTYPE html>
-<html${ifs(blog.hasOgTags, s""" prefix="og: http://ogp.me/ns#"""")}>
+<html${ifs(blog.hasOgTags, s" prefix=\"og: http://ogp.me/ns#\"")}>
 <head>
 <meta charset="utf-8" />
 <title>${ifs(title, title+" | ")+blog.title}</title>
