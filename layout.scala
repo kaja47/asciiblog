@@ -49,11 +49,11 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type, markup: Mark
       case i => ("thz", thumbnailUrl(img))
     }
     val title   = ifs(img.title, markup.paragraph(img.title)).trim
-    //val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim // TODO
+    val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim
     val source  = ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")
     val license = (ifs(img.license)+" "+source).trim
     val locSrc  = ifs(img.localSource, articleLink(img.localSource, img.localSource.title))
-    val desc = Seq(title, /*tags,*/ license, locSrc).mkString(" ").replaceAll(" +", " ").trim
+    val desc = Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
     s"""<span class=$cl><a href="${img.url}"><img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="${absUrlFromPath(srcPath)}"/></a>$desc</span>"""
   }
 
