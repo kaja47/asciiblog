@@ -10,7 +10,7 @@ import scala.util.matching.Regex
 
 trait Layout extends ImageLayout {
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String
-  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String
+  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, prev: Article = null, next: Article = null): String
   def makeFullArticle(a: Article): String
   def makeTagIndex(base: Base): String
 }
@@ -158,7 +158,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 </html>"""
   }
 
-  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String =
+  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, prev: Article = null, next: Article = null): String =
+    "<span class=f>"+_makeNextPrevArrows(prev, next)+"</span>"+
     fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
     (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"
@@ -264,9 +265,11 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     ifs(base.prev(a), "««« "+makeLink(base.prev(a))+"<br/>") +
     ifs(base.next(a), "»»» "+makeLink(base.next(a))+"<br/>")
 
-  def makeNextPrevArrows(a: Article) =
-    (if (base.prev(a) == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${absUrl(base.prev(a))}">«««</a>""")+" "+
-    (if (base.next(a) == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${absUrl(base.next(a))}">»»»</a>""")
+  def makeNextPrevArrows(a: Article) = _makeNextPrevArrows(base.prev(a), base.next(a))
+
+  def _makeNextPrevArrows(prev: Article, next: Article) =
+    (if (prev == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${absUrl(prev)}">«««</a>""")+" "+
+    (if (next == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${absUrl(next)}">»»»</a>""")
 
   def makeTagLinks(tags: Seq[Article], a: Article = null) =
     tags.map { t =>

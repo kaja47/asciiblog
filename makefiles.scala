@@ -779,7 +779,9 @@ object MakeFiles extends App {
   timer("generate and save files") {
   val archiveLinks = archivePages.par.map { case (a, as) =>
     val l = FlowLayout(absUrl(a), base, Blog, markup)
-    val body = l.makeIndex(Seq(), as)
+    val prev = archivePages((archivePages.indexWhere(_._1.slug == a.slug)-1) max 0 min (archivePages.length-1))._1
+    val next = archivePages((archivePages.indexWhere(_._1.slug == a.slug)+1) max 0 min (archivePages.length-1))._1
+    val body = l.makeIndex(Seq(), as, prev = prev, next = next)
     fileIndex ++= saveFile(relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */))
     a
   }.seq
