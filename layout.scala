@@ -1,6 +1,6 @@
 package asciiblog
 
-import MakeFiles. { Blog, relativize, year, isAbsolute, absUrl, absUrlFromSlug, absUrlFromPath, relUrlFromSlug, bigThumbnailUrl, thumbnailUrl, galleryScript }
+import MakeFiles. { Blog, relativize, year, month, isAbsolute, absUrl, absUrlFromSlug, absUrlFromPath, relUrlFromSlug, bigThumbnailUrl, thumbnailUrl, galleryScript }
 import AsciiText. { ahrefRegex, imgsrcRegex }
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -10,7 +10,7 @@ import scala.util.matching.Regex
 
 trait Layout extends ImageLayout {
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String
-  def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String
+  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String
   def makeFullArticle(a: Article): String
   def makeTagIndex(base: Base): String
 }
@@ -158,8 +158,23 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 </html>"""
   }
 
-  def makeIndex(fullArticles: Seq[Article], links: Seq[Article]): String =
-    fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n")+listOfLinks(links, blog.archiveFormat == "short")+"<br/>"
+  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String =
+    fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n")+"<br/>"+
+    listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
+    (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"
+
+  private def groupArchive(archiveLinks: Seq[Article]) =
+    archiveLinks.groupBy(a => year(a.date)).toSeq.sortBy(_._1).reverse.map { case (y, as) =>
+      val mas = if (y < year(new Date)) {
+        (1 to 12).map { m => (m, as.find(a => month(a.date) == m)) }
+      } else {
+        as.reverse.map { a => (month(a.date), Some(a)) }
+      }
+      y+" "+mas.map {
+        case (m, Some(a)) => articleLink(a, "&nbsp;"+m+"&nbsp;")
+        case (m, None) => "&nbsp;"+m+"&nbsp;"
+      }.mkString(" ")
+    }.mkString("<br/>")
 
   def makeFullArticle(a: Article): String = _makeFullArticle(a, false)
 

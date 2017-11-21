@@ -457,8 +457,8 @@ object MakeFiles extends App {
   }
 
   def year(d: Date) = calendar(d, Calendar.YEAR)
-  def yearmonth(d: Date) = (calendar(d, Calendar.YEAR), calendar(d, Calendar.MONTH)+1)
-
+  def month(d: Date) = calendar(d, Calendar.MONTH)+1
+  def yearmonth(d: Date) = (year(d), month(d))
 
 
 
@@ -748,7 +748,7 @@ object MakeFiles extends App {
 //  }
 
 
-  val fileIndex = collection.concurrent. TrieMap[String, String]()
+  val fileIndex = collection.concurrent.TrieMap[String, String]()
   val isIndexGallery = base.feed.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
 
   val (fulls, rest) = base.feed.splitAt(Blog.articlesOnIndex)
@@ -756,19 +756,24 @@ object MakeFiles extends App {
   def chunk[T: Ordering](as: Vector[Article])(g: Date => T)(zero: T)(f: T => Article): Vector[(Article, Vector[Article])] =
     as.groupBy { a => if (a.date == null) zero else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
 
-  val (links, archivePages) = timer("group archive") { (Blog.groupArchiveBy match {
-    case "month" => chunk(rest)(yearmonth)((0,0)) { case (y, m) => Article(Blog.translation("archive")+s" $m/$y", s"index-$y-$m") }
-    case "year"  => chunk(rest)(year)     (0)     { case y      => Article(Blog.translation("archive")+s" $y", s"index-$y") }
-    case num if num matches "\\d+" =>
-      val len = num.toInt
-      rest.reverse.grouped(len).toVector.zipWithIndex.map { case (as, i) =>
-        (Article(Blog.translation("archive")+s" #${i*len+1}-${(i+1)*len}", "index-"+(i+1)), as.reverse)
-      }.reverse
-    case _ => Vector((null, rest))
-  }) match {
-    case (_, links) +: archivePages => (links, archivePages)
-    case _ => (Vector(), Vector())
-  }}
+  val (links, archivePages) = timer("group archive") {
+    def mkDate(y: Int, m: Int) = Seq(new GregorianCalendar(y, m-1, 1).getTime)
+    val title = Blog.translation("archive")
+    (Blog.groupArchiveBy match {
+      case "month" => chunk(rest)(yearmonth)((0,0)) { case (y, m) => Article(title+s" $m/$y", s"index-$y-$m", dates = mkDate(y, m)) }
+      case "year"  => chunk(rest)(year)     (0)     { case y      => Article(title+s" $y", s"index-$y", dates = mkDate(y, 1)) }
+      case num if num.trim.matches("\\d+") =>
+        val len = num.toInt
+        rest.reverse.grouped(len).toVector.zipWithIndex.map { case (as, i) =>
+          (Article(title+s" #${i*len+1}-${(i+1)*len}", "index-"+(i+1)), as.reverse)
+        }.reverse
+      case _ => Vector((null, rest))
+    }) match {
+      case (_, links) +: archivePages => (links, archivePages)
+      case _ => (Vector(), Vector())
+    }
+  }
+
 
 
   timer("generate and save files") {
@@ -777,11 +782,11 @@ object MakeFiles extends App {
     val body = l.makeIndex(Seq(), as)
     fileIndex ++= saveFile(relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */))
     a
-  }
+  }.seq
 
   val path = relUrlFromSlug("index")
   val l = FlowLayout(absUrlFromPath(path), base, Blog, markup)
-  val body = l.makeIndex(fulls, links ++ archiveLinks)
+  val body = l.makeIndex(fulls, links, archiveLinks, Blog.groupArchiveBy == "month")
   fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery))
 
   base.articles.par foreach { a =>
@@ -833,7 +838,7 @@ object MakeFiles extends App {
   }
 
   fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /")
-  saveFile(".files", fileIndex.map { case (file, hash) => hash+" "+file }.mkString("\n"))
+  saveFile(".files", fileIndex.toSeq.sorted.map { case (file, hash) => hash+" "+file }.mkString("\n"))
   }
 
 
