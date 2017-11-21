@@ -800,7 +800,8 @@ object MakeFiles extends App {
   base.allTags.keys.par foreach { a =>
     var l = FlowLayout(absUrl(a), base, Blog, markup)
     val body = l.makeFullArticle(a)
-    fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = base.allTags(a).exists(_.images.nonEmpty), headers = l.rssLink(a.slug+".xml")))
+    val hasImages = a.images.nonEmpty || base.allTags(a).exists(_.images.nonEmpty)
+    fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")))
     fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
   }
 
