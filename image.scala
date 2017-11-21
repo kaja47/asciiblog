@@ -1,6 +1,6 @@
 package asciiblog
 
-import java.awt.image.BufferedImage
+import java.awt.image. { BufferedImage, Kernel, ConvolveOp }
 import java.awt.{ AlphaComposite, RenderingHints => RH }
 
 object ImageTools {
@@ -17,7 +17,7 @@ object ImageTools {
     val x = (src.getWidth - wz) / 2
     val y = (src.getHeight - hz) / 2
     val crop = src.getSubimage(x, y, wz, hz)
-    progressiveResize(crop, width, height)
+    sharpen(progressiveResize(crop, width, height))
   }
 
   /** adapted from https://github.com/coobird/thumbnailator/blob/master/src/main/java/net/coobird/thumbnailator/resizers/ProgressiveBilinearResizer.java */
@@ -74,6 +74,15 @@ object ImageTools {
     destg.dispose()
 
     dest
+  }
+
+  def sharpen(src: BufferedImage) = {
+    val strength = 0.1f
+    val sharpenKernel = Array.fill[Float](9)(-strength)
+    sharpenKernel(4) = 8 * strength + 1
+    val kernel = new Kernel(3, 3, sharpenKernel)
+    val op = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, null)
+    op.filter(src, null)
   }
 
 }
