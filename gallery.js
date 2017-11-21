@@ -5,10 +5,13 @@ img.style = 'display:block;margin:auto;max-width:100%;max-height:100%';
 let x = document.createElement('div');
 x.style = 'position:fixed;top:0px;right:0px;font-size:1.5em;padding:0.5em;background:rgba(255,255,255,0.7);cursor:pointer';
 x.textContent = "❌";
+let label = document.createElement('div');
+label.style='position:fixed;bottom:0px;left:0px;font-size:1em;padding:0.5em;background:rgba(255,255,255,0.7)';
 box.appendChild(img);
 box.appendChild(x);
+box.appendChild(label);
 box.addEventListener('click', function(e) { hide(); });
-img.addEventListener('click', function(e) { move(+1); e.stopPropagation(); });
+img.addEventListener('click', function(e) { move(1); e.stopPropagation(); });
 
 let imgs = null, active = null;
 
@@ -23,6 +26,9 @@ function show(i) {
 		img.src = "";
 		img.src = imgs[i].parentNode.href;
 		active = i;
+		let t = imgs[i].parentElement.parentElement.textContent;
+		label.style.display = (t ? 'block' : 'none');
+		label.textContent = t;
 	}
 }
 
@@ -39,7 +45,7 @@ window.addEventListener('load', function (e) {
 
 document.addEventListener('keydown', function (e) {
 	if (box.style.display === 'block') {
-		let k = {/* <- -> */ 37:-1, 39:+1, /* PgUp, PgDn */ 33:-1, 34:+1};
+		let k = {/* <- -> */ 37:-1, 39:1, /* PgUp, PgDn */ 33:-1, 34:1};
 		if (e.keyCode in k) { move(k[e.keyCode]); e.preventDefault(); }
 		else { hide(); }
 	}
