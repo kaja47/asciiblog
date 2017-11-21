@@ -188,7 +188,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
 
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
-    (if(!a.isTag) makeTitle(a) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
+    (if(!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     "<br/>\n"+
     makeArticleBody(a, compact)+
@@ -212,9 +212,15 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   def makeTagIndex(base: Base) =
     base.allTags.toSeq.sortBy(~_._2.size).map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
-  def articleLink(a: Article, title: String) = s"""<i><a href="${if (a.link != null) a.link else absUrl(a)}">${title}</a></i>"""+ifs(a.images.nonEmpty, blog.imageMarker)
+  def makeTitle(a: Article, asLink: Boolean = true) = makeDate(a)+"<h2>"+articleLink(a, a.title, asLink)+"</h2>"
+
+  def articleLink(a: Article, title: String, asLink: Boolean = true) =
+    if (a.link != null || asLink)
+      s"""<i><a href="${if (a.link != null) a.link else absUrl(a)}">$title</a></i>"""+ifs(a.hasImageMarker, blog.imageMarker)
+    else
+      s"""<i>$title</i>"""+ifs(a.hasImageMarker, blog.imageMarker)
+
   def makeLink(a: Article) = makeDate(a)+articleLink(a, a.title)
-  def makeTitle(a: Article) = makeDate(a)+"<h2>"+articleLink(a, a.title)+"</h2>"
 
   def makeTagLink(t: Article) = {
     val html = s"""#<i><a href="${absUrlFromSlug(t.slug)}">${t.title}</a></i>"""

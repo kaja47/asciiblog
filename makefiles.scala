@@ -43,6 +43,9 @@ case class Article(
     text.links
   }
   def slugsOfLinkedArticles = links.filter(isLocalLink).map(extractSlug)
+
+  // image marker is shown only for images that are not from external sources
+  def hasImageMarker = images.exists(i => i.source == null || i.source == "")
 }
 
 case class Meta(values: Map[String, Meta] = Map()) {
