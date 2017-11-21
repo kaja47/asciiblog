@@ -184,12 +184,25 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     if (shortArticles) list.map(makeShortArticle).mkString+"<br/>&nbsp;"
     else               list.map(makeLink).mkString("<br/>")+"<br/>"
 
+  def rowOfLinks(list: Seq[Article]) =
+    list.map(a => articleLink(a, a.title)).mkString(", ")
+
   def makeShortArticle(a: Article): String = "<div class=sh>"+makeTitle(a)+"<br/>"+makeShortArticleBody(a)+"</div>"
 
 
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
     (if(!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
+    ifs(a.isTag, {
+      val sup = a.tags.visible.map(base.tagByTitle)
+      val sub = base.allTags(a).filter(_.isTag)
+      ifs(sub.nonEmpty || sup.nonEmpty, {
+        "<div style='font-size:0.85em'>"+
+        ifs(sup.nonEmpty, txl("supersections")+" "+rowOfLinks(sup)+" ")+
+        ifs(sub.nonEmpty, txl("subsections")  +" "+rowOfLinks(sub))+
+        "</div>"
+      })
+    })+
     "<br/>\n"+
     makeArticleBody(a, compact)+
     ifs(!compact,
