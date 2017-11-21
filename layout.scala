@@ -225,7 +225,12 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   def makeTagIndex(base: Base) =
     base.allTags.toSeq.sortBy(~_._2.size).map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
-  def makeTitle(a: Article, asLink: Boolean = true) = makeDate(a)+"<h2>"+articleLink(a, a.title, asLink)+"</h2>"
+  def makeDateWithLinkToPubBy(a: Article, asLink: Boolean) =
+    if (a.pubBy != null && !asLink) articleLink(a.pubBy, makeDate(a))
+    else makeDate(a)
+
+  def makeTitle(a: Article, asLink: Boolean = true) =
+    makeDateWithLinkToPubBy(a, asLink)+" <h2>"+articleLink(a, a.title, asLink)+"</h2>"
 
   def articleLink(a: Article, title: String, asLink: Boolean = true) =
     if (a.link != null || asLink)
@@ -233,7 +238,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     else
       s"""<i>$title</i>"""+ifs(a.hasImageMarker, blog.imageMarker)
 
-  def makeLink(a: Article) = makeDate(a)+articleLink(a, a.title)
+  def makeLink(a: Article) = makeDate(a)+" "+articleLink(a, a.title)
 
   def makeTagLink(t: Article) = {
     val html = s"""#<i><a href="${absUrlFromSlug(t.slug)}">${t.title}</a></i>"""
@@ -259,8 +264,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   def makeDate(a: Article) = a.date match {
     case null => ""
     case d if year(a.date) == year(new Date) =>
-      new SimpleDateFormat("d. M.").format(d)+" "
+      new SimpleDateFormat("d. M.").format(d)
     case d =>
-      new SimpleDateFormat("d. M. yyyy").format(d)+" "
+      new SimpleDateFormat("d. M. yyyy").format(d)
   }
 }
