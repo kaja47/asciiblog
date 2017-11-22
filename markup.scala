@@ -8,16 +8,14 @@ import scala.util.matching.Regex
 trait Markup {
   type ResolveLinkFunc = (String, Map[String, String]) => String
 
-  def process(text: String, resolveLink: ResolveLinkFunc): Text
-  def process(a: Article, resolveLink: ResolveLinkFunc): Text = process(a.rawText, resolveLink)
+  def process(a: Article, resolveLink: ResolveLinkFunc): Text
 
-  // renders markup string as inside of single paragraph
-  def paragraph(text: String): String
 }
 
 trait Text {
   def render(l: ImageLayout): String
   def firstParagraph: String
+  def paragraph(text: String): String
 
   def images: Seq[Image]
   // must return absolute urls
@@ -42,21 +40,28 @@ object AsciiText {
 case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) extends Text {
   import AsciiText._
 
-  def render(l: ImageLayout): String = mkText(l)
-  def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""))
+  def render(l: ImageLayout): String = mkText(l, resolvedLinks)
+  def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), resolvedLinks)
+  def paragraph(text: String): String = AsciiText(Seq(Inline(text)), (l, _) => resolvedLinks(l)).render(null)
 
   val images: Seq[Image] = segments.collect { case Images(imgs) => imgs }.flatten
 
   // this is before links method because links uses this one
   val linkAliases: Map[String, String] = segments.collect { case Linkref(lm) => lm }.flatMap { _.iterator }.toMap
 
-  val links: Seq[String] = segments.collect {
-    case Paragraph(txt) =>
-      (ahrefRegex.findAllMatchIn(txt).map(_.group(1)) ++ linkRegex.findAllMatchIn(txt).map(_.group(2))).toVector
-    case Blockquote(txt) => txt.links
-  }.flatten.map(resolve).filter(isAbsolute)
+  lazy val resolvedLinks = _links.map { l => (l, resolveLink(l, linkAliases)) }.toMap //withDefaultValue "error112233"
+  lazy val links: Seq[String] = resolvedLinks.values.filter(isAbsolute).toSeq
 
-  private def resolve(link: String): String = resolveLink(link, linkAliases)
+  private def _links: Seq[String] = segments.collect {
+    case Paragraph(txt) => extractLinks(txt)
+    case Inline(txt)    => extractLinks(txt)
+    case Heading(txt)   => extractLinks(txt)
+    case Images(images) => images.flatMap(i => extractLinks(i.title))
+    case Blockquote(txt)=> txt._links
+  }.flatten
+
+  private def extractLinks(txt: String) =
+    (ahrefRegex.findAllMatchIn(txt).map(_.group(1)) ++ linkRegex.findAllMatchIn(txt).map(_.group(2))).toVector
 
   private val codeRegex     = """(?xs) `    (.+?) `    """.r
   private val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
@@ -69,12 +74,12 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
   private val list2Regex    = """(?xm) ^(\d+\)\ )(?!\ )(.*?)(?=\n(?:\d+\)\ |\n\n)) """.r
   private val commentRegex  = """(?xs) \<!--.*?--\>""".r
 
-  private def mkParagraph(_txt: String): String = {
+  private def mkParagraph(_txt: String, aliases: Map[String, String]): String = {
     var txt = _txt
     txt = blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(7).mkString("<wbr>"))
     txt = altRegex     .replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
-    txt = ahrefRegex   .replaceAllIn(txt, m => Regex.quoteReplacement(resolve(m.group(1))))
-    txt = linkRegex    .replaceAllIn(txt, m => Regex.quoteReplacement(s"""<a href="${resolve(m.group(2))}">${m.group(1)}</a>"""))
+    txt = ahrefRegex   .replaceAllIn(txt, m => Regex.quoteReplacement(aliases(m.group(1))))
+    txt = linkRegex    .replaceAllIn(txt, m => Regex.quoteReplacement(s"""<a href="${aliases(m.group(2))}">${m.group(1)}</a>"""))
     txt = list1Regex   .replaceAllIn(txt, "$1$2<br/>")
     txt = list2Regex   .replaceAllIn(txt, "$1$2<br/>")
     txt = commentRegex .replaceAllIn(txt, "")
@@ -87,9 +92,9 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
   }
 
 
-  private def mkText(l: ImageLayout): String =
+  private def mkText(l: ImageLayout, aliases: Map[String, String]): String =
     segments.map {
-      case Heading(txt)   => "<h3>"+mkParagraph(txt)+"</h3>"
+      case Heading(txt)   => "<h3>"+mkParagraph(txt, aliases)+"</h3>"
       case Hr()           => "<hr/>"
       case Linkref(txt)   => ""
       case Block("html", txt) => txt
@@ -98,10 +103,10 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
       case Block("pre",  txt) => s"<pre>$txt</pre>"
       case Block("comment",_) => ""
       case Block(tpe, _)  => sys.error(s"unknown block type $tpe")
-      case Images(images) => images.map(img => l.imgTag(img)).mkString(" ")
-      case Paragraph(txt) => "<p>"+mkParagraph(txt)+"</p>"
-      case Blockquote(txt) => "<blockquote>"+txt.mkText(l)+"</blockquote>"
-      case Inline(txt) => mkParagraph(txt)
+      case Images(images) => images.map(img => l.imgTag(img, this)).mkString(" ")
+      case Paragraph(txt) => "<p>"+mkParagraph(txt, aliases)+"</p>"
+      case Blockquote(txt) => "<blockquote>"+txt.mkText(l, aliases)+"</blockquote>"
+      case Inline(txt) => mkParagraph(txt, aliases)
     }.mkString("")
 
 
@@ -120,8 +125,7 @@ final case class Inline(txt: String) extends Segment
 
 
 object AsciiMarkup extends Markup {
-  def process(text: String, resolveLink: ResolveLinkFunc): AsciiText = segmentText(text, resolveLink)
-  def paragraph(text: String) = AsciiText(Seq(Inline(text)), (link, _) => link).render(null) // TODO resolve
+  def process(a: Article, resolveLink: ResolveLinkFunc): AsciiText = segmentText(a.rawText, resolveLink)
 
   private val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
   private val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r

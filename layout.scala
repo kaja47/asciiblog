@@ -17,7 +17,7 @@ trait Layout extends ImageLayout {
 
 // this type is passed into markup
 trait ImageLayout {
-  def imgTag(img: Image): String
+  def imgTag(img: Image, t: Text): String
 }
 
 
@@ -42,13 +42,13 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type, markup: Mark
   private def mainImageUrl(a: Article): String  = articleImages(a).find(_.mods == "main").map(_.url).getOrElse(null)
   private def otherImageUrl(a: Article): String = articleImages(a).map(_.url).headOption.getOrElse(null)
 
-  def imgTag(img: Image) = {
+  def imgTag(img: Image, t: Text) = {
     val (cl, srcPath) = img match {
       case i if i.mods == "main" && i.align == ">" => ("fr", bigThumbnailUrl(img, true))
       case i if i.mods == "main" => ("main", bigThumbnailUrl(img, false))
       case i => ("thz", thumbnailUrl(img))
     }
-    val title   = ifs(img.title, markup.paragraph(img.title)).trim
+    val title   = ifs(img.title, t.paragraph(img.title)).trim
     val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim
     val source  = ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")
     val license = (ifs(img.license)+" "+source).trim
@@ -186,12 +186,12 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
       val linked = a.slugsOfLinkedArticles.toSet
       listOfLinks(base.allTags(a).filter(a => !linked.contains(a.asSlug)), blog.tagFormat == "short")
     })+
-    ifs(!compact, a.extraImages.map(img => imgTag(img.asSmallThumbnail)).mkString(" "))+
+    ifs(!compact, a.extraImages.map(img => imgTag(img.asSmallThumbnail, if (img.localSource != null) img.localSource.text else a.text)).mkString(" "))+
     ifs( compact, gallerySample(a))
   }
 
   def makeShortArticleBody(a: Article): String = {
-    val img = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail)).getOrElse("")
+    val img = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a.text)).getOrElse("")
     val txt = truncate(stripTags(a.text.render(this), Seq("wbr")), 300)
     ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
   }

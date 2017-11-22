@@ -644,7 +644,7 @@ object MakeFiles extends App {
 
     timer("parse text") {
     articles = articles.map { a =>
-      val txt = markup.process(a.rawText, (link, localAliases) => resolveLink(link, localAliases, globalNames, a))
+      val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a))
 
       txt.linkAliases.groupBy(_._1).filter(_._2.size > 1).foreach { case (l, _) =>
         sys.error(s"duplicate link refs [$l] in article '${a.slug}'")
@@ -657,7 +657,8 @@ object MakeFiles extends App {
 
       a.copy(
         text = txt,
-        images = a.images ++ txt.images // images might be already populated from readGallery()
+        // images might be already populated from readGallery()
+        images = (a.images ++ txt.images)
       )
     }
     }
