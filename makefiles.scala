@@ -637,9 +637,11 @@ object MakeFiles extends App {
 
     // globalMapping maps from slugs to absolute urls
     def resolveLink(link: String, localAliases: Map[String, String], globalMapping: Map[String, String], a: Article) = {
-      val l = localAliases.getOrElse(link, link)
-      //if (!isAbsolute(l) && !l.startsWith("#") && !l.startsWith("..") && !l.matches(".*\\.(php|jpg|png|gif|rss)$") && !globalMapping.contains(l)) println(s"bad link [$link -> $l] (in ${a.slug})")
-      globalMapping.getOrElse(l, l)
+      val Array(base, hash) = link.split("#", 2).padTo(2, "")
+      val Array(b, h) = localAliases.getOrElse(base, base).split("#", 2).padTo(2, "")
+      if (b.nonEmpty && !isAbsolute(b) && !b.startsWith("#") && !b.startsWith("..") && !b.matches(".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$") && !globalMapping.contains(b))
+        println(s"bad link [$link -> $b] (in ${a.slug})")
+      globalMapping.getOrElse(b, b)+(if (hash.nonEmpty) "#"+hash else "")+(if (h.nonEmpty) "#"+h else "")
     }
 
     timer("parse text") {
