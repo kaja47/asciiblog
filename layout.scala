@@ -162,7 +162,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     "<span class=f>"+_makeNextPrevArrows(prev, next)+"</span>"+
     fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
-    (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"
+    (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"+
+    "<span class=f>"+_makeNextPrevArrows(prev, next)+"</span>"
 
   private def groupArchive(archiveLinks: Seq[Article]) =
     archiveLinks.groupBy(a => year(a.date)).toSeq.sortBy(_._1).reverse.map { case (y, as) =>
