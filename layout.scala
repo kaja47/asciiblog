@@ -137,7 +137,7 @@ span.thz {width:${blog.thumbWidth}px;display:inline-block;vertical-align:top}
 span.fr {text-align:right;max-width:45%;float:right}
 span.main {text-align:right;display:block;margin-bottom:0.5em}
 span.main img, span.fr img {max-width:100%}
-h2 {display:inline;margin:none;font-size:1em}
+h2 {display:inline;margin:0;font-size:1em}
 hr {border:0px dotted gray;border-top-width:1px;margin:0.8em 4em}
 p {margin:1.4em 0}
 .sh {float:left;clear:both;margin:0.7em 0}
@@ -166,6 +166,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     "<span class=f>"+_makeNextPrevArrows(prev, next)+"</span>"
 
   private def groupArchive(archiveLinks: Seq[Article]) =
+    "<div style='clear:both'>"+
     archiveLinks.groupBy(a => year(a.date)).toSeq.sortBy(_._1).reverse.map { case (y, as) =>
       val mas = if (y < year(new Date)) {
         (1 to 12).map { m => (m, as.find(a => month(a.date) == m)) }
@@ -176,7 +177,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
         case (m, Some(a)) => articleLink(a, "&nbsp;"+m+"&nbsp;")
         case (m, None) => "&nbsp;"+m+"&nbsp;"
       }.mkString(" ")
-    }.mkString("<br/>")
+    }.mkString("<br/>")+"</div>"
 
   def makeFullArticle(a: Article): String = _makeFullArticle(a, false)
 
