@@ -389,14 +389,15 @@ object MakeFiles extends App {
   def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
   def _md5(bytes: Array[Byte]) = MessageDigest.getInstance("MD5").digest(bytes)
 
-  def parseArticle(lines: Vector[String]): Article = {
-    val ls = lines.map(_.replaceAll("\\s*$", ""))
+  private val trailingWS = "\\s*$".r
 
-    val titleLine = ls(0)
-    val titleRegex(xxx, title, slug) = titleLine
+  def parseArticle(lines: Seq[String]): Article = {
+    val ls = lines.map(l => if (l.length > 0 && l(l.length-1).isWhitespace) trailingWS.replaceAllIn(l, "") else l)
 
-    val (metaLines, _body) = ls.drop(2).span(l => l.nonEmpty)
-    val body = _body.dropWhile(l => l.isEmpty).reverse.dropWhile(l => l.isEmpty).reverse
+    val titleRegex(xxx, title, slug) = ls(0)
+
+    val (metaLines, b) = ls.drop(2).span(l => l.nonEmpty)
+    val body = b.slice(b.indexWhere(_.nonEmpty), b.lastIndexWhere(_.nonEmpty)+1)
 
     val dates   = metaLines.flatMap(parseDates _     )
     val tags    = metaLines.flatMap(parseTags.lift   andThen (_.toSeq))
@@ -412,7 +413,7 @@ object MakeFiles extends App {
         if (isTag) tagSlug(title)
         else generateSlug(title)
 
-    if ((dates ++ tags ++ license ++ links ++ metas).size < metaLines.size)
+    if ((dates.size + tags.size + license.size + links.size + metas.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
 
     links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
@@ -533,15 +534,21 @@ object MakeFiles extends App {
     }
   }
 
-  def readPosts(): Vector[Article] =
+  def readPosts(): Vector[Article] = {
+    val lineRegex = """^===+$""".r
     Blog.files.flatMap(listFiles).flatMap { f =>
       var ls = io.Source.fromFile(f).getLines.toVector
-      val starts = ls.zipWithIndex.collect { case (l, i) if l.matches("===+") => i-1 }
+      val starts = (0 until ls.length).collect { case i if lineRegex.matches(ls(i)) => i-1 }
       (0 until starts.length).map { i =>
         parseArticle(ls.slice(starts(i), starts.lift(i+1).getOrElse(ls.length)))
       }
     }.toVector
+  }
 
+
+  implicit class RichRegex(val r: Regex) extends AnyVal {
+    def matches(s: String) = r.findFirstIn(s).nonEmpty
+  }
 
   def timer[T](label: String)(f: => T) = {
     val s = System.nanoTime
@@ -549,6 +556,17 @@ object MakeFiles extends App {
     val d = System.nanoTime - s
     println(label+" "+(d/1e6)+"ms")
     r
+  }
+
+  class Timer {
+    private var t = 0L
+    def apply[T](f: => T) = {
+      val s = System.nanoTime
+      val r = f
+      t += System.nanoTime - s
+      r
+    }
+    override def toString = "Timer "+(t/1e6)+"ms"
   }
 
 
@@ -645,7 +663,7 @@ object MakeFiles extends App {
     }
 
     timer("parse text") {
-    articles = articles.map { a =>
+    articles = articles.par.map { a =>
       val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a))
 
       txt.linkAliases.groupBy(_._1).filter(_._2.size > 1).foreach { case (l, _) =>
@@ -662,7 +680,7 @@ object MakeFiles extends App {
         // images might be already populated from readGallery()
         images = (a.images ++ txt.images)
       )
-    }
+    }.seq
     }
 
 
@@ -681,7 +699,7 @@ object MakeFiles extends App {
     }
 
 
-    articles = articles map { a =>
+    articles = timer("populate") { articles.par.map { a =>
       val bs = backlinks.getOrElse(a.asSlug, Seq())
       val pubBy = pubsBy.getOrElse(a.asSlug, null)
 
@@ -696,7 +714,7 @@ object MakeFiles extends App {
         pub = refs(a, "pub"),
         pubBy = pubBy
       )
-    }
+    }.seq }
 
     tagMap = invert(articles.map { a => (a, (a.tags.visible).distinct) }) // ??? recompute tag map
 
@@ -706,7 +724,7 @@ object MakeFiles extends App {
       tagMap = tagMap.map { case (t, as) => (t, as.sortBy(byDate)) }
     }
 
-    tagMap = tagMap.map { case (t, as) =>
+    tagMap = timer("final tagmap") { tagMap.map { case (t, as) =>
       val tagArticle = base.tagByTitle(t)
       val key = tagArticle.meta.scalar("sortby")
 
@@ -725,7 +743,7 @@ object MakeFiles extends App {
           if (k == null) 0 else ~k.toInt
         })
       }
-    }
+    }}
 
     Base(articles, tagMap)
   }

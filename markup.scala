@@ -49,19 +49,20 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
   // this is before links method because links uses this one
   val linkAliases: Map[String, String] = segments.collect { case Linkref(lm) => lm }.flatMap { _.iterator }.toMap
 
-  lazy val resolvedLinks = _links.map { l => (l, resolveLink(l, linkAliases)) }.toMap //withDefaultValue "error112233"
-  lazy val links: Seq[String] = resolvedLinks.values.filter(isAbsolute).toSeq
+  lazy val resolvedLinks = _links.map { l => (l, resolveLink(l, linkAliases)) }.toMap
+  lazy val links: Seq[String] = resolvedLinks.valuesIterator.filter(isAbsolute).toVector
 
-  private def _links: Seq[String] = segments.collect {
+  private def _links: Seq[String] = segments.flatMap {
     case Paragraph(txt) => extractLinks(txt)
     case Inline(txt)    => extractLinks(txt)
     case Heading(txt)   => extractLinks(txt)
-    case Images(images) => images.flatMap(i => extractLinks(i.title))
+    case Images(images) => images.iterator.flatMap(i => extractLinks(i.title))
     case Blockquote(txt)=> txt._links
-  }.flatten
+    case _ => Iterator()
+  }
 
-  private def extractLinks(txt: String) =
-    (ahrefRegex.findAllMatchIn(txt).map(_.group(1)) ++ linkRegex.findAllMatchIn(txt).map(_.group(2))).toVector
+  private def extractLinks(txt: String): Iterator[String] =
+    ahrefRegex.findAllMatchIn(txt).map(_.group(1)) ++ linkRegex.findAllMatchIn(txt).map(_.group(2))
 
   private val codeRegex     = """(?xs) `    (.+?) `    """.r
   private val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
