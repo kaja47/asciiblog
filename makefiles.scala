@@ -217,7 +217,6 @@ object MakeFiles extends App {
     val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean
     val language: String       = cfg.getOrElse("language", "en")
     val dumpAll: Boolean       = cfg.getOrElse("dumpAll", "false").toBoolean // ignore hidden articles, dump everything into main feed
-    val compressFiles: Boolean = cfg.getOrElse("compressFiles", "false").toBoolean
     val fileSuffix: String     = cfg.getOrElse("fileSuffix", ".html")
     val imageMarker: String    = cfg.getOrElse("imageMarker", "")
     val albumsDir: String      = cfg.getOrElse("albumsDir", "")
@@ -481,25 +480,18 @@ object MakeFiles extends App {
 
 
   def saveFile(f: String, content: String): Seq[(String, String)] = { // filename -> hash
-    val g = f+".gz"
     val ff = new File(Blog.outDir, f)
-    val gf = new File(Blog.outDir, g)
 
     val p = ff.getParentFile
     if (p != null) p.mkdirs()
+
+    val h = hash(content)
 
     val fw = new FileWriter(ff)
     fw.write(content)
     fw.close()
 
-    val h = hash(content)
-
-    Seq(f -> h) ++ (if (!Blog.compressFiles) Seq() else {
-      val out = new zip.GZIPOutputStream(new FileOutputStream(gf))
-      out.write(content.getBytes("utf-8"))
-      out.close()
-      Seq(g -> h)
-    })
+    Seq(f -> h)
   }
 
   def saveXml(f: String, content: String): Seq[(String, String)] =
