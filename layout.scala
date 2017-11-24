@@ -20,20 +20,24 @@ trait ImageLayout {
   def imgTag(img: Image, t: Text): String
 }
 
-
-case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type, markup: Markup) extends Layout {
-  def rel(url: String): String = if (baseUrl != null) relativize(url, baseUrl) else url
-  def txl(s: String) = blog.translation(s)
-  def ifs(c: Boolean, body: => String) = if (c) body else ""
-  def ifs(x: String, body: => String) = if (x != null && x.nonEmpty) body else ""
-  def ifs(x: Any, body: => String) = if (x != null) body else ""
-  def ifs(x: String) = if (x != null) x else ""
+object FlowLayout {
   def stripTags(html: String, except: Seq[String] = Seq()) = {
     val exceptRegex = (if (except.isEmpty) "" else "(?!"+except.mkString("|")+")")
     html.replaceAll(s"\\<$exceptRegex.*?\\>", "") // TODO less crude way to strip tags
   }
   def truncate(txt: String, len: Int, append: String = "\u2026"): String =
     if (txt.length <= len) txt else txt.take(len).replaceAll("""\s+(\w+)?$|\<\w+$""", "")+append
+}
+
+
+case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type, markup: Markup) extends Layout {
+  import FlowLayout._
+  def rel(url: String): String = if (baseUrl != null) relativize(url, baseUrl) else url
+  def txl(s: String) = blog.translation(s)
+  def ifs(c: Boolean, body: => String) = if (c) body else ""
+  def ifs(x: String, body: => String) = if (x != null && x.nonEmpty) body else ""
+  def ifs(x: Any, body: => String) = if (x != null) body else ""
+  def ifs(x: String) = if (x != null) x else ""
 
   private def plaintextDescription(a: Article): String =
     stripTags(a.text.firstParagraph).replaceAll("\\n", " ")
