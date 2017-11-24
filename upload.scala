@@ -1,6 +1,6 @@
 import java.io.File
 import java.nio.file.StandardCopyOption._
-import java.nio.file.Files
+import java.nio.file.{ Files, NoSuchFileException }
 
 object Upload extends App {
 
@@ -28,19 +28,28 @@ val tf = new File(target, ".files")
 val sourceIndex = readFileIndex(sf)
 val targetIndex = readFileIndex(tf)
 
-for {
-  (fn, shash) <- sourceIndex.toSeq.sortBy(_._1)
-} {
-  val s = new File(source, fn)
-  val t = new File(target, fn)
-
-  if (!t.exists() || !targetIndex.contains(fn) || targetIndex(fn) != sourceIndex(fn)) {
-    println(s"copying $s -> $t")
+def move(s: File, t: File, retries: Int): Unit = {
+  println(s"copying $s -> $t")
+  try {
     if (t.getParentFile != null) {
       t.getParentFile.mkdirs()
     }
     Files.copy(s.toPath, t.toPath, REPLACE_EXISTING)
+  } catch {
+    case e: NoSuchFileException if retries > 0 => move(s, t, retries-1)
   }
+}
+
+for {
+  (fn, shash) <- sourceIndex.toSeq.sortBy(_._1)
+} {
+
+  val s = new File(source, fn)
+  val t = new File(target, fn)
+  if (!t.exists() || !targetIndex.contains(fn) || targetIndex(fn) != sourceIndex(fn)) {
+    move(s, t, 5)
+  }
+
 }
 
 Files.copy(sf.toPath, tf.toPath, REPLACE_EXISTING)
