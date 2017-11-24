@@ -82,7 +82,8 @@ case class Tags(visible: Seq[Tag] = Seq(), hidden: Seq[Tag] = Seq()) {
   def merge(t: Tags) = Tags(visible ++ t.visible, hidden ++ t.hidden)
 }
 case class Tag(title: String, supertag: Boolean = false) {
-  override def toString = "Tag("+(if (supertag)"##"else"#")+title+")"
+  override def toString = "Tag("+hashTag+")"
+  def hashTag = (if (supertag) "##" else "#")+title
 }
 
 
@@ -178,7 +179,7 @@ object MakeFiles extends App {
 
   private def kv: PartialFunction[String, (String, String)] = {
     case s if s.split(" ", 2).length == 2 =>
-      val Array(k, v) = s.split(" ", 2); (k, v/*.replaceAll("""^"|"$""", "")*/)
+      val Array(k, v) = s.split(" ", 2); (k, v)
   }
 
   private val thisDir = new File(".") // new File(System.getProperty("java.class.path")).getParent
