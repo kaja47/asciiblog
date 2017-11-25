@@ -260,6 +260,9 @@ object MakeFiles extends App {
     val twitterCreator: String = cfg.getOrElse("twitter.creator", "")
     def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
 
+    val printTimes: Boolean  = false
+    val printErrors: Boolean = !(args.length > 1 && args(1) == "tags")
+
     val translation: Map[String, String] =
       io.Source.fromFile(thisDir+"/lang."+language).getLines.collect(kv).toMap
   }
@@ -581,7 +584,7 @@ object MakeFiles extends App {
     val s = System.nanoTime
     val r = f
     val d = System.nanoTime - s
-    println(label+" "+(d/1e6)+"ms")
+    if (Blog.printTimes) { println(label+" "+(d/1e6)+"ms") }
     r
   }
 
@@ -684,7 +687,7 @@ object MakeFiles extends App {
     def resolveLink(link: String, localAliases: Map[String, String], globalMapping: Map[String, String], a: Article) = {
       val Array(base, hash) = link.split("#", 2).padTo(2, "")
       val Array(b, h) = localAliases.getOrElse(base, base).split("#", 2).padTo(2, "")
-      if (b.nonEmpty && !isAbsolute(b) && !b.startsWith("#") && !b.startsWith("..") && !b.matches(".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$") && !globalMapping.contains(b))
+      if (Blog.printErrors && b.nonEmpty && !isAbsolute(b) && !b.startsWith("#") && !b.startsWith("..") && !b.matches(".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$") && !globalMapping.contains(b))
         println(s"bad link [$link -> $b] (in ${a.slug})")
       globalMapping.getOrElse(b, b)+(if (hash.nonEmpty) "#"+hash else "")+(if (h.nonEmpty) "#"+h else "")
     }
