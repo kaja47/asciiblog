@@ -330,7 +330,9 @@ object MakeFiles extends App {
       val bs = b.getPath.split("/").filter(_.nonEmpty)
       val prefixLen = (us zip bs).takeWhile { case (u, b) => u == b }.length
       val backLevels = bs.length - prefixLen - 1
-      (Seq.fill(backLevels)("..") ++ us.drop(prefixLen)).mkString("/")
+      (Seq.fill(backLevels)("..") ++ us.drop(prefixLen)).mkString("/") +
+        (if (u.getRawQuery != null) "?"+u.getRawQuery else "")+
+        (if (u.getRawFragment != null) "#"+u.getRawFragment else "")
     }
   }
   def isLocalLink(url: String) = url.startsWith(Blog.baseUrl+"/")
