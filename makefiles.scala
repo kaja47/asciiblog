@@ -860,9 +860,9 @@ object MakeFiles extends App {
 
 
   timer("resize images") {
-  def smallThumbJob(img: Image) = (new File(Blog.outDir, thumbnailUrl(img)), Blog.thumbWidth, Blog.thumbHeight)
-  def mainThumbJob(img: Image)  = (new File(Blog.outDir, bigThumbnailUrl(img, false)), Blog.bigThumbWidth, -1)
-  def rightThumbJob(img: Image) = (new File(Blog.outDir, bigThumbnailUrl(img, true)), Blog.bigThumbWidth/2, -1)
+  def smallThumbJob(img: Image) = (new File(Blog.outDir, thumbnailUrl(img)),           Blog.thumbWidth,      Blog.thumbHeight, 0.05f)
+  def mainThumbJob(img: Image)  = (new File(Blog.outDir, bigThumbnailUrl(img, false)), Blog.bigThumbWidth,   -1,               0.1f)
+  def rightThumbJob(img: Image) = (new File(Blog.outDir, bigThumbnailUrl(img, true)),  Blog.bigThumbWidth/2, -1,               0.1f)
 
   val resizeJobs = base.all.flatMap(_.images).map {
     case i if i.mods == "main" && i.align == ">" => (i, Seq(smallThumbJob(i), rightThumbJob(i)))
@@ -877,13 +877,13 @@ object MakeFiles extends App {
         println(s"downloading ${image.url}")
         ImageIO.read(new URL(fixPath(image.url)))
       }
-      for ((thumbFile, w, h) <- jobs if !thumbFile.exists) {
+      for ((thumbFile, w, h, sharpenStrength) <- jobs if !thumbFile.exists) {
         println(s"resizing image ${image.url} -> $thumbFile")
           val suffix = image.url.split("\\.").last.toLowerCase
           val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
           file match {
             case null => println(s"ImageIO.read(${image.url}) == null")
-            case full => ImageIO.write(ImageTools.resizeImage(full, w, h), s, thumbFile)
+            case full => ImageIO.write(ImageTools.resizeImage(full, w, h, sharpenStrength), s, thumbFile)
           }
       }
     } catch { case e: IIOException => println(e) }

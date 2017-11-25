@@ -5,7 +5,7 @@ import java.awt.{ AlphaComposite, RenderingHints => RH }
 
 object ImageTools {
 
-  def resizeImage(src: BufferedImage, _width: Int, _height: Int = -1): BufferedImage = {
+  def resizeImage(src: BufferedImage, _width: Int, _height: Int = -1, sharpenStrength: Float): BufferedImage = {
     val (width, height) =
       if (_height <= 0) {
         if (_width > src.getWidth) (src.getWidth, src.getHeight) // do not scale up
@@ -17,7 +17,7 @@ object ImageTools {
     val x = (src.getWidth - wz) / 2
     val y = (src.getHeight - hz) / 2
     val crop = src.getSubimage(x, y, wz, hz)
-    sharpen(progressiveResize(crop, width, height))
+    sharpen(progressiveResize(crop, width, height), sharpenStrength)
   }
 
   /** adapted from https://github.com/coobird/thumbnailator/blob/master/src/main/java/net/coobird/thumbnailator/resizers/ProgressiveBilinearResizer.java */
@@ -76,8 +76,8 @@ object ImageTools {
     dest
   }
 
-  def sharpen(src: BufferedImage) = {
-    val strength = 0.1f
+  def sharpen(src: BufferedImage, strength: Float) = {
+    require(strength > 0f && strength < 1f)
     val sharpenKernel = Array.fill[Float](9)(-strength)
     sharpenKernel(4) = 8 * strength + 1
     val kernel = new Kernel(3, 3, sharpenKernel)
