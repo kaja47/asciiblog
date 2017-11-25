@@ -554,7 +554,7 @@ object MakeFiles extends App {
         else (new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime, t)
 
       val imgUrls = albumDir.list collect { case f if f.toLowerCase.endsWith(".jpg") =>
-        Blog.baseUrl+"/albums/"+albumDir.getName+"/"+f
+        fixPath(Blog.baseUrl+"/albums/"+albumDir.getName+"/"+f)
       }
 
       new Article(
