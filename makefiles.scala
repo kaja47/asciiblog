@@ -591,14 +591,14 @@ object MakeFiles extends App {
   }
 
   class Timer {
-    private var t = 0L
+    private val t = new java.util.concurrent.atomic.LongAdder()
     def apply[T](f: => T) = {
       val s = System.nanoTime
       val r = f
-      t += System.nanoTime - s
+      t.add(System.nanoTime - s)
       r
     }
-    override def toString = "Timer "+(t/1e6)+"ms"
+    override def toString = "Timer "+(t.sum/1e6)+"ms"
   }
 
 
