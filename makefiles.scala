@@ -214,7 +214,7 @@ object MakeFiles extends App {
       val Array(k, v) = s.split(" ", 2); (k, v)
   }
 
-  private val thisDir = new File(".") // new File(System.getProperty("java.class.path")).getParent
+  private val thisDir = /*new File(".")*/ new File(System.getProperty("java.class.path")).getParent
 
   val galleryScript =
     io.Source.fromFile(thisDir+"/gallery.js").mkString
