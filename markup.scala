@@ -34,6 +34,9 @@ object AsciiText {
   val ahrefRegex  = """(?x) (?<= href=") (.*?) (?=") """.r
   val imgsrcRegex = """(?x) (?<= src=") (.*?) (?=") """.r
 
+  val linkCheck = "\":["
+  val ahrefCheck = "href=\""
+
   def empty = AsciiText(Seq(), null)
 }
 
@@ -62,7 +65,8 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
   }
 
   private def extractLinks(txt: String): Iterator[String] =
-    ahrefRegex.findAllMatchIn(txt).map(_.group(1)) ++ linkRegex.findAllMatchIn(txt).map(_.group(2))
+    (if (txt.contains(ahrefCheck)) ahrefRegex.findAllMatchIn(txt).map(_.group(1)) else Iterator()) ++
+    (if (txt.contains(linkCheck))  linkRegex.findAllMatchIn(txt).map(_.group(2))  else Iterator())
 
   private val codeRegex     = """(?xs) `    (.+?) `    """.r
   private val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
