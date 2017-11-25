@@ -79,20 +79,49 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
   private val list2Regex    = """(?xm) ^(\d+\)\ )(?!\ )(.*?)(?=\n(?:\d+\)\ |\n\n)) """.r
   private val commentRegex  = """(?xs) \<!--.*?--\>""".r
 
+  private val codeCheck     = """`"""
+  private val boldCheck     = """**"""
+  private val italicCheck   = """*"""
+  private val italic2Check  = """//"""
+  private val altCheck      = """.("""
+  private val emCheck       = """---"""
+  private val blackoutCheck = """[|"""
+  private val commentCheck  = """<!--"""
+
   private def mkParagraph(_txt: String, aliases: Map[String, String]): String = {
     var txt = _txt
-    txt = blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(7).mkString("<wbr>"))
-    txt = altRegex     .replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
-    txt = ahrefRegex   .replaceAllIn(txt, m => Regex.quoteReplacement(aliases(m.group(1))))
-    txt = linkRegex    .replaceAllIn(txt, m => Regex.quoteReplacement(s"""<a href="${aliases(m.group(2))}">${m.group(1)}</a>"""))
+    if (txt.contains(blackoutCheck)) {
+      txt = blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(7).mkString("<wbr>"))
+    }
+    if (txt.contains(altCheck)) {
+      txt = altRegex     .replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
+    }
+    if (txt.contains(ahrefCheck)) {
+      txt = ahrefRegex   .replaceAllIn(txt, m => Regex.quoteReplacement(aliases(m.group(1))))
+    }
+    if (txt.contains(linkCheck)) {
+      txt = linkRegex    .replaceAllIn(txt, m => Regex.quoteReplacement(s"""<a href="${aliases(m.group(2))}">${m.group(1)}</a>"""))
+    }
     txt = list1Regex   .replaceAllIn(txt, "$1$2<br/>")
     txt = list2Regex   .replaceAllIn(txt, "$1$2<br/>")
-    txt = commentRegex .replaceAllIn(txt, "")
-    txt = codeRegex    .replaceAllIn(txt, """<code>$1</code>""")
-    txt = boldRegex    .replaceAllIn(txt, """<b>$1</b>""")
-    txt = italicRegex  .replaceAllIn(txt, """<i>$1</i>""")
-    txt = italic2Regex .replaceAllIn(txt, """<i>$1</i>""")
-    txt = emRegex      .replaceAllIn(txt, "&mdash;")
+    if (txt.contains(commentCheck)) {
+      txt = commentRegex .replaceAllIn(txt, "")
+    }
+    if (txt.contains(codeCheck)) {
+      txt = codeRegex    .replaceAllIn(txt, """<code>$1</code>""")
+    }
+    if (txt.contains(boldCheck)) {
+      txt = boldRegex    .replaceAllIn(txt, """<b>$1</b>""")
+    }
+    if (txt.contains(italicCheck)) {
+      txt = italicRegex  .replaceAllIn(txt, """<i>$1</i>""")
+    }
+    if (txt.contains(italic2Check)) {
+      txt = italic2Regex .replaceAllIn(txt, """<i>$1</i>""")
+    }
+    if (txt.contains(emCheck)) {
+      txt = emRegex      .replaceAllIn(txt, "&mdash;")
+    }
     txt
   }
 
