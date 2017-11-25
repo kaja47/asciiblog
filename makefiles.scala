@@ -361,11 +361,12 @@ object MakeFiles extends App {
   val licenses = Set("CC by", "CC by-nc", "CC by-nd", "CC by-sa", "CC by-nc-nd", "CC by-nc-sa")
 
   def parseDates(l: String): Option[Seq[Date]] = {
+    if (!l.charAt(0).isDigit) return None
     val dates = l.split(",").map(l => parseDate(l.trim))
     if (dates.nonEmpty && dates.forall(_.isDefined)) Some(dates.map(_.get)) else None
   }
 
-  def parseDate(l: String) = l match {
+  def parseDate(l: String): Option[Date] = l match {
     case dateRegex(y, m, d, null, null, null) =>
       Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime)
     case dateRegex(y, m, d, h, mi, null) =>
@@ -375,26 +376,26 @@ object MakeFiles extends App {
     case _ => None
   }
 
-  def parseLicense(l: String): Option[String] =
-    if (licenses.contains(l)) Some(l) else None
+  val parseLicense: PartialFunction[String, String] = {
+    case l if licenses.contains(l) => l
+  }
 
-  val bracketRegex  = """^\(([^)]+)\)$""".r
-  def bracketed(xs: Array[String])   = xs.collect { case bracketRegex(x) => x }
-  def unbracketed(xs: Array[String]) = xs.filter { case bracketRegex(x) => false ; case _ => true }
-
-  val tagsRegex     = """^((?:#).+)$""".r
-  val tagBlockRegex = """(##|#)(.+?)(?=( |^)(##|#)|$)""".r
+  val tagBlockRegex = """(##|#)\s*(.+?)(?=( |^)(##|#)|$)""".r
+  val tagSplitRegex = "\\s*,\\s*".r
+  def isBracketed(x: String) = x.charAt(0) == '(' && x.charAt(x.length-1) == ')'
   def getTags(s: String) =
     tagBlockRegex.findAllMatchIn(s).foldLeft(Tags()) { (t, m) =>
-      val tags = m.group(2).split("\\s*,\\s*").map(_.trim)
-      val (vis, hid): (Seq[Tag], Seq[Tag]) = (m.group(1) match {
-        case "##" => (tags.map(Tag(_, true)), Seq())
-        case "#"  => (unbracketed(tags).map(Tag(_)), bracketed(tags).map(Tag(_)))
+      val tags = tagSplitRegex.split(m.group(2))
+      val (vis, hid) = (m.group(1) match {
+        case "##" => (tags.map(Tag(_, true)), Array[Tag]())
+        case "#"  => tags.map(Tag(_)).partition(t => !isBracketed(t.title))
       })
       t.copy(visible = t.visible ++ vis, hidden = t.hidden ++ hid)
     }
   def peelOffTags(s: String): (String, Tags) = (tagBlockRegex.replaceAllIn(s, "").trim, getTags(s))
-  val parseTags: PartialFunction[String, Tags] = { case tagsRegex(s) => getTags(s) }
+  val parseTags: PartialFunction[String, Tags] = {
+    case s if s.charAt(0) == '#' => getTags(s)
+  }
 
   val metaRegex = """(?x) \s+ | \[ | \] | , | \w+:\w+ | [\w/-]+ | :""".r
 
@@ -417,10 +418,9 @@ object MakeFiles extends App {
       Some(_parseMeta(l.drop(prefix.length)))
     } else None
 
-  def parseLink(l: String): Option[String] =
-    if (l.startsWith("link:")) {
-      Some(l.drop("link:".length).trim)
-    } else None
+  val parseLink: PartialFunction[String, String] = {
+    case l if l.startsWith("link:") => l.drop("link:".length).trim
+  }
 
   def hash(txt: String): String = hash(txt.getBytes("utf-8"))
   def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
@@ -436,11 +436,11 @@ object MakeFiles extends App {
     val (metaLines, b) = ls.drop(2).span(l => l.nonEmpty)
     val body = b.slice(b.indexWhere(_.nonEmpty), b.lastIndexWhere(_.nonEmpty)+1)
 
-    val dates   = metaLines.flatMap(parseDates _     )
-    val tags    = metaLines.flatMap(parseTags.lift   andThen (_.toSeq))
-    val license = metaLines.flatMap(parseLicense _   andThen (_.toSeq))
-    val links   = metaLines.flatMap(parseLink _      andThen (_.toSeq))
-    val metas   = metaLines.flatMap(l => parseMeta(l, "meta: ").toSeq)
+    val dates   = metaLines.flatMap(parseDates)
+    val tags    = metaLines.collect(parseTags)
+    val license = metaLines.collect(parseLicense)
+    val links   = metaLines.collect(parseLink)
+    val metas   = metaLines.flatMap(parseMeta(_, "meta: "))
     val meta = metas.foldLeft(Meta())(_ merge _)
 
     val isTag = meta.values.contains("supertag") || meta.values.contains("tag") || (slug != null && isTagSlug(slug))
