@@ -517,7 +517,7 @@ object MakeFiles extends App {
 
 
 
-  def saveFile(f: String, content: String): Seq[(String, String)] = { // filename -> hash
+  def saveFile(f: String, content: String, fileIndex: Map[String, String] = Map()): Seq[(String, String)] = { // filename -> hash
     val ff = new File(Blog.outDir, f)
 
     val p = ff.getParentFile
@@ -525,15 +525,17 @@ object MakeFiles extends App {
 
     val h = hash(content)
 
-    val fw = new FileWriter(ff)
-    fw.write(content)
-    fw.close()
+    if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
+      val fw = new FileWriter(ff)
+      fw.write(content)
+      fw.close()
+    }
 
     Seq(f -> h)
   }
 
-  def saveXml(f: String, content: String): Seq[(String, String)] =
-    saveFile(f+".xml", content)
+  def saveXml(f: String, content: String, fileIndex: Map[String, String] = Map()): Seq[(String, String)] =
+    saveFile(f+".xml", content, fileIndex)
 
 
 
@@ -799,6 +801,13 @@ object MakeFiles extends App {
 //  }
 
 
+  val oldFileIndex: Map[String, String] = {
+    val f = new File(Blog.outDir, ".files")
+    if (!f.exists) Map()
+    else io.Source.fromFile(f).getLines.map(l => kv(l).swap).toMap
+  }
+
+
   val fileIndex = collection.concurrent.TrieMap[String, String]()
   val isIndexGallery = base.feed.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
 
@@ -833,37 +842,37 @@ object MakeFiles extends App {
     val prev = archivePages((archivePages.indexWhere(_._1.slug == a.slug)-1) max 0 min (archivePages.length-1))._1
     val next = archivePages((archivePages.indexWhere(_._1.slug == a.slug)+1) max 0 min (archivePages.length-1))._1
     val body = l.makeIndex(Seq(), as, prev = prev, next = next)
-    fileIndex ++= saveFile(relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */))
+    fileIndex ++= saveFile(relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */), oldFileIndex)
     a
   }.seq
 
   val path = relUrlFromSlug("index")
   val l = FlowLayout(absUrlFromPath(path), base, Blog, markup)
   val body = l.makeIndex(fulls, links, archiveLinks, Blog.groupArchiveBy == "month")
-  fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery))
+  fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
 
   base.articles.par foreach { a =>
     var l = FlowLayout(absUrl(a), base, Blog, markup)
     val body = l.makeFullArticle(a)
-    fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)))
+    fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
   }
 
   base.allTags.keys.par foreach { a =>
     var l = FlowLayout(absUrl(a), base, Blog, markup)
     val body = l.makeFullArticle(a)
     val hasImages = a.images.nonEmpty || base.allTags(a).exists(_.images.nonEmpty)
-    fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")))
-    fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null))
+    fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")), oldFileIndex)
+    fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null), oldFileIndex)
   }
 
   {
     val path = relUrlFromSlug("tags")
     val l = FlowLayout(absUrlFromPath(path), base, Blog, markup)
-    fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)))
+    fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)), oldFileIndex)
   }
 
   def mkBody(a: Article) = FlowLayout(null, base, Blog, markup).makeArticleBody(a, true)
-  fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null))
+  fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null), oldFileIndex)
 
   if (Blog.allowComments) {
     val l = FlowLayout(absUrlFromPath("comments.php"), base, Blog, markup)
@@ -882,17 +891,17 @@ object MakeFiles extends App {
         cs = cs.replace(from, to)
       }
       cs
-    })
+    }, oldFileIndex)
     new File(".comments").mkdirs()
-    fileIndex ++= saveFile(".comments/.htaccess", "Deny from all")
+    fileIndex ++= saveFile(".comments/.htaccess", "Deny from all", oldFileIndex)
   }
 
   if (Blog.cssFile.nonEmpty) {
-    fileIndex ++= saveFile("style.css", io.Source.fromFile(Blog.cssFile).mkString)
+    fileIndex ++= saveFile("style.css", io.Source.fromFile(Blog.cssFile).mkString, oldFileIndex)
   }
 
-  fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /")
-  saveFile(".files", fileIndex.toSeq.sorted.map { case (file, hash) => hash+" "+file }.mkString("\n"))
+  fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /", oldFileIndex)
+  saveFile(".files", fileIndex.toSeq.sorted.map { case (file, hash) => hash+" "+file }.mkString("\n"), oldFileIndex)
   }
 
 
