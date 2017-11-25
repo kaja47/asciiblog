@@ -135,11 +135,10 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
   private val articlesReferencedByRel = base.all.flatMap { a => a.rel.flatMap { rel => base.find(rel).orElse { undefId(rel, a); None } } }
   private val arts: Array[Article] = (tagMap.values.flatten ++ articlesReferencedByRel).toArray.distinct
   private val artMap: Map[Article, Int] = arts.zipWithIndex.toMap
+  private val slugMap: Map[Slug, Int] = artMap.map { case (k, v) => (k.asSlug, v) }
   private val tm: Map[Tag, Array[Int]] = tagMap.map { case (t, as) => (t, as.map(artMap).toArray) }
 
-  private case class Sim(article: Article, commonTags: Int)
-
-  private def _similarByTags(a: Article): Seq[Sim] = {
+  def similarByTags(a: Article, count: Int, without: Seq[Article]): Seq[Article] = {
     def dateDiff(a: Article, b: Article): Long = {
       (a.date, b.date) match {
         case (null, null) => 0
@@ -147,8 +146,12 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
         case (a, b) => math.abs(a.getTime - b.getTime)
       }
     }
+
+    val arrs = (a.tags.visible ++ a.tags.hidden).flatMap(tm.get)
+    if (arrs.size == 0) return Seq()
+
     val freq = new Array[Int](arts.length) // article idx -> count
-    for (t <- (a.tags.visible ++ a.tags.hidden); arr <- tm.get(t)) {
+    for (arr <- arrs) {
       var i = 0; while (i < arr.length) {
         freq(arr(i)) += 1
         i += 1
@@ -159,14 +162,43 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
       freq(i) += 64
     }
 
-    (0 until arts.length).iterator.collect { case i if freq(i) >= 1 && arts(i).slug != a.slug =>
-      Sim(arts(i), freq(i))
-    } .toVector
-      .sortBy { s => (~s.commonTags, dateDiff(a, s.article)) } // most common tags, published closest together
-  }
+    for (a <- without ; i <- slugMap.get(a.asSlug)) freq(i) = 0
+    for (i <- slugMap.get(a.asSlug)) freq(i) = 0
+    freq(slugMap(a.asSlug)) = 0
 
-  def similarByTags(a: Article, count: Int, without: Seq[Article]): Seq[Article] =
-    _similarByTags(a).filter(s => !without.contains(s.article)).take(count).map(_.article)
+    case class Key(commonTags: Int, dateDiff: Long, idx: Int)
+    implicit val o = new Ordering[Key]{
+      def compare(a: Key, b: Key): Int = {
+        val c1 = java.lang.Integer.compare(b.commonTags, a.commonTags)
+        if (c1 != 0) return c1
+        val c2 = java.lang.Long.compare(a.dateDiff, b.dateDiff)
+        if (c2 != 0) return c2
+        java.lang.Integer.compare(a.idx, b.idx)
+      }
+    }
+
+    val sortedMap = mutable.TreeMap[Key, Article]()
+    var min = Key(0,0,0)
+
+    for (i <- 0 until arts.length)
+      if (freq(i) >= 1) {
+        val key = Key(freq(i), dateDiff(a, arts(i)), i) // most common tags, published closest together
+        if (o.gt(key, min)) {
+          sortedMap.put(key, arts(i))
+          if (sortedMap.size > count) {
+            val last = sortedMap.last._1
+            sortedMap.remove(last)
+            min = last
+          }
+        }
+      }
+
+    //val w = without.map(_.slug).toSet + a.slug
+    //val rr = sortedMap.toVector.map { case (Key(f, d, _), a) => ((~f, d), a) }
+    //val v = for (i <- 0 until arts.length if freq(i) >= 1 && !w.contains(arts(i).slug)) yield ((~freq(i), dateDiff(a, arts(i))), arts(i))
+
+    sortedMap.values.toVector
+  }
 }
 
 
