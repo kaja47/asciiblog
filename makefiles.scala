@@ -780,6 +780,13 @@ object MakeFiles extends App {
     Base(articles, tagMap)
   }
 
+  if (args.length >= 2 && args(1) == "tags") {
+    val titleLine = io.Source.stdin.getLines.take(1).toSeq.head
+    val titleRegex(_, _, slug) = titleLine
+    RecommendTags(base, slug)
+    sys.exit()
+  }
+
 
 
 //  if (args.length == 2 && args(1) == "checkLinks") {
