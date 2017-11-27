@@ -36,12 +36,14 @@ object AsciiText {
 
   val linkCheck = "\":["
   val ahrefCheck = "href=\""
+  val imgsrcCheck = "src=\""
 
   def empty = AsciiText(Seq(), null)
 }
 
 case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) extends Text {
   import AsciiText._
+  import AsciiMarkup.{ commentRegex, commentCheck }
 
   def render(l: ImageLayout): String = mkText(l, resolvedLinks)
   def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), resolvedLinks)
@@ -77,7 +79,6 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
   private val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
   private val list1Regex    = """(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n|\d+\)\ )) """.r
   private val list2Regex    = """(?xm) ^(\d+\)\ )(?!\ )(.*?)(?=\n(?:\d+\)\ |\n\n)) """.r
-  private val commentRegex  = """(?xs) \<!--.*?--\>""".r
 
   private val codeCheck     = """`"""
   private val boldCheck     = """**"""
@@ -86,7 +87,6 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
   private val altCheck      = """.("""
   private val emCheck       = """---"""
   private val blackoutCheck = """[|"""
-  private val commentCheck  = """<!--"""
 
   private def mkParagraph(_txt: String, aliases: Map[String, String]): String = {
     var txt = _txt
@@ -164,9 +164,13 @@ object AsciiMarkup extends Markup {
   private val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
   private val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r
   private val hrRegex       = """(?xm) ---+|\*\*\*+ """.r
-  private val blockRegex    = """(?xs) /---(\w+)[^\n]*\n (.*?) \\--- | \<!-- (.*?) --\>  """.r
+  private val blockRegex    = """(?xs) /---(\w+)[^\n]*\n (.*?) \\--- """.r
+  val commentRegex          = """(?xs) \<!--.*?--\>""".r
 
-  private def segmentText(txt: String, resolveLink: ResolveLinkFunc): AsciiText = {
+  private val blockCheck    = """/---"""
+  val commentCheck          = """<!--"""
+
+  private def segmentText(_txt: String, resolveLink: ResolveLinkFunc): AsciiText = {
     def matchAllLines[T](ls: Seq[String])(f: PartialFunction[String, T]): Option[Seq[T]] = {
       val ms = ls.map(f.lift)
       if (ms.forall(_.isDefined)) Some(ms.map(_.get)) else None
@@ -191,13 +195,17 @@ object AsciiMarkup extends Markup {
           }
       }
 
-    var prev = 0
-    val segments: Seq[Segment] = (for (m <- blockRegex.findAllMatchIn(txt)) yield {
-      val block = if (m.group(1) != null) Block(m.group(1), m.group(2)) else Block("comment", m.group(3))
-      val res = splitBlocks(txt.substring(prev, m.start)) :+ block
-      prev = m.end
-      res
-    }).toVector.flatten ++ (if (prev > txt.length) Seq() else splitBlocks(txt.substring(prev)))
+    var txt = commentRegex.replaceAllIn(_txt, "")
+
+    val segments: Seq[Segment] = {
+      var prev = 0
+      (for (m <- blockRegex.findAllMatchIn(txt)) yield {
+        val block = Block(m.group(1), m.group(2))
+        val res = splitBlocks(txt.substring(prev, m.start)) :+ block
+        prev = m.end
+        res
+      }).toVector.flatten ++ (if (prev > txt.length) Seq() else splitBlocks(txt.substring(prev)))
+    }
 
     AsciiText(segments, resolveLink)
   }

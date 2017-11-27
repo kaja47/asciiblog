@@ -646,7 +646,6 @@ object MakeFiles extends App {
           (a.tags != Tags() && b.tags != Tags()) ||
           (a.license != null && b.license != null) ||
           (a.meta != Meta() && b.meta != Meta()) //||
-          //(a.rawText.nonEmpty && b.rawText.nonEmpty)
         ) sys.error("two conflicting articles with the same slug '"+a.slug+"'")
 
 
@@ -698,6 +697,7 @@ object MakeFiles extends App {
     articles = articles.par.map { a =>
       val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a))
 
+      // TODO linkAliases return map, no dupes can be detected
       txt.linkAliases.groupBy(_._1).filter(_._2.size > 1).foreach { case (l, _) =>
         sys.error(s"duplicate link refs [$l] in article '${a.slug}'")
       }
@@ -842,7 +842,6 @@ object MakeFiles extends App {
   }
 
 
-
   timer("generate and save files") {
   val archiveLinks = archivePages.par.map { case (a, as) =>
     val l = FlowLayout(absUrl(a), base, Blog, markup)
@@ -858,10 +857,12 @@ object MakeFiles extends App {
   val body = l.makeIndex(fulls, links, archiveLinks, Blog.groupArchiveBy == "month")
   fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
 
+  timer("generate and save files - articles") {
   base.articles.par foreach { a =>
     var l = FlowLayout(absUrl(a), base, Blog, markup)
     val body = l.makeFullArticle(a)
     fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
+  }
   }
 
   base.allTags.keys.par foreach { a =>

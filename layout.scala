@@ -1,7 +1,7 @@
 package asciiblog
 
 import MakeFiles. { Blog, relativize, year, month, isAbsolute, absUrl, absUrlFromSlug, absUrlFromPath, relUrlFromSlug, bigThumbnailUrl, thumbnailUrl, galleryScript }
-import AsciiText. { ahrefRegex, imgsrcRegex }
+import AsciiText. { ahrefRegex, ahrefCheck, imgsrcRegex, imgsrcCheck }
 import java.text.SimpleDateFormat
 import java.util.Date
 import scala.util.matching.Regex
@@ -125,7 +125,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type, markup: Mark
     val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
     val footer = ahrefRegex.replaceAllIn(blog.footer, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
     val c1 = ahrefRegex.replaceAllIn(content, l => Regex.quoteReplacement(rel(l.group(1))))
-    val c2 = imgsrcRegex.replaceAllIn(c1,     l => Regex.quoteReplacement(rel(l.group(1))))
+    val c2 = if (!c1.contains(imgsrcCheck)) c1 else imgsrcRegex.replaceAllIn(c1,     l => Regex.quoteReplacement(rel(l.group(1))))
     val body = "<body><div class=b>"+header+c2+footer+"</div></body>"
     val cats: String => Boolean = if (includeCompleteStyle) _ => true else classesAndTags(body)
 
@@ -164,7 +164,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, prev: Article = null, next: Article = null): String =
     "<span class=f>"+_makeNextPrevArrows(prev, next)+"</span>"+
-    fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br clear=all/>\n")+"<br/>"+
+    fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
     (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"+
     "<span class=f>"+_makeNextPrevArrows(prev, next)+"</span>"
