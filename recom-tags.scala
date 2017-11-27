@@ -20,6 +20,7 @@ object RecommendTags {
     }
 
     def exclude(tags: Seq[Tag]): Seq[Tag] = tags.diff(article.tags.visible)
+    def present(tags: Seq[Tag]) = tags.map(_.hashTag).mkString(" ")
 
     val tagCandidatesInText = tagsInText(article, allTags).toSeq
 
@@ -43,10 +44,28 @@ object RecommendTags {
       .groupBy(_._1).mapValues(_.map(_._2).sum)
       .toSeq.sortBy(~_._2).map(_._1)
 
+    def freq[T](xs: Seq[T]) =
+      xs.groupBy(identity).mapValues(_.size)
+        .toSeq.sortBy(~_._2).map(_._1)
+
+    val tagsInLinkedArticles = freq(article.slugsOfLinkedArticles.flatMap(s => base.find(s.id)).flatMap(_.tags.visible))
+    val tagsInRelArticles = freq(article.rel.flatMap(base.find)).flatMap(_.tags.visible)
+
     println(article.title)
-    println("current tags:  "+article.tags.visible.map(_.hashTag).mkString(" "))
-    println("in text:       "+exclude(tagCandidatesInText).map(_.hashTag).mkString(" "))
-    println("expand:        "+exclude(cotags).map(_.hashTag).mkString(" "))
+    println("current tags:")
+    println(present(article.tags.visible))
+    println()
+    println("in text:")
+    println(present(exclude(tagCandidatesInText)))
+    println()
+    println("tags in articles with similar tags:")
+    println(present(exclude(cotags)))
+    println()
+    println("tags in linked articles:")
+    println(present(exclude(tagsInLinkedArticles)))
+    println()
+    println("tags in rel articles:")
+    println(present(exclude(tagsInRelArticles)))
   }
 
 

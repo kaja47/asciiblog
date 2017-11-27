@@ -42,7 +42,7 @@ case class Article(
     text.links.foreach(l => require(isAbsolute(l), s"Text.links must return absolute urls, '$l' provided (in article $slug)"))
     text.links
   }
-  def slugsOfLinkedArticles = links.filter(isLocalLink).map(extractSlug)
+  def slugsOfLinkedArticles: Seq[Slug] = links.filter(isLocalLink).map(extractSlug)
 
   // image marker is shown only for images that are not from external sources
   def hasImageMarker = images.exists(i => i.source == null || i.source == "")
