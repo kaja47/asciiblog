@@ -180,24 +180,24 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
     val sortedMap = mutable.TreeMap[Key, Article]()
     var min = Key(0,0,0)
 
-    for (i <- 0 until arts.length)
-      if (freq(i) >= 1) {
-        val key = Key(freq(i), dateDiff(a, arts(i)), i) // most common tags, published closest together
-        if (o.gt(key, min)) {
-          sortedMap.put(key, arts(i))
-          if (sortedMap.size > count) {
-            val last = sortedMap.last._1
-            sortedMap.remove(last)
-            min = last
-          }
+    for (i <- 0 until arts.length) if (freq(i) >= 1) {
+      val key = Key(freq(i), dateDiff(a, arts(i)), i) // most common tags, published closest together
+      if (!o.gt(key, min)) {
+        sortedMap.put(key, arts(i))
+        if (sortedMap.size > count) {
+          val last = sortedMap.last._1
+          sortedMap.remove(last)
+          min = last
         }
       }
+    }
+
+    sortedMap.values.toVector
 
     //val w = without.map(_.slug).toSet + a.slug
     //val rr = sortedMap.toVector.map { case (Key(f, d, _), a) => ((~f, d), a) }
     //val v = for (i <- 0 until arts.length if freq(i) >= 1 && !w.contains(arts(i).slug)) yield ((~freq(i), dateDiff(a, arts(i))), arts(i))
-
-    sortedMap.values.toVector
+    //v.sortBy(_._1).map(_._2).take(count)
   }
 }
 
