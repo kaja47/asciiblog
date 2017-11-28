@@ -17,7 +17,7 @@ trait Layout extends ImageLayout {
 
 // this type is passed into markup
 trait ImageLayout {
-  def imgTag(img: Image, t: Text): String
+  def imgTag(img: Image, t: Text, showDesc: Boolean = true): String
 }
 
 object FlowLayout {
@@ -46,18 +46,20 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type, markup: Mark
   private def mainImageUrl(a: Article): String  = articleImages(a).find(_.mods == "main").map(_.url).getOrElse(null)
   private def otherImageUrl(a: Article): String = articleImages(a).map(_.url).headOption.getOrElse(null)
 
-  def imgTag(img: Image, t: Text) = {
+  def imgTag(img: Image, t: Text, showDesc: Boolean = true) = {
     val (cl, srcPath) = img match {
       case i if i.mods == "main" && i.align == ">" => ("fr", bigThumbnailUrl(img, true))
       case i if i.mods == "main" => ("main", bigThumbnailUrl(img, false))
       case i => ("thz", thumbnailUrl(img))
     }
-    val title   = ifs(img.title, t.paragraph(img.title)).trim
-    val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim
-    val source  = ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")
-    val license = (ifs(img.license)+" "+source).trim
-    val locSrc  = ifs(img.localSource, articleLink(img.localSource, img.localSource.title))
-    val desc = Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
+    val desc = if (showDesc) {
+      val title   = ifs(img.title, t.paragraph(img.title)).trim
+      val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim
+      val source  = ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")
+      val license = (ifs(img.license)+" "+source).trim
+      val locSrc  = ifs(img.localSource, articleLink(img.localSource, img.localSource.title))
+      Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
+    } else ""
     s"""<span class=$cl><a href="${img.url}"><img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="${absUrlFromPath(srcPath)}"/></a>$desc</span>"""
   }
 
@@ -197,7 +199,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeShortArticleBody(a: Article): String = {
-    val img = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a.text)).getOrElse("")
+    val img = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a.text, false)).getOrElse("")
     val txt = truncate(stripTags(a.text.render(this), Seq("wbr")), 300)
     ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
   }
