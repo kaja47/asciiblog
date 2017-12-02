@@ -935,9 +935,10 @@ object MakeFiles extends App {
         println(s"resizing image ${image.url} -> $thumbFile")
           val suffix = image.url.split("\\.").last.toLowerCase
           val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
+          val strength = if (s == "png" || s == "gif") 0f else sharpenStrength
           file match {
             case null => println(s"ImageIO.read(${image.url}) == null")
-            case full => ImageIO.write(ImageTools.resizeImage(full, w, h, sharpenStrength), s, thumbFile)
+            case full => ImageIO.write(ImageTools.resizeImage(full, w, h, strength), s, thumbFile)
           }
       }
     } catch { case e: IIOException => println(e) }

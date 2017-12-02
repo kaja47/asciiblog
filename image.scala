@@ -8,9 +8,10 @@ object ImageTools {
   def resizeImage(src: BufferedImage, _width: Int, _height: Int = -1, sharpenStrength: Float): BufferedImage = {
     val (width, height) =
       if (_height <= 0) {
-        if (_width > src.getWidth) (src.getWidth, src.getHeight) // do not scale up
+        if (_width > src.getWidth) return src /*(src.getWidth, src.getHeight)*/ // do not scale up
         else (_width, (1.0 * _width / src.getWidth * src.getHeight).toInt)
       } else (_width, _height)
+
     val zoom = math.min(1.0 * src.getWidth / width, 1.0 * src.getHeight / height)
     val wz = math.max(1, (width * zoom).toInt)
     val hz = math.max(1, (height * zoom).toInt)
@@ -76,8 +77,9 @@ object ImageTools {
     dest
   }
 
-  def sharpen(src: BufferedImage, strength: Float) = {
-    require(strength > 0f && strength < 1f)
+  def sharpen(src: BufferedImage, strength: Float): BufferedImage = {
+    require(strength >= 0f && strength < 1f)
+    if (strength == 0f) return src
     val sharpenKernel = Array.fill[Float](9)(-strength)
     sharpenKernel(4) = 8 * strength + 1
     val kernel = new Kernel(3, 3, sharpenKernel)
