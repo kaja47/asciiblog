@@ -45,7 +45,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
   import AsciiText._
   import AsciiMarkup.{ commentRegex, commentCheck }
 
-  def render(l: ImageLayout): String = mkText(l, resolvedLinks)
+  def render(l: ImageLayout): String = mkText(segments, l, resolvedLinks)
   def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), resolvedLinks)
   def paragraph(text: String): String = AsciiText(Seq(Inline(text)), (l, _) => resolvedLinks(l)).render(null)
 
@@ -54,15 +54,15 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
   // this is before links method because links uses this one
   val linkAliases: Map[String, String] = segments.collect { case Linkref(lm) => lm }.flatMap { _.iterator }.toMap
 
-  lazy val resolvedLinks = _links.map { l => (l, resolveLink(l, linkAliases)) }.toMap
+  lazy val resolvedLinks = _links(segments).map { l => (l, resolveLink(l, linkAliases)) }.toMap
   lazy val links: Seq[String] = resolvedLinks.valuesIterator.filter(isAbsolute).toVector
 
-  private def _links: Seq[String] = segments.flatMap {
+  private def _links(segments: Seq[Segment]): Seq[String] = segments.flatMap {
     case Paragraph(txt) => extractLinks(txt)
     case Inline(txt)    => extractLinks(txt)
     case Heading(txt)   => extractLinks(txt)
     case Images(images) => images.iterator.flatMap(i => extractLinks(i.title))
-    case Blockquote(txt)=> txt._links
+    case Blockquote(sx) => _links(sx)
     case _ => Iterator()
   }
 
@@ -125,8 +125,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
     txt
   }
 
-
-  private def mkText(l: ImageLayout, aliases: Map[String, String]): String =
+  private def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String]): String =
     segments.map {
       case Heading(txt)   => "<h3>"+mkParagraph(txt, aliases)+"</h3>"
       case Hr()           => "<hr/>"
@@ -139,7 +138,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc) exten
       case Block(tpe, _)  => sys.error(s"unknown block type $tpe")
       case Images(images) => images.map(img => l.imgTag(img, this)).mkString(" ")
       case Paragraph(txt) => "<p>"+mkParagraph(txt, aliases)+"</p>"
-      case Blockquote(txt) => "<blockquote>"+txt.mkText(l, aliases)+"</blockquote>"
+      case Blockquote(sx) => "<blockquote>"+mkText(sx, l, aliases)+"</blockquote>"
       case Inline(txt) => mkParagraph(txt, aliases)
     }.mkString("")
 
@@ -154,7 +153,7 @@ final case class Linkref(linkMap: Map[String, String]) extends Segment
 final case class Images(images: Seq[Image]) extends Segment
 final case class Paragraph(txt: String) extends Segment
 final case class Block(tpe: String, txt: String) extends Segment
-final case class Blockquote(txt: AsciiText) extends Segment
+final case class Blockquote(segments: Seq[Segment]) extends Segment
 final case class Inline(txt: String) extends Segment
 
 
@@ -189,7 +188,7 @@ object AsciiMarkup extends Markup {
           }.orElse {
             matchAllLines(ls) {
               case l if l.startsWith("> ") || l == ">"  => l.drop(2)
-            }.map { ls => Blockquote(AsciiText(splitBlocks(ls.mkString("\n")), resolveLink)) }
+            }.map { ls => Blockquote(splitBlocks(ls.mkString("\n"))) }
           }.getOrElse {
             Paragraph(txt)
           }
