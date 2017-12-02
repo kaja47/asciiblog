@@ -95,8 +95,10 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   private def taggedImages(t: Tag) = imageTagMap.getOrElse(t, Seq()).map { case (i, a) => i.copy(inText = false, localSource = a) }
 
   lazy val extraTags: Seq[Article] = { // tags that have no particular article
-    val direct = all.collect { case a if a.isTag => a.asTag }.toSet
-    tagMap.collect { case (t, as) if !direct.contains(t) => Article(t.title, tagSlug(t.title), meta = Meta(Map((if (t.supertag) "supertag" else "tag") -> null)), text = AsciiText.empty) }.toSeq
+    val direct: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
+    tagMap.collect { case (t, as) if !direct.contains(t) =>
+      Article(t.title, tagSlug(t.title), meta = Meta(Map((if (t.supertag) "supertag" else "tag") -> null)), text = AsciiText.empty)
+    }.toSeq
   }
 
   private lazy val bySlug: Map[String, Article] = (all ++ extraTags).map(a => (a.slug, a)).toMap
