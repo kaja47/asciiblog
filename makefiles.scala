@@ -17,6 +17,7 @@ case class Article(
   tags: Tags = Tags(),
   meta: Meta = Meta(),
   link: String = null,
+  notes: String = null,
   license: String = null,
   rawText: String = "",
   text: Text = null,
@@ -424,6 +425,10 @@ object MakeFiles extends App {
     case l if l.startsWith("link:") => l.drop("link:".length).trim
   }
 
+  val parseNotes: PartialFunction[String, String] = {
+    case l if l.startsWith("notes:") => l.drop("notes:".length).trim
+  }
+
   def hash(txt: String): String = hash(txt.getBytes("utf-8"))
   def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
   def _md5(bytes: Array[Byte]) = MessageDigest.getInstance("MD5").digest(bytes)
@@ -443,6 +448,7 @@ object MakeFiles extends App {
     val license = metaLines.collect(parseLicense)
     val links   = metaLines.collect(parseLink)
     val metas   = metaLines.flatMap(parseMeta(_, "meta: "))
+    val notess  = metaLines.collect(parseNotes)
     val meta = metas.foldLeft(Meta())(_ merge _)
 
     val isTag = meta.values.contains("supertag") || meta.values.contains("tag") || (slug != null && isTagSlug(slug))
@@ -452,7 +458,7 @@ object MakeFiles extends App {
         if (isTag) tagSlug(title)
         else generateSlug(title)
 
-    if ((dates.size + tags.size + license.size + links.size + metas.size) < metaLines.size)
+    if ((dates.size + tags.size + license.size + links.size + notess.size + metas.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
 
     links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
@@ -464,6 +470,7 @@ object MakeFiles extends App {
       tags    = tags.fold(Tags()) { (a, b) => a.merge(b) },
       meta    = meta,
       link    = links.headOption.getOrElse(null),
+      notes   = notess.headOption.getOrElse(null),
       license = license.headOption.getOrElse(null),
       rawText = body.mkString("\n"),
       inFeed  = inFeed
@@ -697,7 +704,7 @@ object MakeFiles extends App {
 
     timer("parse text") {
     articles = articles.par.map { a =>
-      val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a))
+      val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a), if (a.notes == null) "" else absUrlFromSlug(a.notes))
 
       // TODO linkAliases return map, no dupes can be detected
       txt.linkAliases.groupBy(_._1).filter(_._2.size > 1).foreach { case (l, _) =>
