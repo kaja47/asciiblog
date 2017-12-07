@@ -63,6 +63,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
     case Heading(txt)   => extractLinks(txt)
     case Images(images) => images.iterator.flatMap(i => extractLinks(i.title))
     case Blockquote(sx) => _links(sx)
+    case Table(rows, _) => rows.iterator.flatten.flatMap(cell => extractLinks(cell.txt))
     case _ => Iterator()
   }
 
@@ -144,7 +145,15 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
       case Images(images) => images.map(img => l.imgTag(img, this)).mkString(" ")
       case Paragraph(txt) => "<p>"+mkParagraph(txt, aliases)+"</p>"
       case Blockquote(sx) => "<blockquote>"+mkText(sx, l, aliases)+"</blockquote>"
-      case Inline(txt) => mkParagraph(txt, aliases)
+      case Inline(txt)    => mkParagraph(txt, aliases)
+      case Table(rows, columns) =>
+        "<table>"+
+        rows.map(cols =>
+          "<tr>"+
+          cols.map(cell => "<td>"+mkParagraph(cell.txt, aliases)+"</td>").mkString+
+          "</tr>"
+        ).mkString+
+        "</table>"
     }.mkString("")
 
 
@@ -160,6 +169,9 @@ final case class Paragraph(txt: String) extends Segment
 final case class Block(tpe: String, txt: String) extends Segment
 final case class Blockquote(segments: Seq[Segment]) extends Segment
 final case class Inline(txt: String) extends Segment
+final case class Table(rows: Seq[Seq[Cell]], columns: Int) extends Segment
+
+case class Cell(txt: String, span: Int = 1)
 
 
 object AsciiMarkup extends Markup {
@@ -194,6 +206,10 @@ object AsciiMarkup extends Markup {
             matchAllLines(ls) {
               case l if l.startsWith("> ") || l == ">"  => l.drop(2)
             }.map { ls => Blockquote(splitBlocks(ls.mkString("\n"))) }
+          }.orElse {
+            matchAllLines(ls) {
+              case l if l.startsWith("|") => l
+            }.map { ls => mkTable(ls) }
           }.getOrElse {
             Paragraph(txt)
           }
@@ -248,6 +264,13 @@ object AsciiMarkup extends Markup {
         source = source,
         tags = tags
       )
+  }
+
+  private def mkTable(lines: Seq[String]): Table = {
+    val ls = lines.filterNot{ _.matches("""\|-+""" )}
+    val rows = ls.map { l => l.split("\\|").toSeq.tail.map { cell => Cell(cell, 1) } }
+    val columns = rows.map(_.map(_.span).sum).max
+    Table(rows, columns)
   }
 
 }
