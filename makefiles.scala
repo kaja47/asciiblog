@@ -205,6 +205,48 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
   }
 }
 
+class Blog (
+  val title: String,
+  val baseUrl: String,
+  val files: Seq[String],
+  val outDir: String,
+  val articlesOnIndex: Int,
+  val groupArchiveBy: String,
+  val archiveFormat: String,
+  val tagFormat: String,
+  val cssStyle: String,
+  val cssFile: String,
+  val header: String,
+  val footer: String,
+  val thumbWidth: Int,
+  val thumbHeight: Int,
+  val bigThumbWidth: Int,
+  val limitRss: Int,
+  val articlesInRss: Boolean,
+  val limitSimilar: Int,
+  val sortByDate: Boolean,
+  val imageRoot: String,
+  val articlesMustBeSorted: Boolean,
+  val articlesMustNotBeMixed: Boolean,
+  val language: String,
+  val dumpAll: Boolean,
+  val fileSuffix: String,
+  val imageMarker: String,
+  val albumsDir: String,
+  val allowComments: Boolean,
+
+  val openGraph: Boolean,
+  val twitterSite: String,
+  val twitterCreator: String,
+
+  val args: Array[String],
+  val translation: Map[String, String]
+) {
+  def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
+  def printTimes: Boolean  = false
+  def printErrors: Boolean = !(args.length > 1 && args(1) == "tags")
+}
+
 
 object MakeFiles extends App {
 
@@ -229,48 +271,46 @@ object MakeFiles extends App {
 
   val cfg = io.Source.fromFile(args(0)).getLines.collect(kv).toMap
 
-  object Blog {
-    val title: String          = cfg("title")
-    val baseUrl: String        = cfg("baseUrl")
-    val files: Seq[String]     = spaceSeparatedStrings(cfg.getOrElse("files", "").trim)
-    val outDir: String         = cfg.getOrElse("outDir", null)
-    val articlesOnIndex: Int   = cfg.getOrElse("fullArticlesOnIndex", "5").toInt
-    val groupArchiveBy: String = cfg.getOrElse("groupArchiveBy", "year") // "year", "month" or some number
-    val archiveFormat: String  = cfg.getOrElse("archiveFormat", "link").ensuring(f => f == "link" || f == "short")
-    val tagFormat: String      = cfg.getOrElse("tagFormat", "link").ensuring(f => f == "link" || f == "short")
-    val cssStyle: String       = cfg.getOrElse("style", "")
-    val cssFile: String        = cfg.getOrElse("cssFile", "")
-    val header: String         = cfg.getOrElse("header", "")
-    val footer: String         = cfg.getOrElse("footer", "")
-    val thumbWidth: Int        = cfg.getOrElse("thumbnailWidth", "150").toInt
-    val thumbHeight: Int       = cfg.getOrElse("thumbnailHeight", "100").toInt
-    val bigThumbWidth: Int     = cfg.getOrElse("bigThumbnailWidth", "800").toInt
-    val limitRss: Int          = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt
-    val articlesInRss: Boolean = cfg.getOrElse("fullArticlesInRss", "false").toBoolean
-    val limitSimilar: Int      = cfg.getOrElse("limitSimilarLinks", "5").toInt
-    val sortByDate: Boolean    = cfg.getOrElse("sortByDate", "false").toBoolean
-    val imageRoot: String      = cfg.getOrElse("imageRoot", "")
-    val articlesMustBeSorted: Boolean = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean
-    val articlesMustNotBeMixed: Boolean = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean
-    val language: String       = cfg.getOrElse("language", "en")
-    val dumpAll: Boolean       = cfg.getOrElse("dumpAll", "false").toBoolean // ignore hidden articles, dump everything into main feed
-    val fileSuffix: String     = cfg.getOrElse("fileSuffix", ".html")
-    val imageMarker: String    = cfg.getOrElse("imageMarker", "")
-    val albumsDir: String      = cfg.getOrElse("albumsDir", "")
-    val allowComments: Boolean = cfg.getOrElse("allowComments", "false").toBoolean
 
-    val openGraph: Boolean     = cfg.getOrElse("openGraph", "false").toBoolean
-    val twitterSite: String    = cfg.getOrElse("twitter.site", "")
-    val twitterCreator: String = cfg.getOrElse("twitter.creator", "")
-    def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
+  object Blog extends Blog(
+    title                  = cfg("title"),
+    baseUrl                = cfg("baseUrl"),
+    files                  = spaceSeparatedStrings(cfg.getOrElse("files", "").trim),
+    outDir                 = cfg.getOrElse("outDir", null),
+    articlesOnIndex        = cfg.getOrElse("fullArticlesOnIndex", "5").toInt,
+    groupArchiveBy         = cfg.getOrElse("groupArchiveBy", "year"), // "year", "month" or some number
+    archiveFormat          = cfg.getOrElse("archiveFormat", "link").ensuring(f => f == "link" || f == "short"),
+    tagFormat              = cfg.getOrElse("tagFormat", "link").ensuring(f => f == "link" || f == "short"),
+    cssStyle               = cfg.getOrElse("style", ""),
+    cssFile                = cfg.getOrElse("cssFile", ""),
+    header                 = cfg.getOrElse("header", ""),
+    footer                 = cfg.getOrElse("footer", ""),
+    thumbWidth             = cfg.getOrElse("thumbnailWidth", "150").toInt,
+    thumbHeight            = cfg.getOrElse("thumbnailHeight", "100").toInt,
+    bigThumbWidth          = cfg.getOrElse("bigThumbnailWidth", "800").toInt,
+    limitRss               = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt,
+    articlesInRss          = cfg.getOrElse("fullArticlesInRss", "false").toBoolean,
+    limitSimilar           = cfg.getOrElse("limitSimilarLinks", "5").toInt,
+    sortByDate             = cfg.getOrElse("sortByDate", "false").toBoolean,
+    imageRoot              = cfg.getOrElse("imageRoot", ""),
+    articlesMustBeSorted   = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean,
+    articlesMustNotBeMixed = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean,
+    language               = cfg.getOrElse("language", "en"),
+    dumpAll                = cfg.getOrElse("dumpAll", "false").toBoolean, // ignore hidden articles, dump everything into main feed
+    fileSuffix             = cfg.getOrElse("fileSuffix", ".html"),
+    imageMarker            = cfg.getOrElse("imageMarker", ""),
+    albumsDir              = cfg.getOrElse("albumsDir", ""),
+    allowComments          = cfg.getOrElse("allowComments", "false").toBoolean,
 
-    val printTimes: Boolean  = false
-    val printErrors: Boolean = !(args.length > 1 && args(1) == "tags")
+    openGraph              = cfg.getOrElse("openGraph", "false").toBoolean,
+    twitterSite            = cfg.getOrElse("twitter.site", ""),
+    twitterCreator         = cfg.getOrElse("twitter.creator", ""),
 
-    val translation: Map[String, String] =
-      io.Source.fromFile(thisDir+"/lang."+language).getLines.collect(kv).toMap
-  }
+    args = args,
+    translation = io.Source.fromFile(thisDir+"/lang."+language).getLines.collect(kv).toMap
+  )
 
+  val blog = Blog
   val markup = AsciiMarkup
 
   private def spaceSeparatedStrings(str: String): Seq[String] = str match {

@@ -1,6 +1,6 @@
 package asciiblog
 
-import MakeFiles. { Blog, relativize, year, month, isAbsolute, absUrl, absUrlFromSlug, absUrlFromPath, relUrlFromSlug, bigThumbnailUrl, thumbnailUrl, galleryScript }
+import MakeFiles. { relativize, year, month, isAbsolute, absUrl, absUrlFromSlug, absUrlFromPath, relUrlFromSlug, bigThumbnailUrl, thumbnailUrl, galleryScript }
 import AsciiText. { ahrefRegex, ahrefCheck, imgsrcRegex, imgsrcCheck }
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -32,7 +32,7 @@ object FlowLayout {
 }
 
 
-case class FlowLayout(baseUrl: String, base: Base, blog: Blog.type, markup: Markup) extends Layout {
+case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) extends Layout {
   import FlowLayout._
 
   def rel(url: String): String =
