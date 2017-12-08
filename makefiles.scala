@@ -223,8 +223,8 @@ object MakeFiles extends App {
     io.Source.fromFile(thisDir+"/gallery.js").mkString
       .replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "") // rather crude and incorrect minifier
 
-  val commentsScript =
-    io.Source.fromFile(thisDir+"/comments.php").mkString
+  val commentsScript = io.Source.fromFile(thisDir+"/comments.php").mkString
+  val outScript      = io.Source.fromFile(thisDir+"/out.php").mkString
 
   val cfg = io.Source.fromFile(args(0)).getLines.collect(kv).toMap
 
@@ -912,6 +912,8 @@ object MakeFiles extends App {
     new File(".comments").mkdirs()
     fileIndex ++= saveFile(".comments/.htaccess", "Deny from all", oldFileIndex)
   }
+
+  fileIndex ++= saveFile("out.php", outScript, oldFileIndex)
 
   if (Blog.cssFile.nonEmpty) {
     fileIndex ++= saveFile("style.css", io.Source.fromFile(Blog.cssFile).mkString, oldFileIndex)
