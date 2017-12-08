@@ -42,8 +42,8 @@ class CommentSection {
 	}
 
 	function addComment($path, $comment) {
-		$this->append($this->openFile($path), $comment);
 		$this->append($this->openFile($this->globalPath, false), $comment);
+		$this->append($this->openFile($path), $comment);
 	}
 
 	function getComments($path, $flat = false) {
