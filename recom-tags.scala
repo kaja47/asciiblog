@@ -1,7 +1,6 @@
 package asciiblog
 
 import scala.collection.{ mutable, immutable }
-import MakeFiles.timer
 
 object RecommendTags {
 

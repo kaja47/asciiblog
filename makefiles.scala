@@ -9,6 +9,7 @@ import java.util.{ Date, GregorianCalendar, Calendar, Locale, zip }
 import javax.imageio.{ ImageIO, IIOException }
 import scala.collection.{ mutable, immutable }
 import scala.util.matching.Regex
+import util._
 
 case class Article(
   title: String,
@@ -597,28 +598,6 @@ object MakeFiles extends App {
   }
 
 
-  implicit class RichRegex(val r: Regex) extends AnyVal {
-    def matches(s: String) = r.findFirstIn(s).nonEmpty
-  }
-
-  def timer[T](label: String)(f: => T) = {
-    val s = System.nanoTime
-    val r = f
-    val d = System.nanoTime - s
-    if (Blog.printTimes) { println(label+" "+(d/1e6)+"ms") }
-    r
-  }
-
-  class Timer {
-    private val t = new java.util.concurrent.atomic.LongAdder()
-    def apply[T](f: => T) = {
-      val s = System.nanoTime
-      val r = f
-      t.add(System.nanoTime - s)
-      r
-    }
-    override def toString = "Timer "+(t.sum/1e6)+"ms"
-  }
 
 
   val base: Base = {
