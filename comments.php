@@ -16,6 +16,31 @@ class CommentSection {
 	private $pathRegex  = '~.*\.html~';
 	private $globalPath = 'global.rss.html';
 
+	function isSpam($comment) {
+		$ipBlacklistFile   = $this->baseDir."/ip-blacklist";
+		$termBlacklistFile = $this->baseDir."/term-blacklist";
+
+		if (file_exists($ipBlacklistFile)) {
+			$ips = array_map('trim', file($ipBlacklistFile));
+			foreach ($ips as $ip) {
+				if (substr($comment->ip, 0, strlen($ip)) === $ip) {
+					return true;
+				}
+			}
+		}
+
+		if (file_exists($termBlacklistFile)) {
+			$terms = array_map('trim', file($termBlacklistFile));
+			foreach ($terms as $term) {
+				if (strpos($comment->text, $term) !== false) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	function addComment($path, $comment) {
 		$this->append($this->openFile($path), $comment);
 		$this->append($this->openFile($this->globalPath, false), $comment);
@@ -130,6 +155,9 @@ if (isset($_POST['text'])) {
 		$comment->replyTo = $replyTo;
 	}
 
+	if ($commentSection->isSpam($comment)) {
+		exit;
+	}
 	$commentSection->addComment($url, $comment);
 	setcookie('user', json_encode(array($comment->name, $comment->mail, $comment->web)), time()+3600*24*30);
 	header('Location: '.$requestUrl);
