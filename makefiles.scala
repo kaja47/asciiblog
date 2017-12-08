@@ -486,18 +486,19 @@ object MakeFiles extends App {
     )
   }
 
-  def generateSlug(title: String) = {
-    val from = "áčďéěíňóřšťúůýž"
-    val to   = "acdeeinorstuuyz"
-    val txl = (from zip to).toMap withDefault (x => x)
+  private val _multipleDashes = "--+".r
+  private val _trailingDashes = "-+$|^-+".r
+  private val slugFrom = "áčďéěíňóřšťúůýž"
+  private val slugTo   = "acdeeinorstuuyz"
+  private val slugTxl: Map[Char, Char] = (slugFrom zip slugTo).toMap withDefault (x => x)
 
-    title
-      .toLowerCase
-      .map(txl)
-      .map{ ch => if (Character.isAlphabetic(ch) || Character.isDigit(ch)) ch else "-" }
-      .mkString
-      .replaceAll("--+", "-")
-      .replaceAll("-+$|^-+", "")
+  def generateSlug(title: String): String = {
+    var t = title.toLowerCase
+      .map(slugTxl)
+      .map(ch => if (Character.isAlphabetic(ch) || Character.isDigit(ch)) ch else '-')
+
+    t = _multipleDashes.replaceAllIn(t, "-")
+    _trailingDashes.replaceAllIn(t, "")
   }
 
   def tagSlug(tag: String) = "tag/"+generateSlug(tag)
