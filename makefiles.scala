@@ -546,11 +546,11 @@ object MakeFiles extends App {
 
     val h = hash(content)
 
-    if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
+    //if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
       val fw = new FileWriter(ff)
       fw.write(content)
       fw.close()
-    }
+    //}
 
     Seq(f -> h)
   }
@@ -693,7 +693,7 @@ object MakeFiles extends App {
     }
 
     timer("parse text") {
-    articles = articles.par.map { a =>
+    articles = articles.map { a =>
       val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a), if (a.notes == null) "" else absUrlFromSlug(a.notes))
 
       // TODO linkAliases return map, no dupes can be detected
@@ -711,7 +711,7 @@ object MakeFiles extends App {
         // images might be already populated from readGallery()
         images = (a.images ++ txt.images)
       )
-    }.seq
+    }
     }
 
 
@@ -878,11 +878,11 @@ object MakeFiles extends App {
     fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)), oldFileIndex)
   }
 
-    def mkBody(a: Article) = {
-      val body = FlowLayout(null, base, Blog, markup).makeArticleBody(a, true)
-      FlowLayout.updateLinks(body, url => addParamMediumFeed(url))
-    }
-    fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null), oldFileIndex)
+  def mkBody(a: Article) = {
+    val body = FlowLayout(null, base, Blog, markup).makeArticleBody(a, true)
+    FlowLayout.updateLinks(body, url => addParamMediumFeed(url))
+  }
+  fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null), oldFileIndex)
 
   if (Blog.allowComments) {
     val l = FlowLayout(absUrlFromPath("comments.php"), base, Blog, markup)
