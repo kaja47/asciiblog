@@ -344,6 +344,14 @@ object MakeFiles extends App {
   def isLocalLink(url: String) = url.startsWith(Blog.baseUrl+"/")
   def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
   def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(Blog.fileSuffix.length)) else sys.error("not local url")
+
+  def addParam(url: String, param: String) =
+    if (url.contains("?")) url+"&"+param
+    else                   url+"?"+param
+
+  def addParamMediumFeed(url: String) =
+    if (isAbsolute(url) && isLocalLink(url)) addParam(url, "utm_medium=feed") else url
+
   def thumbnailUrl(img: Image) = s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"+imgSuffix(img)
   def bigThumbnailUrl(img: Image, half: Boolean) = s"t/${img.thumb}-${Blog.bigThumbWidth / (if (half) 2 else 1)}"+imgSuffix(img)
 
@@ -512,17 +520,19 @@ object MakeFiles extends App {
   def rssdate(date: Date) = if (date == null) "" else
     new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US).format(date)
 
-  def makeRSS(articles: Seq[Article], mkBody: Article => String): String =
-    "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" + (
-  <rss version="2.0">
-  <channel>
-  <title>{Blog.title}</title>{
-  if (mkBody == null)
-    articles.map(a => <item><title>{a.title}</title><guid isPermaLink="true">{absUrlFromSlug(a.slug)}</guid><pubDate>{rssdate(a.date)}</pubDate></item>)
-  else
-    articles.map(a => <item><title>{a.title}</title><guid isPermaLink="true">{absUrlFromSlug(a.slug)}</guid><pubDate>{rssdate(a.date)}</pubDate><description>{mkBody(a)}</description></item>)
-  }</channel>
-  </rss>).toString
+    def makeRSS(articles: Seq[Article], mkBody: Article => String): String =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" + (
+    <rss version="2.0">
+    <channel>
+    <title>{Blog.title}</title>{
+      articles.map(a => <item>
+        <title>{a.title}</title>
+        <guid isPermaLink="true">{addParamMediumFeed(absUrlFromSlug(a.slug))}</guid>
+        <pubDate>{rssdate(a.date)}</pubDate>
+        {if (mkBody != null) <description>{mkBody(a)}</description> else xml.NodeSeq.Empty }
+      </item>)
+    }</channel>
+    </rss>).toString
 
 
 
@@ -888,8 +898,11 @@ object MakeFiles extends App {
     fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)), oldFileIndex)
   }
 
-  def mkBody(a: Article) = FlowLayout(null, base, Blog, markup).makeArticleBody(a, true)
-  fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null), oldFileIndex)
+    def mkBody(a: Article) = {
+      val body = FlowLayout(null, base, Blog, markup).makeArticleBody(a, true)
+      FlowLayout.updateLinks(body, url => addParamMediumFeed(url))
+    }
+    fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null), oldFileIndex)
 
   if (Blog.allowComments) {
     val l = FlowLayout(absUrlFromPath("comments.php"), base, Blog, markup)

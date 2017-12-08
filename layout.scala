@@ -27,6 +27,8 @@ object FlowLayout {
   }
   def truncate(txt: String, len: Int, append: String = "\u2026"): String =
     if (txt.length <= len) txt else txt.take(len).replaceAll("""\s+(\w+)?$|\<\w+$""", "")+append
+  def updateLinks(content: String, f: String => String) =
+    ahrefRegex.replaceAllIn(content, m => Regex.quoteReplacement(f(m.group(1))))
 }
 
 
