@@ -591,7 +591,7 @@ object MakeFiles extends App {
     val lineRegex = """^===+$""".r
     Blog.files.flatMap(listFiles).flatMap { f =>
       var ls = io.Source.fromFile(f).getLines.toVector
-      val starts = (0 until ls.length).collect { case i if lineRegex.matches(ls(i)) => i-1 }
+      val starts = (0 until ls.length).collect { case i if matches(lineRegex, ls(i)) => i-1 }
       (0 until starts.length).map { i =>
         parseArticle(ls.slice(starts(i), starts.lift(i+1).getOrElse(ls.length)))
       }
