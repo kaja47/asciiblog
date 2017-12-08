@@ -4,7 +4,7 @@ import scala.collection.{ mutable, immutable }
 
 object RecommendTags {
 
-  def apply(base: Base, slug: String) = timer ("tags") {
+  def apply(blog: Blog, base: Base, slug: String) = timer ("tags") {
 
     val allTags: Set[Tag] = base.tagMap.keySet
     val article = base.find(slug).get
@@ -47,7 +47,7 @@ object RecommendTags {
       xs.groupBy(identity).mapValues(_.size)
         .toSeq.sortBy(~_._2).map(_._1)
 
-    val tagsInLinkedArticles = freq(article.slugsOfLinkedArticles.flatMap(s => base.find(s.id)).flatMap(_.tags.visible))
+    val tagsInLinkedArticles = freq(article.slugsOfLinkedArticles(blog).flatMap(s => base.find(s.id)).flatMap(_.tags.visible))
     val tagsInRelArticles = freq(article.rel.flatMap(base.find)).flatMap(_.tags.visible)
 
     println(article.title)

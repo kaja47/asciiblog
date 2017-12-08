@@ -1,6 +1,6 @@
 package asciiblog
 
-import MakeFiles.{ Blog, hash, tagSlug, invert, undefId, isAbsolute, isLocalLink, extractSlug }
+import MakeFiles.{ hash, tagSlug, invert, undefId, UrlOps, isAbsolute }
 import java.io.{ File, FileWriter, FileOutputStream }
 import java.net.{ URL, URI, HttpURLConnection, UnknownHostException }
 import java.security.MessageDigest
@@ -10,6 +10,48 @@ import javax.imageio.{ ImageIO, IIOException }
 import scala.collection.{ mutable, immutable }
 import scala.util.matching.Regex
 import util._
+
+class Blog (
+  val title: String,
+  val baseUrl: String,
+  val files: Seq[String],
+  val outDir: String,
+  val articlesOnIndex: Int,
+  val groupArchiveBy: String,
+  val archiveFormat: String,
+  val tagFormat: String,
+  val cssStyle: String,
+  val cssFile: String,
+  val header: String,
+  val footer: String,
+  val thumbWidth: Int,
+  val thumbHeight: Int,
+  val bigThumbWidth: Int,
+  val limitRss: Int,
+  val articlesInRss: Boolean,
+  val limitSimilar: Int,
+  val sortByDate: Boolean,
+  val imageRoot: String,
+  val articlesMustBeSorted: Boolean,
+  val articlesMustNotBeMixed: Boolean,
+  val language: String,
+  val dumpAll: Boolean,
+  val fileSuffix: String,
+  val imageMarker: String,
+  val albumsDir: String,
+  val allowComments: Boolean,
+
+  val openGraph: Boolean,
+  val twitterSite: String,
+  val twitterCreator: String,
+
+  val args: Array[String],
+  val translation: Map[String, String]
+) {
+  def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
+  def printTimes: Boolean  = false
+  def printErrors: Boolean = !(args.length > 1 && args(1) == "tags")
+}
 
 case class Article(
   title: String,
@@ -44,7 +86,7 @@ case class Article(
     text.links.foreach(l => require(isAbsolute(l), s"Text.links must return absolute urls, '$l' provided (in article $slug)"))
     text.links
   }
-  def slugsOfLinkedArticles: Seq[Slug] = links.filter(isLocalLink).map(extractSlug)
+  def slugsOfLinkedArticles(implicit blog: Blog): Seq[Slug] = links.filter(blog.isLocalLink).map(blog.extractSlug)
 
   // image marker is shown only for images that are not from external sources
   def hasImageMarker = images.exists(i => i.source == null || i.source == "")
@@ -205,47 +247,6 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
   }
 }
 
-class Blog (
-  val title: String,
-  val baseUrl: String,
-  val files: Seq[String],
-  val outDir: String,
-  val articlesOnIndex: Int,
-  val groupArchiveBy: String,
-  val archiveFormat: String,
-  val tagFormat: String,
-  val cssStyle: String,
-  val cssFile: String,
-  val header: String,
-  val footer: String,
-  val thumbWidth: Int,
-  val thumbHeight: Int,
-  val bigThumbWidth: Int,
-  val limitRss: Int,
-  val articlesInRss: Boolean,
-  val limitSimilar: Int,
-  val sortByDate: Boolean,
-  val imageRoot: String,
-  val articlesMustBeSorted: Boolean,
-  val articlesMustNotBeMixed: Boolean,
-  val language: String,
-  val dumpAll: Boolean,
-  val fileSuffix: String,
-  val imageMarker: String,
-  val albumsDir: String,
-  val allowComments: Boolean,
-
-  val openGraph: Boolean,
-  val twitterSite: String,
-  val twitterCreator: String,
-
-  val args: Array[String],
-  val translation: Map[String, String]
-) {
-  def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
-  def printTimes: Boolean  = false
-  def printErrors: Boolean = !(args.length > 1 && args(1) == "tags")
-}
 
 
 object MakeFiles extends App {
@@ -272,7 +273,7 @@ object MakeFiles extends App {
   val cfg = io.Source.fromFile(args(0)).getLines.collect(kv).toMap
 
 
-  object Blog extends Blog(
+  implicit val blog = new Blog(
     title                  = cfg("title"),
     baseUrl                = cfg("baseUrl"),
     files                  = spaceSeparatedStrings(cfg.getOrElse("files", "").trim),
@@ -310,7 +311,6 @@ object MakeFiles extends App {
     translation = io.Source.fromFile(thisDir+"/lang."+language).getLines.collect(kv).toMap
   )
 
-  val blog = Blog
   val markup = AsciiMarkup
 
   private def spaceSeparatedStrings(str: String): Seq[String] = str match {
@@ -356,51 +356,56 @@ object MakeFiles extends App {
       .map { case (b, bas) => (b, bas.map(_._2).toVector) }
 
 
-  def absUrlFromPath(path: String) = Blog.baseUrl + "/" + path
-  def absUrlFromSlug(slug: String) = Blog.baseUrl + "/" + slug + Blog.fileSuffix
-  def relUrlFromSlug(slug: String) = slug + Blog.fileSuffix
-  def absUrl(a: Article) = absUrlFromSlug(a.slug)
-  def relUrl(a: Article) = relUrlFromSlug(a.slug)
-  def fixPath(path: String) = path.replaceAll(" ", "%20") // TODO hackity hack
   def isAbsolute(url: String) = new URI(fixPath(url)).isAbsolute
-  def relativize(url: String, baseUrl: String) = {
-    val u = new URI(url)
-    val b = new URI(baseUrl)
-    require(b.isAbsolute)
-
-    if (u.getHost != null && u.getHost != b.getHost) {
-      url
-    } else if (u.getPath == null) { // mailto: links
-      url
-    } else {
-      val us = u.getPath.split("/").filter(_.nonEmpty)
-      val bs = b.getPath.split("/").filter(_.nonEmpty)
-      val prefixLen = (us zip bs).takeWhile { case (u, b) => u == b }.length
-      val backLevels = bs.length - prefixLen - 1
-      (Seq.fill(backLevels)("..") ++ us.drop(prefixLen)).mkString("/") +
-        (if (u.getRawQuery != null) "?"+u.getRawQuery else "")+
-        (if (u.getRawFragment != null) "#"+u.getRawFragment else "")
-    }
-  }
-  def isLocalLink(url: String) = url.startsWith(Blog.baseUrl+"/")
-  def dropLocalPrefix(url: String) = url.drop(Blog.baseUrl.length+1)
-  def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(Blog.fileSuffix.length)) else sys.error("not local url")
-
+  def fixPath(path: String) = path.replaceAll(" ", "%20") // TODO hackity hack
   def addParam(url: String, param: String) =
     if (url.contains("?")) url+"&"+param
     else                   url+"?"+param
-
-  def addParamMediumFeed(url: String) =
-    if (isAbsolute(url) && isLocalLink(url)) addParam(url, "utm_medium=feed") else url
-
-  def thumbnailUrl(img: Image) = s"t/${img.thumb}-${Blog.thumbWidth}x${Blog.thumbHeight}"+imgSuffix(img)
-  def bigThumbnailUrl(img: Image, half: Boolean) = s"t/${img.thumb}-${Blog.bigThumbWidth / (if (half) 2 else 1)}"+imgSuffix(img)
-
   def imgSuffix(img: Image) = {
     val imageSuffixes = Set("jpg", "jpeg", "png")
     val suffix = img.url.split("\\.").last.toLowerCase
     if (imageSuffixes.contains(suffix)) "."+suffix else ""
   }
+
+  implicit class UrlOps(blog: Blog) {
+    def absUrlFromPath(path: String) = blog.baseUrl + "/" + path
+    def absUrlFromSlug(slug: String) = blog.baseUrl + "/" + slug + blog.fileSuffix
+    def relUrlFromSlug(slug: String) = slug + blog.fileSuffix
+    def absUrl(a: Article) = absUrlFromSlug(a.slug)
+    def relUrl(a: Article) = relUrlFromSlug(a.slug)
+    def relativize(url: String, baseUrl: String) = {
+      val u = new URI(url)
+      val b = new URI(baseUrl)
+      require(b.isAbsolute)
+
+      if (u.getHost != null && u.getHost != b.getHost) {
+        url
+      } else if (u.getPath == null) { // mailto: links
+        url
+      } else {
+        val us = u.getPath.split("/").filter(_.nonEmpty)
+        val bs = b.getPath.split("/").filter(_.nonEmpty)
+        val prefixLen = (us zip bs).takeWhile { case (u, b) => u == b }.length
+        val backLevels = bs.length - prefixLen - 1
+        (Seq.fill(backLevels)("..") ++ us.drop(prefixLen)).mkString("/") +
+          (if (u.getRawQuery != null) "?"+u.getRawQuery else "")+
+          (if (u.getRawFragment != null) "#"+u.getRawFragment else "")
+      }
+    }
+
+    def isLocalLink(url: String) = url.startsWith(blog.baseUrl+"/")
+    def dropLocalPrefix(url: String) = url.drop(blog.baseUrl.length+1)
+    def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(blog.fileSuffix.length)) else sys.error("not local url")
+
+    def addParamMediumFeed(url: String) =
+      if (isAbsolute(url) && isLocalLink(url)) addParam(url, "utm_medium=feed") else url
+
+    def thumbnailUrl(img: Image) = s"t/${img.thumb}-${blog.thumbWidth}x${blog.thumbHeight}"+imgSuffix(img)
+    def bigThumbnailUrl(img: Image, half: Boolean) = s"t/${img.thumb}-${blog.bigThumbWidth / (if (half) 2 else 1)}"+imgSuffix(img)
+
+  }
+
+
 
   def undefId(id: String, a: Article) = {
     println(s"id [$id] is not defined in article '${a.title}'")
@@ -484,7 +489,7 @@ object MakeFiles extends App {
 
   private val trailingWS = "\\s*$".r
 
-  def parseArticle(lines: Seq[String]): Article = {
+  def parseArticle(lines: Seq[String])(implicit blog: Blog): Article = {
     val ls = lines.map(l => if (l.length > 0 && l(l.length-1).isWhitespace) trailingWS.replaceAllIn(l, "") else l)
 
     val titleRegex(xxx, title, slug) = ls(0)
@@ -501,7 +506,7 @@ object MakeFiles extends App {
     val meta = metas.foldLeft(Meta())(_ merge _)
 
     val isTag = meta.values.contains("supertag") || meta.values.contains("tag") || (slug != null && isTagSlug(slug))
-    val inFeed = Blog.dumpAll || (xxx == null && !isTag)
+    val inFeed = blog.dumpAll || (xxx == null && !isTag)
     val realSlug =
       if (slug != null && slug != "") slug else
         if (isTag) tagSlug(title)
@@ -562,24 +567,24 @@ object MakeFiles extends App {
   def rssdate(date: Date) = if (date == null) "" else
     new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US).format(date)
 
-    def makeRSS(articles: Seq[Article], mkBody: Article => String): String =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" + (
-    <rss version="2.0">
-    <channel>
-    <title>{Blog.title}</title>{
-      articles.map(a => <item>
-        <title>{a.title}</title>
-        <guid isPermaLink="true">{addParamMediumFeed(absUrlFromSlug(a.slug))}</guid>
-        <pubDate>{rssdate(a.date)}</pubDate>
-        {if (mkBody != null) <description>{mkBody(a)}</description> else xml.NodeSeq.Empty }
-      </item>)
-    }</channel>
-    </rss>).toString
+  def makeRSS(articles: Seq[Article], mkBody: Article => String)(implicit blog: Blog): String =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" + (
+  <rss version="2.0">
+  <channel>
+  <title>{blog.title}</title>{
+    articles.map(a => <item>
+      <title>{a.title}</title>
+      <guid isPermaLink="true">{blog.addParamMediumFeed(blog.absUrlFromSlug(a.slug))}</guid>
+      <pubDate>{rssdate(a.date)}</pubDate>
+      {if (mkBody != null) <description>{mkBody(a)}</description> else xml.NodeSeq.Empty }
+    </item>)
+  }</channel>
+  </rss>).toString
 
 
 
   def saveFile(f: String, content: String, fileIndex: Map[String, String] = Map()): Seq[(String, String)] = { // filename -> hash
-    val ff = new File(Blog.outDir, f)
+    val ff = new File(blog.outDir, f)
 
     val p = ff.getParentFile
     if (p != null) p.mkdirs()
@@ -601,9 +606,9 @@ object MakeFiles extends App {
 
 
   def readGallery(): Vector[Article] = {
-    if (Blog.albumsDir.isEmpty) return Vector()
+    if (blog.albumsDir.isEmpty) return Vector()
 
-    val albumDirs = new File(Blog.albumsDir, "albums").listFiles.sortBy(_.getName).reverse.toSeq
+    val albumDirs = new File(blog.albumsDir, "albums").listFiles.sortBy(_.getName).reverse.toSeq
     val dateTitle = """^(?:(\d+)-(\d+)-(\d+)\s*-?\s*)?(.*)$""".r
 
     for (albumDir <- albumDirs.toVector) yield {
@@ -615,7 +620,7 @@ object MakeFiles extends App {
         else (new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime, t)
 
       val imgUrls = albumDir.list collect { case f if f.toLowerCase.endsWith(".jpg") =>
-        fixPath(Blog.baseUrl+"/albums/"+albumDir.getName+"/"+f)
+        fixPath(blog.baseUrl+"/albums/"+albumDir.getName+"/"+f)
       }
 
       new Article(
@@ -629,7 +634,7 @@ object MakeFiles extends App {
 
   def readPosts(): Vector[Article] = {
     val lineRegex = """^===+$""".r
-    Blog.files.flatMap(listFiles).flatMap { f =>
+    blog.files.flatMap(listFiles).flatMap { f =>
       var ls = io.Source.fromFile(f).getLines.toVector
       val starts = (0 until ls.length).collect { case i if matches(lineRegex, ls(i)) => i-1 }
       (0 until starts.length).map { i =>
@@ -645,13 +650,13 @@ object MakeFiles extends App {
     var articles: Vector[Article] = timer("readfiles")(readGallery() ++ readPosts())
 
     timer("checks") {
-    if (Blog.articlesMustNotBeMixed) {
+    if (blog.articlesMustNotBeMixed) {
       val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
       val (visible, rest) = rest1.span { a => !a.title.startsWith("?") }
       if (rest.nonEmpty) sys.error("hidden and visible articles are mixed up")
     }
 
-    val hiddenSlugs: Set[Slug] = if (Blog.dumpAll) Set() else {
+    val hiddenSlugs: Set[Slug] = if (blog.dumpAll) Set() else {
       articles.filter(_.title.startsWith("?")).map(_.asSlug).toSet // this is done ahead of time beucase of article merging
     }
 
@@ -707,7 +712,7 @@ object MakeFiles extends App {
 
     // ordered by date
     timer("order by date") {
-    if (Blog.articlesMustBeSorted) {
+    if (blog.articlesMustBeSorted) {
       val dated = articles.filter(_.date != null)
       val ordered = dated == dated.sortBy(~_.date.getTime)
       if (!ordered) sys.error("articles are not ordered by date")
@@ -720,21 +725,21 @@ object MakeFiles extends App {
     // maps all article slugs (main ones and aliases) to their absolute urls
     val globalNames: Map[String, String] = timer("global names") {
       (Base(articles, tagMap).extraTags ++ articles)
-        .flatMap { a => (a.slug +: a.aliases).map(s => (s, absUrl(a))) }.toMap
+        .flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
     }
 
     // globalMapping maps from slugs to absolute urls
     def resolveLink(link: String, localAliases: Map[String, String], globalMapping: Map[String, String], a: Article) = {
       val Array(base, hash) = link.split("#", 2).padTo(2, "")
       val Array(b, h) = localAliases.getOrElse(base, base).split("#", 2).padTo(2, "")
-      if (Blog.printErrors && b.nonEmpty && !isAbsolute(b) && !b.startsWith("#") && !b.startsWith("..") && !b.matches(".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$") && !globalMapping.contains(b))
+      if (blog.printErrors && b.nonEmpty && !isAbsolute(b) && !b.startsWith("#") && !b.startsWith("..") && !b.matches(".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$") && !globalMapping.contains(b))
         println(s"bad link [$link -> $b] (in ${a.slug})")
       globalMapping.getOrElse(b, b)+(if (hash.nonEmpty) "#"+hash else "")+(if (h.nonEmpty) "#"+h else "")
     }
 
     timer("parse text") {
     articles = articles.map { a =>
-      val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a), if (a.notes == null) "" else absUrlFromSlug(a.notes))
+      val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a), if (a.notes == null) "" else blog.absUrlFromSlug(a.notes), blog.imageRoot)
 
       // TODO linkAliases return map, no dupes can be detected
       txt.linkAliases.groupBy(_._1).filter(_._2.size > 1).foreach { case (l, _) =>
@@ -781,7 +786,7 @@ object MakeFiles extends App {
       a.copy(
         dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
         backlinks = bs,
-        similar = sim.similarByTags(a, count = Blog.limitSimilar, without = bs),
+        similar = sim.similarByTags(a, count = blog.limitSimilar, without = bs),
         pub = refs(a, "pub"),
         pubBy = pubBy
       )
@@ -789,7 +794,7 @@ object MakeFiles extends App {
 
     tagMap = invert(articles.map { a => (a, (a.tags.visible).distinct) }) // ??? recompute tag map
 
-    if (Blog.sortByDate) { // newest first, articles without date last
+    if (blog.sortByDate) { // newest first, articles without date last
       val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
       articles = articles.sortBy(byDate)
       tagMap = tagMap.map { case (t, as) => (t, as.sortBy(byDate)) }
@@ -822,7 +827,7 @@ object MakeFiles extends App {
   if (args.length >= 2 && args(1) == "tags") {
     val titleLine = io.Source.stdin.getLines.take(1).toSeq.head
     val titleRegex(_, _, slug) = titleLine
-    RecommendTags(base, slug)
+    RecommendTags(blog, base, slug)
     sys.exit()
   }
 
@@ -848,24 +853,24 @@ object MakeFiles extends App {
 
 
   val oldFileIndex: Map[String, String] = {
-    val f = new File(Blog.outDir, ".files")
+    val f = new File(blog.outDir, ".files")
     if (!f.exists) Map()
     else io.Source.fromFile(f).getLines.map(l => kv(l).swap).toMap
   }
 
 
   val fileIndex = collection.concurrent.TrieMap[String, String]()
-  val isIndexGallery = base.feed.take(Blog.articlesOnIndex).exists(_.images.nonEmpty)
+  val isIndexGallery = base.feed.take(blog.articlesOnIndex).exists(_.images.nonEmpty)
 
-  val (fulls, rest) = base.feed.splitAt(Blog.articlesOnIndex)
+  val (fulls, rest) = base.feed.splitAt(blog.articlesOnIndex)
 
   def chunk[T: Ordering](as: Vector[Article])(g: Date => T)(zero: T)(f: T => Article): Vector[(Article, Vector[Article])] =
     as.groupBy { a => if (a.date == null) zero else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
 
   val (links, archivePages) = timer("group archive") {
     def mkDate(y: Int, m: Int) = Seq(new GregorianCalendar(y, m-1, 1).getTime)
-    val title = Blog.translation("archive")
-    (Blog.groupArchiveBy match {
+    val title = blog.translation("archive")
+    (blog.groupArchiveBy match {
       case "month" => chunk(rest)(yearmonth)((0,0)) { case (y, m) => Article(title+s" $m/$y", s"index-$y-$m", dates = mkDate(y, m)) }
       case "year"  => chunk(rest)(year)     (0)     { case y      => Article(title+s" $y", s"index-$y", dates = mkDate(y, 1)) }
       case num if num.trim.matches("\\d+") =>
@@ -883,57 +888,57 @@ object MakeFiles extends App {
 
   timer("generate and save files") {
   val archiveLinks = archivePages.par.map { case (a, as) =>
-    val l = FlowLayout(absUrl(a), base, Blog, markup)
+    val l = FlowLayout(blog.absUrl(a), base, blog, markup)
     val prev = archivePages((archivePages.indexWhere(_._1.slug == a.slug)-1) max 0 min (archivePages.length-1))._1
     val next = archivePages((archivePages.indexWhere(_._1.slug == a.slug)+1) max 0 min (archivePages.length-1))._1
     val body = l.makeIndex(Seq(), as, prev = prev, next = next)
-    fileIndex ++= saveFile(relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */), oldFileIndex)
+    fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */), oldFileIndex)
     a
   }.seq
 
-  val path = relUrlFromSlug("index")
-  val l = FlowLayout(absUrlFromPath(path), base, Blog, markup)
-  val body = l.makeIndex(fulls, links, archiveLinks, Blog.groupArchiveBy == "month")
+  val path = blog.relUrlFromSlug("index")
+  val l = FlowLayout(blog.absUrlFromPath(path), base, blog, markup)
+  val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month")
   fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
 
   timer("generate and save files - articles") {
   base.articles.par foreach { a =>
-    var l = FlowLayout(absUrl(a), base, Blog, markup)
+    var l = FlowLayout(blog.absUrl(a), base, blog, markup)
     val body = l.makeFullArticle(a)
-    fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
+    fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
   }
   }
 
   base.allTags.keys.par foreach { a =>
-    var l = FlowLayout(absUrl(a), base, Blog, markup)
+    var l = FlowLayout(blog.absUrl(a), base, blog, markup)
     val body = l.makeFullArticle(a)
     val hasImages = a.images.nonEmpty || base.allTags(a).exists(_.images.nonEmpty)
-    fileIndex ++= saveFile(relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")), oldFileIndex)
-    fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(Blog.limitRss), null), oldFileIndex)
+    fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")), oldFileIndex)
+    fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(blog.limitRss), null), oldFileIndex)
   }
 
   {
-    val path = relUrlFromSlug("tags")
-    val l = FlowLayout(absUrlFromPath(path), base, Blog, markup)
+    val path = blog.relUrlFromSlug("tags")
+    val l = FlowLayout(blog.absUrlFromPath(path), base, blog, markup)
     fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)), oldFileIndex)
   }
 
   def mkBody(a: Article) = {
-    val body = FlowLayout(null, base, Blog, markup).makeArticleBody(a, true)
-    FlowLayout.updateLinks(body, url => addParamMediumFeed(url))
+    val body = FlowLayout(null, base, blog, markup).makeArticleBody(a, true)
+    FlowLayout.updateLinks(body, url => blog.addParamMediumFeed(url))
   }
-  fileIndex ++= saveXml("rss", makeRSS(base.feed.take(Blog.limitRss), if (Blog.articlesInRss) mkBody else null), oldFileIndex)
+  fileIndex ++= saveXml("rss", makeRSS(base.feed.take(blog.limitRss), if (blog.articlesInRss) mkBody else null), oldFileIndex)
 
-  if (Blog.allowComments) {
-    val l = FlowLayout(absUrlFromPath("comments.php"), base, Blog, markup)
+  if (blog.allowComments) {
+    val l = FlowLayout(blog.absUrlFromPath("comments.php"), base, blog, markup)
     val p = l.makePage("{comments.body}", null, false,  null, includeCompleteStyle = true)
     val Array(pre, post) = p.split(Regex.quote("{comments.body}"))
 
     fileIndex ++= saveFile("comments.php", {
-      val replaces = Blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v } ++ Seq(
+      val replaces = blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v } ++ Seq(
         "{comments.prebody}"  -> pre,
         "{comments.postbody}" -> post,
-        "{comments.baseUrl}"  -> Blog.baseUrl,
+        "{comments.baseUrl}"  -> blog.baseUrl,
         """href="rss.xml""""  -> """href="'.escapeHtmlAttr($requestUrl).'&amp;rss"""" // this is a bit ugly trick
       )
       var cs = commentsScript
@@ -948,8 +953,8 @@ object MakeFiles extends App {
 
   fileIndex ++= saveFile("out.php", outScript, oldFileIndex)
 
-  if (Blog.cssFile.nonEmpty) {
-    fileIndex ++= saveFile("style.css", io.Source.fromFile(Blog.cssFile).mkString, oldFileIndex)
+  if (blog.cssFile.nonEmpty) {
+    fileIndex ++= saveFile("style.css", io.Source.fromFile(blog.cssFile).mkString, oldFileIndex)
   }
 
   fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /", oldFileIndex)
@@ -958,9 +963,9 @@ object MakeFiles extends App {
 
 
   timer("resize images") {
-  def smallThumbJob(img: Image) = (new File(Blog.outDir, thumbnailUrl(img)),           Blog.thumbWidth,      Blog.thumbHeight, 0.05f)
-  def mainThumbJob(img: Image)  = (new File(Blog.outDir, bigThumbnailUrl(img, false)), Blog.bigThumbWidth,   -1,               0.1f)
-  def rightThumbJob(img: Image) = (new File(Blog.outDir, bigThumbnailUrl(img, true)),  Blog.bigThumbWidth/2, -1,               0.1f)
+  def smallThumbJob(img: Image) = (new File(blog.outDir, blog.thumbnailUrl(img)),           blog.thumbWidth,      blog.thumbHeight, 0.05f)
+  def mainThumbJob(img: Image)  = (new File(blog.outDir, blog.bigThumbnailUrl(img, false)), blog.bigThumbWidth,   -1,               0.1f)
+  def rightThumbJob(img: Image) = (new File(blog.outDir, blog.bigThumbnailUrl(img, true)),  blog.bigThumbWidth/2, -1,               0.1f)
 
   val resizeJobs = base.all.flatMap(_.images).map {
     case i if i.mods == "main" && i.align == ">" => (i, Seq(smallThumbJob(i), rightThumbJob(i)))
@@ -968,7 +973,7 @@ object MakeFiles extends App {
     case i                                       => (i, Seq(smallThumbJob(i)))
   }
 
-  new File(Blog.outDir, "t").mkdir()
+  new File(blog.outDir, "t").mkdir()
   for ((image, jobs) <- resizeJobs) {
     try {
       lazy val file = {

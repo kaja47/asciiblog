@@ -1,6 +1,6 @@
 package asciiblog
 
-import MakeFiles. { relativize, year, month, isAbsolute, absUrl, absUrlFromSlug, absUrlFromPath, relUrlFromSlug, bigThumbnailUrl, thumbnailUrl, galleryScript }
+import MakeFiles. { year, month, galleryScript, UrlOps, isAbsolute }
 import AsciiText. { ahrefRegex, ahrefCheck, imgsrcRegex, imgsrcCheck }
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -37,7 +37,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
 
   def rel(url: String): String =
     if (baseUrl == null || url.startsWith("#")) url
-    else relativize(url, baseUrl)
+    else blog.relativize(url, baseUrl)
 
   def txl(s: String) = blog.translation(s)
   def ifs(c: Boolean, body: => String) = if (c) body else ""
@@ -54,9 +54,9 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
 
   def imgTag(img: Image, t: Text, showDesc: Boolean = true) = {
     val (cl, srcPath) = img match {
-      case i if i.mods == "main" && i.align == ">" => ("fr", bigThumbnailUrl(img, true))
-      case i if i.mods == "main" => ("main", bigThumbnailUrl(img, false))
-      case i => ("thz", thumbnailUrl(img))
+      case i if i.mods == "main" && i.align == ">" => ("fr", blog.bigThumbnailUrl(img, true))
+      case i if i.mods == "main" => ("main", blog.bigThumbnailUrl(img, false))
+      case i => ("thz", blog.thumbnailUrl(img))
     }
     val desc = if (showDesc) {
       val title   = ifs(img.title, t.paragraph(img.title)).trim
@@ -66,12 +66,12 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
       val locSrc  = ifs(img.localSource, articleLink(img.localSource, img.localSource.title))
       Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
     } else ""
-    s"""<span class=$cl><a href="${img.url}"><img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="${absUrlFromPath(srcPath)}"/></a>$desc</span>"""
+    s"""<span class=$cl><a href="${img.url}"><img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="${blog.absUrlFromPath(srcPath)}"/></a>$desc</span>"""
   }
 
   def gallerySample(a: Article) =
     a.extraImages.take(3).map { i =>
-      s"""<a href="${relUrlFromSlug(a.slug)}"><img class=th src="${thumbnailUrl(i)}"/></a>"""
+      s"""<a href="${blog.relUrlFromSlug(a.slug)}"><img class=th src="${blog.thumbnailUrl(i)}"/></a>"""
     }.mkString(" ")
 
   val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
@@ -103,9 +103,9 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
 
   def resolveGlobalLink(link: String, base: Base) = link match {
     case l if isAbsolute(l) => l
-    case l if base.isValidId(l) => absUrlFromSlug(base.canonicSlug(l))
+    case l if base.isValidId(l) => blog.absUrlFromSlug(base.canonicSlug(l))
     case l if l.contains('.') => l // rss.xml, index.html
-    case l => absUrlFromSlug(l)    // index or just slug
+    case l => blog.absUrlFromSlug(l)    // index or just slug
   }
 
   def rssLink(rss: String) =
@@ -197,7 +197,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   def makeArticleBody(a: Article, compact: Boolean): String = {
     a.text.render(this)+
     ifs(a.isTag, {
-      val linked = a.slugsOfLinkedArticles.toSet
+      val linked = a.slugsOfLinkedArticles(blog).toSet
       listOfLinks(base.allTags(a).filter(a => !linked.contains(a.asSlug)), blog.tagFormat == "short")
     })+
     ifs(!compact, a.extraImages.map(img => imgTag(img.asSmallThumbnail, if (img.localSource != null) img.localSource.text else a.text)).mkString(" "))+
@@ -236,7 +236,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     "<br/>\n"+
     makeArticleBody(a, compact)+
     ifs(!compact,
-      ifs(blog.allowComments && !a.isTag, s"""<hr/><b><a href="comments.php?url=${relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b> """)+
+      ifs(blog.allowComments && !a.isTag, s"""<hr/><b><a href="comments.php?url=${blog.relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b> """)+
       "<hr/>"+
       """<div style="font-size:0.9em;">"""+
       """<div class="f r" style="max-width:50%">"""+
@@ -264,14 +264,14 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   def articleLink(a: Article, title: String, asLink: Boolean = true) =
     if (a.link != null || asLink)
-      s"""<i><a href="${if (a.link != null) a.link else absUrl(a)}">$title</a></i>"""+ifs(a.hasImageMarker, blog.imageMarker)
+      s"""<i><a href="${if (a.link != null) a.link else blog.absUrl(a)}">$title</a></i>"""+ifs(a.hasImageMarker, blog.imageMarker)
     else
       s"""<i>$title</i>"""+ifs(a.hasImageMarker, blog.imageMarker)
 
   def makeLink(a: Article) = makeDate(a)+" "+articleLink(a, a.title)
 
   def makeTagLink(t: Article) = {
-    val html = s"""#<i><a href="${absUrlFromSlug(t.slug)}">${t.title}</a></i>"""
+    val html = s"""#<i><a href="${blog.absUrlFromSlug(t.slug)}">${t.title}</a></i>"""
     if (t.isSupertag) s"<b>$html</b>" else html
   }
 
@@ -282,14 +282,14 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   def makeNextPrevArrows(a: Article) = _makeNextPrevArrows(base.prev(a), base.next(a))
 
   def _makeNextPrevArrows(prev: Article, next: Article) =
-    (if (prev == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${absUrl(prev)}">«««</a>""")+" "+
-    (if (next == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${absUrl(next)}">»»»</a>""")
+    (if (prev == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${blog.absUrl(prev)}">«««</a>""")+" "+
+    (if (next == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${blog.absUrl(next)}">»»»</a>""")
 
   def makeTagLinks(tags: Seq[Article], a: Article = null) =
     tags.map { t =>
       makeTagLink(t) + ifs(t.isSupertag && a != null,
-        ifs(base.prev(a, t.asTag), s""" <a href="${absUrl(base.prev(a, t.asTag))}">««</a>""")+
-        ifs(base.next(a, t.asTag), s""" <a href="${absUrl(base.next(a, t.asTag))}">»»</a>""")
+        ifs(base.prev(a, t.asTag), s""" <a href="${blog.absUrl(base.prev(a, t.asTag))}">««</a>""")+
+        ifs(base.next(a, t.asTag), s""" <a href="${blog.absUrl(base.next(a, t.asTag))}">»»</a>""")
       )
     }.mkString(" ")
 

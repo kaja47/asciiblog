@@ -1,6 +1,6 @@
 package asciiblog
 
-import MakeFiles. { Blog, licenses, peelOffTags, isAbsolute }
+import MakeFiles. { licenses, peelOffTags, isAbsolute }
 import AsciiMarkup._
 import scala.util.matching.Regex
 
@@ -8,7 +8,7 @@ import scala.util.matching.Regex
 trait Markup {
   type ResolveLinkFunc = (String, Map[String, String]) => String
 
-  def process(a: Article, resolveLink: ResolveLinkFunc, noteUrl: String): Text
+  def process(a: Article, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): Text
 
 }
 
@@ -175,7 +175,7 @@ case class Cell(txt: String, span: Int = 1)
 
 
 object AsciiMarkup extends Markup {
-  def process(a: Article, resolveLink: ResolveLinkFunc, noteUrl: String): AsciiText = segmentText(a.rawText, resolveLink, noteUrl)
+  def process(a: Article, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = segmentText(a.rawText, resolveLink, noteUrl, imageRoot)
 
   private val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
   private val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r
@@ -186,7 +186,7 @@ object AsciiMarkup extends Markup {
   private val blockCheck    = """/---"""
   val commentCheck          = """<!--"""
 
-  private def segmentText(_txt: String, resolveLink: ResolveLinkFunc, noteUrl: String): AsciiText = {
+  private def segmentText(_txt: String, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = {
     def matchAllLines[T](ls: Seq[String])(f: PartialFunction[String, T]): Option[Seq[T]] = {
       val ms = ls.map(f.lift)
       if (ms.forall(_.isDefined)) Some(ms.map(_.get)) else None
@@ -201,7 +201,7 @@ object AsciiMarkup extends Markup {
           matchAllLines(ls) {
             case linkRefRegex(r, url) => (r, url)
           }.map(refs => Linkref(refs.toMap)).orElse {
-            matchAllLines(ls)(mkImage).map(Images)
+            matchAllLines(ls)(mkImage(imageRoot)).map(Images)
           }.orElse {
             matchAllLines(ls) {
               case l if l.startsWith("> ") || l == ">"  => l.drop(2)
@@ -244,7 +244,7 @@ object AsciiMarkup extends Markup {
   private val imgRegex      = s"""(?xm) $imgRegexFragment""".r
   private val imgLicenseRegex = """(?x) (.*?) \s* (?: \( (?:(CC\ [\w-]+)\s+)? \s* ([^\ ]*)? \) )? \s*$""".r
 
-  private def mkImage: PartialFunction[String, Image] = {
+  private def mkImage(imageRoot: String): PartialFunction[String, Image] = {
     case imgRegex(url, mod, alt1, alt2, align, link, rawTitle) =>
       val u = if (link != null) link else url // ???
       val (t, license, source) = rawTitle match {
@@ -255,7 +255,7 @@ object AsciiMarkup extends Markup {
       }
       val (title, tags) = peelOffTags(t)
       Image(
-        url = if (isAbsolute(u)) u else Blog.imageRoot + u,
+        url = if (isAbsolute(u)) u else imageRoot + u,
         alt  = if (alt1 != null) alt1 else alt2,
         mods = mod,
         align = if (align == "*") null else align,
