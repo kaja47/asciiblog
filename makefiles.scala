@@ -445,7 +445,9 @@ object MakeFiles extends App {
       val tags = tagSplitRegex.split(m.group(2))
       val (vis, hid) = (m.group(1) match {
         case "##" => (tags.map(Tag(_, true)), Array[Tag]())
-        case "#"  => tags.map(Tag(_)).partition(t => !isBracketed(t.title))
+        case "#"  =>
+          val (v, h) = tags.partition(t => !isBracketed(t))
+          (v.map(Tag(_)), h.map(t => Tag(t.substring(1, t.length-1))))
       })
       t.copy(visible = t.visible ++ vis, hidden = t.hidden ++ hid)
     }
