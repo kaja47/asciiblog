@@ -253,7 +253,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeTagIndex(base: Base) =
-    base.allTags.toSeq.sortBy(~_._2.size).map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
+    base.allTags.toSeq.sortBy { case (t, as) => (~as.size, t.slug) }.map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
   def makeDateWithLinkToPubBy(a: Article, asLink: Boolean) =
     if (a.pubBy != null && !asLink) articleLink(a.pubBy, makeDate(a))
