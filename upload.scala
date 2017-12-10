@@ -6,13 +6,10 @@ import java.nio.file.{ Files, NoSuchFileException }
 
 object Upload extends App {
 
-if (args.length != 2) {
-  println("usage scala upload.scala source-directory destination-directory")
-  sys.exit()
-}
+val cfg = MakeFiles.keyValues(args(0))
 
-val source = new File(args(0))
-val target = new File(args(1))
+val source = new File(cfg("outDir"))
+val target = new File(cfg("remoteDir"))
 
 
 // copy images
