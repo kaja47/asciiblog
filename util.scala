@@ -1,9 +1,35 @@
 package asciiblog
 
 import scala.util.matching.Regex
+import java.io.File
 
 object util {
   def matches(r: Regex, s: String) = r.findFirstIn(s).nonEmpty
+
+  private val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
+
+  def globFiles(pattern: String): Array[File] = ((pattern match {
+    case p if p.endsWith("*") =>
+      val f = new File(p.init)
+      if (f.isDirectory) {
+        val fs = f.listFiles
+        if (fs == null) Array() else fs
+      } else {
+        val prefix = f.getName
+        val fs = f.getParentFile.listFiles
+        if (fs == null) Array() else fs.filter { _.getName.startsWith(prefix) }
+      }
+    case patternBracketRegex(p, variants) =>
+      val f = new File(p)
+      if (f.isDirectory) {
+        variants.split(",").map { v => new File(f, v) }
+      } else {
+        variants.split(",").map { v => new File(f.getParentFile, f.getName+v) }
+      }
+    case _ =>
+      val f = new File(pattern)
+      if (f.isDirectory) f.listFiles else Array(f)
+    }): Array[File]).filter(f => !f.getName.startsWith("."))
 }
 
 object timer {

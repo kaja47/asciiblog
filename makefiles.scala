@@ -11,7 +11,7 @@ import scala.collection.{ mutable, immutable }
 import scala.util.matching.Regex
 import util._
 
-class Blog (
+case class Blog (
   val title: String,
   val baseUrl: String,
   val files: Seq[String],
@@ -51,6 +51,58 @@ class Blog (
   def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
   def printTimes: Boolean  = false
   def printErrors: Boolean = !(args.length > 1 && args(1) == "tags")
+}
+
+object Blog {
+  def populate(cfg: Map[String, String], args: Array[String], translation: Map[String, String]) = {
+    new Blog(
+      title                  = cfg("title"),
+      baseUrl                = cfg("baseUrl"),
+      files                  = spaceSeparatedStrings(cfg.getOrElse("files", "").trim),
+      outDir                 = cfg.getOrElse("outDir", null),
+      articlesOnIndex        = cfg.getOrElse("fullArticlesOnIndex", "5").toInt,
+      groupArchiveBy         = cfg.getOrElse("groupArchiveBy", "year"), // "year", "month" or some number
+      archiveFormat          = cfg.getOrElse("archiveFormat", "link").ensuring(f => f == "link" || f == "short"),
+      tagFormat              = cfg.getOrElse("tagFormat", "link").ensuring(f => f == "link" || f == "short"),
+      cssStyle               = cfg.getOrElse("style", ""),
+      cssFile                = cfg.getOrElse("cssFile", ""),
+      header                 = cfg.getOrElse("header", ""),
+      footer                 = cfg.getOrElse("footer", ""),
+      thumbWidth             = cfg.getOrElse("thumbnailWidth", "150").toInt,
+      thumbHeight            = cfg.getOrElse("thumbnailHeight", "100").toInt,
+      bigThumbWidth          = cfg.getOrElse("bigThumbnailWidth", "800").toInt,
+      limitRss               = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt,
+      articlesInRss          = cfg.getOrElse("fullArticlesInRss", "false").toBoolean,
+      limitSimilar           = cfg.getOrElse("limitSimilarLinks", "5").toInt,
+      sortByDate             = cfg.getOrElse("sortByDate", "false").toBoolean,
+      imageRoot              = cfg.getOrElse("imageRoot", ""),
+      articlesMustBeSorted   = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean,
+      articlesMustNotBeMixed = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean,
+      language               = cfg.getOrElse("language", "en"),
+      dumpAll                = cfg.getOrElse("dumpAll", "false").toBoolean, // ignore hidden articles, dump everything into main feed
+      fileSuffix             = cfg.getOrElse("fileSuffix", ".html"),
+      imageMarker            = cfg.getOrElse("imageMarker", ""),
+      albumsDir              = cfg.getOrElse("albumsDir", ""),
+      allowComments          = cfg.getOrElse("allowComments", "false").toBoolean,
+
+      openGraph              = cfg.getOrElse("openGraph", "false").toBoolean,
+      twitterSite            = cfg.getOrElse("twitter.site", ""),
+      twitterCreator         = cfg.getOrElse("twitter.creator", ""),
+
+      args = args,
+      translation = translation
+    )
+  }
+
+  private def spaceSeparatedStrings(str: String): Seq[String] = str match {
+    case "" => Seq()
+    case str if str(0) == '"' =>
+      val (s, rest) = str.drop(1).span(_ != '"')
+      s +: spaceSeparatedStrings(rest.drop(1).trim)
+    case _ =>
+      val (s, rest) = str.span(_ != ' ')
+      s +: spaceSeparatedStrings(rest.trim)
+  }
 }
 
 case class Article(
@@ -249,105 +301,53 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
 
 
 
-object MakeFiles extends App {
+object Make extends App {
 
   if (args.length < 1) {
     println("config file not specified")
     sys.exit()
   }
 
-  private def kv: PartialFunction[String, (String, String)] = {
+  val (blog, markup, base) = MakeFiles.init(args)
+
+  if (args.length >= 2 && args(1) == "tags") {
+    MakeFiles.tags(blog, base)
+
+  } else if (args.length >= 2 && args(1) == "checkLinks") {
+    MakeFiles.checkUrls(blog, base)
+
+  } else {
+    MakeFiles.makeFiles(blog, base, markup)
+  }
+
+}
+
+
+
+object MakeFiles {
+
+  def keyVal: PartialFunction[String, (String, String)] = {
     case s if s.split(" ", 2).length == 2 =>
       val Array(k, v) = s.split(" ", 2); (k, v)
   }
 
   private val thisDir = /*new File(".")*/ new File(System.getProperty("java.class.path")).getParent
 
-  val galleryScript =
-    io.Source.fromFile(thisDir+"/gallery.js").mkString
-      .replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "") // rather crude and incorrect minifier
+  def crudelyMinify(js: String) = js.replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "")
+  def keyValues(f: String) = io.Source.fromFile(f).getLines.collect(keyVal).toMap
 
-  val commentsScript = io.Source.fromFile(thisDir+"/comments.php").mkString
-  val outScript      = io.Source.fromFile(thisDir+"/out.php").mkString
+  lazy val galleryScript  = crudelyMinify(io.Source.fromFile(thisDir+"/gallery.js").mkString)
+  lazy val commentsScript = io.Source.fromFile(thisDir+"/comments.php").mkString
+  lazy val outScript      = io.Source.fromFile(thisDir+"/out.php").mkString
 
-  val cfg = io.Source.fromFile(args(0)).getLines.collect(kv).toMap
-
-
-  implicit val blog = new Blog(
-    title                  = cfg("title"),
-    baseUrl                = cfg("baseUrl"),
-    files                  = spaceSeparatedStrings(cfg.getOrElse("files", "").trim),
-    outDir                 = cfg.getOrElse("outDir", null),
-    articlesOnIndex        = cfg.getOrElse("fullArticlesOnIndex", "5").toInt,
-    groupArchiveBy         = cfg.getOrElse("groupArchiveBy", "year"), // "year", "month" or some number
-    archiveFormat          = cfg.getOrElse("archiveFormat", "link").ensuring(f => f == "link" || f == "short"),
-    tagFormat              = cfg.getOrElse("tagFormat", "link").ensuring(f => f == "link" || f == "short"),
-    cssStyle               = cfg.getOrElse("style", ""),
-    cssFile                = cfg.getOrElse("cssFile", ""),
-    header                 = cfg.getOrElse("header", ""),
-    footer                 = cfg.getOrElse("footer", ""),
-    thumbWidth             = cfg.getOrElse("thumbnailWidth", "150").toInt,
-    thumbHeight            = cfg.getOrElse("thumbnailHeight", "100").toInt,
-    bigThumbWidth          = cfg.getOrElse("bigThumbnailWidth", "800").toInt,
-    limitRss               = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt,
-    articlesInRss          = cfg.getOrElse("fullArticlesInRss", "false").toBoolean,
-    limitSimilar           = cfg.getOrElse("limitSimilarLinks", "5").toInt,
-    sortByDate             = cfg.getOrElse("sortByDate", "false").toBoolean,
-    imageRoot              = cfg.getOrElse("imageRoot", ""),
-    articlesMustBeSorted   = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean,
-    articlesMustNotBeMixed = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean,
-    language               = cfg.getOrElse("language", "en"),
-    dumpAll                = cfg.getOrElse("dumpAll", "false").toBoolean, // ignore hidden articles, dump everything into main feed
-    fileSuffix             = cfg.getOrElse("fileSuffix", ".html"),
-    imageMarker            = cfg.getOrElse("imageMarker", ""),
-    albumsDir              = cfg.getOrElse("albumsDir", ""),
-    allowComments          = cfg.getOrElse("allowComments", "false").toBoolean,
-
-    openGraph              = cfg.getOrElse("openGraph", "false").toBoolean,
-    twitterSite            = cfg.getOrElse("twitter.site", ""),
-    twitterCreator         = cfg.getOrElse("twitter.creator", ""),
-
-    args = args,
-    translation = io.Source.fromFile(thisDir+"/lang."+language).getLines.collect(kv).toMap
-  )
-
-  val markup = AsciiMarkup
-
-  private def spaceSeparatedStrings(str: String): Seq[String] = str match {
-    case "" => Seq()
-    case str if str(0) == '"' =>
-      val (s, rest) = str.drop(1).span(_ != '"')
-      s +: spaceSeparatedStrings(rest.drop(1).trim)
-    case _ =>
-      val (s, rest) = str.span(_ != ' ')
-      s +: spaceSeparatedStrings(rest.trim)
+  def init(args: Array[String]) = {
+    val cfg = keyValues(args(0))
+    val txl = keyValues(thisDir+"/lang."+cfg.getOrElse("language", "en"))
+    val blog = Blog.populate(cfg, args, txl)
+    val markup = AsciiMarkup
+    val base = makeBase(blog, markup)
+    (blog, markup, base)
   }
-
-
-  private val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
-  private def listFiles(pattern: String): Array[File] = ((pattern match {
-    case p if p.endsWith("*") =>
-      val f = new File(p.init)
-      if (f.isDirectory) {
-        val fs = f.listFiles
-        if (fs == null) Array() else fs
-      } else {
-        val prefix = f.getName
-        val fs = f.getParentFile.listFiles
-        if (fs == null) Array() else fs.filter { _.getName.startsWith(prefix) }
-      }
-    case patternBracketRegex(p, variants) =>
-      val f = new File(p)
-      if (f.isDirectory) {
-        variants.split(",").map { v => new File(f, v) }
-      } else {
-        variants.split(",").map { v => new File(f.getParentFile, f.getName+v) }
-      }
-    case _ =>
-      val f = new File(pattern)
-      if (f.isDirectory) f.listFiles else Array(f)
-    }): Array[File]).filter(f => !f.getName.startsWith("."))
-
 
 
   def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] =
@@ -585,7 +585,7 @@ object MakeFiles extends App {
 
 
 
-  def saveFile(f: String, content: String, fileIndex: Map[String, String] = Map()): Seq[(String, String)] = { // filename -> hash
+  def saveFile(f: String, content: String, fileIndex: Map[String, String] = Map())(implicit blog: Blog): Seq[(String, String)] = { // filename -> hash
     val ff = new File(blog.outDir, f)
 
     val p = ff.getParentFile
@@ -602,12 +602,12 @@ object MakeFiles extends App {
     Seq(f -> h)
   }
 
-  def saveXml(f: String, content: String, fileIndex: Map[String, String] = Map()): Seq[(String, String)] =
+  def saveXml(f: String, content: String, fileIndex: Map[String, String] = Map())(implicit blog: Blog): Seq[(String, String)] =
     saveFile(f+".xml", content, fileIndex)
 
 
 
-  def readGallery(): Vector[Article] = {
+  def readGallery(blog: Blog): Vector[Article] = {
     if (blog.albumsDir.isEmpty) return Vector()
 
     val albumDirs = new File(blog.albumsDir, "albums").listFiles.sortBy(_.getName).reverse.toSeq
@@ -634,9 +634,9 @@ object MakeFiles extends App {
     }
   }
 
-  def readPosts(): Vector[Article] = {
+  def readPosts(implicit blog: Blog): Vector[Article] = {
     val lineRegex = """^===+$""".r
-    blog.files.flatMap(listFiles).flatMap { f =>
+    blog.files.flatMap(globFiles).flatMap { f =>
       var ls = io.Source.fromFile(f).getLines.toVector
       val starts = (0 until ls.length).collect { case i if matches(lineRegex, ls(i)) => i-1 }
       (0 until starts.length).map { i =>
@@ -648,8 +648,10 @@ object MakeFiles extends App {
 
 
 
-  val base: Base = {
-    var articles: Vector[Article] = timer("readfiles")(readGallery() ++ readPosts())
+
+
+  def makeBase(implicit blog: Blog, markup: Markup): Base = {
+    var articles: Vector[Article] = timer("readfiles")(readGallery(blog) ++ readPosts(blog))
 
     timer("checks") {
     if (blog.articlesMustNotBeMixed) {
@@ -826,19 +828,13 @@ object MakeFiles extends App {
     Base(articles, tagMap)
   }
 
-  if (args.length >= 2 && args(1) == "tags") {
-    val titleLine = io.Source.stdin.getLines.take(1).toSeq.head
-    val titleRegex(_, _, slug) = titleLine
-    RecommendTags(blog, base, slug)
-    sys.exit()
-  }
 
 
 
-//  if (args.length == 2 && args(1) == "checkLinks") {
+  def checkUrls(blog: Blog, base: Base) = ()
 //    for {
 //      a <- base.all ; l <- a.links
-//      url = resolveLink(l, base, a) if !isLocalLink(url)
+//      url = resolveLink(l, base, a) if !blog.isLocalLink(url)
 //    } {
 //      try {
 //        val conn = new URL(url).openConnection().asInstanceOf[HttpURLConnection]
@@ -850,150 +846,163 @@ object MakeFiles extends App {
 //        case e: UnknownHostException => println("unknown host "+url)
 //      }
 //    }
-//    sys.exit()
-//  }
 
-
-  val oldFileIndex: Map[String, String] = {
-    val f = new File(blog.outDir, ".files")
-    if (!f.exists) Map()
-    else io.Source.fromFile(f).getLines.map(l => kv(l).swap).toMap
+  def tags(blog: Blog, base: Base) = {
+    val titleLine = io.Source.stdin.getLines.take(1).toSeq.head
+    val titleRegex(_, _, slug) = titleLine
+    RecommendTags(blog, base, slug)
   }
 
 
-  val fileIndex = collection.concurrent.TrieMap[String, String]()
-  val isIndexGallery = base.feed.take(blog.articlesOnIndex).exists(_.images.nonEmpty)
 
-  val (fulls, rest) = base.feed.splitAt(blog.articlesOnIndex)
 
-  def chunk[T: Ordering](as: Vector[Article])(g: Date => T)(zero: T)(f: T => Article): Vector[(Article, Vector[Article])] =
-    as.groupBy { a => if (a.date == null) zero else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
 
-  val (links, archivePages) = timer("group archive") {
-    def mkDate(y: Int, m: Int) = Seq(new GregorianCalendar(y, m-1, 1).getTime)
-    val title = blog.translation("archive")
-    (blog.groupArchiveBy match {
-      case "month" => chunk(rest)(yearmonth)((0,0)) { case (y, m) => Article(title+s" $m/$y", s"index-$y-$m", dates = mkDate(y, m)) }
-      case "year"  => chunk(rest)(year)     (0)     { case y      => Article(title+s" $y", s"index-$y", dates = mkDate(y, 1)) }
-      case num if num.trim.matches("\\d+") =>
-        val len = num.toInt
-        rest.reverse.grouped(len).toVector.zipWithIndex.map { case (as, i) =>
-          (Article(title+s" #${i*len+1}-${(i+1)*len}", "index-"+(i+1)), as.reverse)
-        }.reverse
-      case _ => Vector((null, rest))
-    }) match {
-      case (_, links) +: archivePages => (links, archivePages)
-      case _ => (Vector(), Vector())
+
+  def makeFiles(blog: Blog, base: Base, markup: Markup) = {
+    implicit val _blog = blog
+
+    val oldFileIndex: Map[String, String] = {
+      val f = new File(blog.outDir, ".files")
+      if (!f.exists) Map()
+      else io.Source.fromFile(f).getLines.map{ l => val Array(k, v) = l.split(" ", 2); (v, k) }.toMap
     }
-  }
 
 
-  timer("generate and save files") {
-  val archiveLinks = archivePages.par.map { case (a, as) =>
-    val l = FlowLayout(blog.absUrl(a), base, blog, markup)
-    val prev = archivePages((archivePages.indexWhere(_._1.slug == a.slug)-1) max 0 min (archivePages.length-1))._1
-    val next = archivePages((archivePages.indexWhere(_._1.slug == a.slug)+1) max 0 min (archivePages.length-1))._1
-    val body = l.makeIndex(Seq(), as, prev = prev, next = next)
-    fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */), oldFileIndex)
-    a
-  }.seq
+    val fileIndex = collection.concurrent.TrieMap[String, String]()
+    val isIndexGallery = base.feed.take(blog.articlesOnIndex).exists(_.images.nonEmpty)
 
-  val path = blog.relUrlFromSlug("index")
-  val l = FlowLayout(blog.absUrlFromPath(path), base, blog, markup)
-  val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month")
-  fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
+    val (fulls, rest) = base.feed.splitAt(blog.articlesOnIndex)
 
-  timer("generate and save files - articles") {
-  base.articles.par foreach { a =>
-    var l = FlowLayout(blog.absUrl(a), base, blog, markup)
-    val body = l.makeFullArticle(a)
-    fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
-  }
-  }
+    def chunk[T: Ordering](as: Vector[Article])(g: Date => T)(zero: T)(f: T => Article): Vector[(Article, Vector[Article])] =
+      as.groupBy { a => if (a.date == null) zero else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
 
-  base.allTags.keys.par foreach { a =>
-    var l = FlowLayout(blog.absUrl(a), base, blog, markup)
-    val body = l.makeFullArticle(a)
-    val hasImages = a.images.nonEmpty || base.allTags(a).exists(_.images.nonEmpty)
-    fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")), oldFileIndex)
-    fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(blog.limitRss), null), oldFileIndex)
-  }
+    val (links, archivePages) = timer("group archive") {
+      def mkDate(y: Int, m: Int) = Seq(new GregorianCalendar(y, m-1, 1).getTime)
+      val title = blog.translation("archive")
+      (blog.groupArchiveBy match {
+        case "month" => chunk(rest)(yearmonth)((0,0)) { case (y, m) => Article(title+s" $m/$y", s"index-$y-$m", dates = mkDate(y, m)) }
+        case "year"  => chunk(rest)(year)     (0)     { case y      => Article(title+s" $y", s"index-$y", dates = mkDate(y, 1)) }
+        case num if num.trim.matches("\\d+") =>
+          val len = num.toInt
+          rest.reverse.grouped(len).toVector.zipWithIndex.map { case (as, i) =>
+            (Article(title+s" #${i*len+1}-${(i+1)*len}", "index-"+(i+1)), as.reverse)
+          }.reverse
+        case _ => Vector((null, rest))
+      }) match {
+        case (_, links) +: archivePages => (links, archivePages)
+        case _ => (Vector(), Vector())
+      }
+    }
 
-  {
-    val path = blog.relUrlFromSlug("tags")
+
+    timer("generate and save files") {
+    val archiveLinks = archivePages.par.map { case (a, as) =>
+      val l = FlowLayout(blog.absUrl(a), base, blog, markup)
+      val prev = archivePages((archivePages.indexWhere(_._1.slug == a.slug)-1) max 0 min (archivePages.length-1))._1
+      val next = archivePages((archivePages.indexWhere(_._1.slug == a.slug)+1) max 0 min (archivePages.length-1))._1
+      val body = l.makeIndex(Seq(), as, prev = prev, next = next)
+      fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */), oldFileIndex)
+      a
+    }.seq
+
+    val path = blog.relUrlFromSlug("index")
     val l = FlowLayout(blog.absUrlFromPath(path), base, blog, markup)
-    fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)), oldFileIndex)
-  }
+    val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month")
+    fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
 
-  def mkBody(a: Article) = {
-    val body = FlowLayout(null, base, blog, markup).makeArticleBody(a, true)
-    FlowLayout.updateLinks(body, url => blog.addParamMediumFeed(url))
-  }
-  fileIndex ++= saveXml("rss", makeRSS(base.feed.take(blog.limitRss), if (blog.articlesInRss) mkBody else null), oldFileIndex)
+    timer("generate and save files - articles") {
+    base.articles.par foreach { a =>
+      var l = FlowLayout(blog.absUrl(a), base, blog, markup)
+      val body = l.makeFullArticle(a)
+      fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
+    }
+    }
 
-  if (blog.allowComments) {
-    val l = FlowLayout(blog.absUrlFromPath("comments.php"), base, blog, markup)
-    val p = l.makePage("{comments.body}", null, false,  null, includeCompleteStyle = true)
-    val Array(pre, post) = p.split(Regex.quote("{comments.body}"))
+    base.allTags.keys.par foreach { a =>
+      var l = FlowLayout(blog.absUrl(a), base, blog, markup)
+      val body = l.makeFullArticle(a)
+      val hasImages = a.images.nonEmpty || base.allTags(a).exists(_.images.nonEmpty)
+      fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")), oldFileIndex)
+      fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(blog.limitRss), null), oldFileIndex)
+    }
 
-    fileIndex ++= saveFile("comments.php", {
-      val replaces = blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v } ++ Seq(
-        "{comments.prebody}"  -> pre,
-        "{comments.postbody}" -> post,
-        "{comments.baseUrl}"  -> blog.baseUrl,
-        """href="rss.xml""""  -> """href="'.escapeHtmlAttr($requestUrl).'&amp;rss"""" // this is a bit ugly trick
-      )
-      var cs = commentsScript
-      for ((from, to) <- replaces) {
-        cs = cs.replace(from, to)
-      }
-      cs
-    }, oldFileIndex)
-    new File(".comments").mkdirs()
-    fileIndex ++= saveFile(".comments/.htaccess", "Deny from all", oldFileIndex)
-  }
+    {
+      val path = blog.relUrlFromSlug("tags")
+      val l = FlowLayout(blog.absUrlFromPath(path), base, blog, markup)
+      fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)), oldFileIndex)
+    }
 
-  fileIndex ++= saveFile("out.php", outScript, oldFileIndex)
+    def mkBody(a: Article) = {
+      val body = FlowLayout(null, base, blog, markup).makeArticleBody(a, true)
+      FlowLayout.updateLinks(body, url => blog.addParamMediumFeed(url))
+    }
+    fileIndex ++= saveXml("rss", makeRSS(base.feed.take(blog.limitRss), if (blog.articlesInRss) mkBody else null), oldFileIndex)
 
-  if (blog.cssFile.nonEmpty) {
-    fileIndex ++= saveFile("style.css", io.Source.fromFile(blog.cssFile).mkString, oldFileIndex)
-  }
+    if (blog.allowComments) {
+      val l = FlowLayout(blog.absUrlFromPath("comments.php"), base, blog, markup)
+      val p = l.makePage("{comments.body}", null, false,  null, includeCompleteStyle = true)
+      val Array(pre, post) = p.split(Regex.quote("{comments.body}"))
 
-  fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /", oldFileIndex)
-  saveFile(".files", fileIndex.toSeq.sorted.map { case (file, hash) => hash+" "+file }.mkString("\n"), oldFileIndex)
-  }
+      fileIndex ++= saveFile("comments.php", {
+        val replaces = blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v } ++ Seq(
+          "{comments.prebody}"  -> pre,
+          "{comments.postbody}" -> post,
+          "{comments.baseUrl}"  -> blog.baseUrl,
+          """href="rss.xml""""  -> """href="'.escapeHtmlAttr($requestUrl).'&amp;rss"""" // this is a bit ugly trick
+        )
+        var cs = commentsScript
+        for ((from, to) <- replaces) {
+          cs = cs.replace(from, to)
+        }
+        cs
+      }, oldFileIndex)
+      new File(".comments").mkdirs()
+      fileIndex ++= saveFile(".comments/.htaccess", "Deny from all", oldFileIndex)
+    }
+
+    fileIndex ++= saveFile("out.php", outScript, oldFileIndex)
+
+    if (blog.cssFile.nonEmpty) {
+      fileIndex ++= saveFile("style.css", io.Source.fromFile(blog.cssFile).mkString, oldFileIndex)
+    }
+
+    fileIndex ++= saveFile("robots.txt", "User-agent: *\nAllow: /", oldFileIndex)
+    saveFile(".files", fileIndex.toSeq.sorted.map { case (file, hash) => hash+" "+file }.mkString("\n"), oldFileIndex)
+    }
 
 
-  timer("resize images") {
-  def smallThumbJob(img: Image) = (new File(blog.outDir, blog.thumbnailUrl(img)),           blog.thumbWidth,      blog.thumbHeight, 0.05f)
-  def mainThumbJob(img: Image)  = (new File(blog.outDir, blog.bigThumbnailUrl(img, false)), blog.bigThumbWidth,   -1,               0.1f)
-  def rightThumbJob(img: Image) = (new File(blog.outDir, blog.bigThumbnailUrl(img, true)),  blog.bigThumbWidth/2, -1,               0.1f)
+    timer("resize images") {
+    def smallThumbJob(img: Image) = (new File(blog.outDir, blog.thumbnailUrl(img)),           blog.thumbWidth,      blog.thumbHeight, 0.05f)
+    def mainThumbJob(img: Image)  = (new File(blog.outDir, blog.bigThumbnailUrl(img, false)), blog.bigThumbWidth,   -1,               0.1f)
+    def rightThumbJob(img: Image) = (new File(blog.outDir, blog.bigThumbnailUrl(img, true)),  blog.bigThumbWidth/2, -1,               0.1f)
 
-  val resizeJobs = base.all.flatMap(_.images).map {
-    case i if i.mods == "main" && i.align == ">" => (i, Seq(smallThumbJob(i), rightThumbJob(i)))
-    case i if i.mods == "main"                   => (i, Seq(smallThumbJob(i), mainThumbJob(i)))
-    case i                                       => (i, Seq(smallThumbJob(i)))
-  }
+    val resizeJobs = base.all.flatMap(_.images).map {
+      case i if i.mods == "main" && i.align == ">" => (i, Seq(smallThumbJob(i), rightThumbJob(i)))
+      case i if i.mods == "main"                   => (i, Seq(smallThumbJob(i), mainThumbJob(i)))
+      case i                                       => (i, Seq(smallThumbJob(i)))
+    }
 
-  new File(blog.outDir, "t").mkdir()
-  for ((image, jobs) <- resizeJobs) {
-    try {
-      lazy val file = {
-        println(s"downloading ${image.url}")
-        ImageIO.read(new URL(fixPath(image.url)))
-      }
-      for ((thumbFile, w, h, sharpenStrength) <- jobs if !thumbFile.exists) {
-        println(s"resizing image ${image.url} -> $thumbFile")
-          val suffix = image.url.split("\\.").last.toLowerCase
-          val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
-          val strength = if (s == "png" || s == "gif") 0f else sharpenStrength
-          file match {
-            case null => println(s"ImageIO.read(${image.url}) == null")
-            case full => ImageIO.write(ImageTools.resizeImage(full, w, h, strength), s, thumbFile)
-          }
-      }
-    } catch { case e: IIOException => println(e) }
-  }
+    new File(blog.outDir, "t").mkdir()
+    for ((image, jobs) <- resizeJobs) {
+      try {
+        lazy val file = {
+          println(s"downloading ${image.url}")
+          ImageIO.read(new URL(fixPath(image.url)))
+        }
+        for ((thumbFile, w, h, sharpenStrength) <- jobs if !thumbFile.exists) {
+          println(s"resizing image ${image.url} -> $thumbFile")
+            val suffix = image.url.split("\\.").last.toLowerCase
+            val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
+            val strength = if (s == "png" || s == "gif") 0f else sharpenStrength
+            file match {
+              case null => println(s"ImageIO.read(${image.url}) == null")
+              case full => ImageIO.write(ImageTools.resizeImage(full, w, h, strength), s, thumbFile)
+            }
+        }
+      } catch { case e: IIOException => println(e) }
+    }
+    }
+
   }
 
 }
