@@ -727,8 +727,18 @@ object MakeFiles {
 
     // maps all article slugs (main ones and aliases) to their absolute urls
     val globalNames: Map[String, String] = timer("global names") {
-      (Base(articles, tagMap).extraTags ++ articles)
-        .flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
+      val allArticles: Seq[Article] = (Base(articles, tagMap).extraTags ++ articles)
+
+      val slugs   = allArticles.map(_.slug)
+      val aliases = allArticles.flatMap(_.aliases)
+
+      for ((s, ss) <- slugs.groupBy(s => s)) if (ss.size > 1) sys.error(s"duplicate slug $s")
+      //for ((a, as) <- aliases.groupBy(a => a)) if (as.size > 1) sys.error(s"duplicate alias $a") // TODO
+
+      val slugSet = slugs.toSet
+      for (a <- aliases) if (slugSet.contains(a)) sys.error(s"alias $a is colliding with a slug")
+
+      allArticles.flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
     }
 
     // globalMapping maps from slugs to absolute urls
