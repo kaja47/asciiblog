@@ -721,8 +721,7 @@ object MakeFiles extends App {
     }
     }
 
-    var tagMap   : Map[Tag, Seq[Article]] = timer("invert tags 1") { invert(articles.map { a => (a, (a.tags.visible).distinct) }) }
-    val allTagMap: Map[Tag, Seq[Article]] = timer("invert tags 2") { invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) }) }
+    var tagMap: Map[Tag, Seq[Article]] = timer("invert tags 1") { invert(articles.map { a => (a, (a.tags.visible).distinct) }) }
 
     // maps all article slugs (main ones and aliases) to their absolute urls
     val globalNames: Map[String, String] = timer("global names") {
@@ -763,6 +762,7 @@ object MakeFiles extends App {
 
 
     val base = Base(articles, tagMap)
+    val allTagMap: Map[Tag, Seq[Article]] = timer("invert tags 2") { invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) }) }
     val sim = new Similarities(base, allTagMap)
     def refs(a: Article, k: String) = a.meta.seq(k) flatMap base.find
 
