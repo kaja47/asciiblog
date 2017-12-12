@@ -172,8 +172,8 @@ if (isset($_POST['text'])) {
 
 	foreach ($block->comments as $c) {
 		$item = $rss->channel->addChild("item");
-		$item->title = "$block->title - $c->name";
-		$item->description = $c->text;
+		$item->title = $block->title." - ".$c->name;
+		$item->description = escapeHtml($c->text);
 		$item->guid  = "{comments.baseUrl}/comments.php?url=".escapeHtmlAttr(isset($c->path) ? $c->path : $block->path)."#".$c->id;
 		$item->guid["isPermalink"] = "true";
 		$item->pubDate = date(DATE_RSS, strtotime($c->date));
