@@ -105,6 +105,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
     case l if isAbsolute(l) => l
     case l if base.isValidId(l) => blog.absUrlFromSlug(base.canonicSlug(l))
     case l if l.contains('.') => l // rss.xml, index.html
+    case "index" => blog.baseUrl
     case l => blog.absUrlFromSlug(l)    // index or just slug
   }
 
