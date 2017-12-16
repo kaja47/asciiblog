@@ -40,6 +40,7 @@ case class Blog (
   val imageMarker: String,
   val albumsDir: String,
   val allowComments: Boolean,
+  val shareLinks: Boolean,
 
   val openGraph: Boolean,
   val twitterSite: String,
@@ -84,6 +85,7 @@ object Blog {
       imageMarker            = cfg.getOrElse("imageMarker", ""),
       albumsDir              = cfg.getOrElse("albumsDir", ""),
       allowComments          = cfg.getOrElse("allowComments", "false").toBoolean,
+      shareLinks             = cfg.getOrElse("shareLinks", "false").toBoolean,
 
       openGraph              = cfg.getOrElse("openGraph", "false").toBoolean,
       twitterSite            = cfg.getOrElse("twitter.site", ""),

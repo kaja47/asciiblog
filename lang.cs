@@ -15,3 +15,7 @@ comments.name Jméno
 comments.mail Email
 comments.web Web
 comments.submit Komentovat
+share.share sdílet na
+share.facebook facebooku
+share.twitter twitteru
+share.googleplus google+

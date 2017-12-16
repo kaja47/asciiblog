@@ -4,6 +4,7 @@ import MakeFiles. { year, month, galleryScript, UrlOps, isAbsolute }
 import AsciiText. { ahrefRegex, ahrefCheck, imgsrcRegex, imgsrcCheck }
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.net.URLEncoder
 import scala.util.matching.Regex
 
 
@@ -238,6 +239,10 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     makeArticleBody(a, compact)+
     ifs(!compact,
       ifs(blog.allowComments && !a.isTag, s"""<hr/><b><a href="comments.php?url=${blog.relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b> """)+
+      ifs(blog.shareLinks && !a.isTag, {
+        val url = URLEncoder.encode(blog.absUrl(a), "UTF-8")
+        s""" &nbsp;&nbsp; ${txl("share.share")} <a href="https://www.facebook.com/sharer/sharer.php?u=$url">${txl("share.facebook")}</a>, <a href="https://twitter.com/intent/tweet?url=$url">${txl("share.twitter")}</a>, <a href="https://plus.google.com/share?url=$url">${txl("share.googleplus")}</a>"""
+      })+
       "<hr/>"+
       """<div style="font-size:0.9em;">"""+
       """<div class="f r" style="max-width:50%">"""+
