@@ -21,9 +21,10 @@ trait Text {
   // must return absolute urls
   def links: Seq[String]
 
-  // Outside Markup and Text this is intended only to expand `meta: rel: [ x ]`
-  // that is specified by local alias, not a valid slug.
-  def linkAliases: Map[String, String]
+  // Outside Markup and Text this is intended only for
+  // - expanding `meta: rel: [ x ]` specified by a local alias, not a valid slug
+  // - check if there are not duplicate aliases
+  def linkAliases: Seq[(String, String)]
 }
 
 
@@ -52,9 +53,10 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
   val images: Seq[Image] = segments.collect { case Images(imgs) => imgs }.flatten
 
   // this is before links method because links uses this one
-  val linkAliases: Map[String, String] = segments.collect { case Linkref(lm) => lm }.flatMap { _.iterator }.toMap
+  val linkAliases: Seq[(String, String)] = segments.collect { case Linkref(lm) => lm }.flatMap { _.iterator }
+  val linkAliasesMap = linkAliases.toMap
 
-  lazy val resolvedLinks = _links(segments).map { l => (l, resolveLink(l, linkAliases)) }.toMap
+  lazy val resolvedLinks = _links(segments).map { l => (l, resolveLink(l, linkAliasesMap)) }.toMap
   lazy val links: Seq[String] = resolvedLinks.valuesIterator.filter(isAbsolute).toVector
 
   private def _links(segments: Seq[Segment]): Seq[String] = segments.flatMap {

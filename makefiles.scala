@@ -757,7 +757,6 @@ object MakeFiles {
     articles = articles.map { a =>
       val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a), if (a.notes == null) "" else blog.absUrlFromSlug(a.notes), blog.imageRoot)
 
-      // TODO linkAliases return map, no dupes can be detected
       txt.linkAliases.groupBy(_._1).filter(_._2.size > 1).foreach { case (l, _) =>
         sys.error(s"duplicate link refs [$l] in article '${a.slug}'")
       }
