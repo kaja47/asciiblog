@@ -150,6 +150,7 @@ case class Meta(values: Map[String, Meta] = Map()) {
   def scalar(key: String): String = scalars.find(_.startsWith(key+":")).map(_.drop(key.length+1).trim).getOrElse(null)
   def scalars = values.collect { case (k, v) if v == null => k }
   def seq(k: String): Seq[String] = values.get(k).map(_.values.keys.toSeq).getOrElse(Seq())
+  def withSeq(k: String, xs: Seq[String]) = Meta(values.updated(k, Meta(xs.map(_ -> null).toMap)))
   def merge(that: Meta): Meta =
     Meta(that.values.foldLeft(values) { case (res, (k, v)) =>
       res.get(k) match {
@@ -766,8 +767,15 @@ object MakeFiles {
         }
       }
 
+      // translate meta:rel specified by local alias
+      val newMeta = if (a.rel.isEmpty) a.meta else {
+        val localAliases = txt.linkAliases.toMap
+        a.meta.withSeq("rel", a.meta.seq("rel").map { r => localAliases.getOrElse(r, r) })
+      }
+
       a.copy(
         text = txt,
+        meta = newMeta,
         // images might be already populated from readGallery()
         images = (a.images ++ txt.images)
       )
