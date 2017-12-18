@@ -294,11 +294,12 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
     }
 
     sortedMap.values.toVector
+  }
 
-    //val w = without.map(_.slug).toSet + a.slug
-    //val rr = sortedMap.toVector.map { case (Key(f, d, _), a) => ((~f, d), a) }
-    //val v = for (i <- 0 until arts.length if freq(i) >= 1 && !w.contains(arts(i).slug)) yield ((~freq(i), dateDiff(a, arts(i))), arts(i))
-    //v.sortBy(_._1).map(_._2).take(count)
+  def sortBySimilarity(bs: Seq[Article], a: Article): Seq[Article] = {
+    val atags = a.tags.visible.toSet
+    def time(a: Article) = if (a.date != null) a.date.getTime else 0
+    bs.map { b => (b, (~(b.tags.visible.toSet intersect atags).size, ~time(b), b.slug)) }.sortBy(_._2).map(_._1)
   }
 }
 
@@ -808,7 +809,7 @@ object MakeFiles {
 
       a.copy(
         dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
-        backlinks = bs,
+        backlinks = sim.sortBySimilarity(bs, a),
         similar = sim.similarByTags(a, count = blog.limitSimilar, without = bs),
         pub = refs(a, "pub"),
         pubBy = pubBy
