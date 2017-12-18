@@ -312,7 +312,7 @@ object Make extends App {
     sys.exit()
   }
 
-  val (blog, markup, base) = MakeFiles.init(args)
+  val (_, blog, markup, base) = MakeFiles.init(args)
 
   if (args.length >= 2 && args(1) == "tags") {
     MakeFiles.tags(blog, base)
@@ -335,22 +335,28 @@ object MakeFiles {
       val Array(k, v) = s.split(" ", 2); (k, v)
   }
 
-  private val thisDir = /*new File(".")*/ new File(System.getProperty("java.class.path")).getParent
+  private val thisDir: File = {
+    val dot = new File(".")
+    val cp  = new File(System.getProperty("java.class.path")).getParentFile
+    if (new File(dot, "gallery.js").exists()) dot else cp
+  }
 
-  def crudelyMinify(js: String) = js.replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "")
-  def keyValues(f: String) = io.Source.fromFile(f).getLines.collect(keyVal).toMap
+  private def file(f: String) = new File(thisDir, f)
 
-  lazy val galleryScript  = crudelyMinify(io.Source.fromFile(thisDir+"/gallery.js").mkString)
-  lazy val commentsScript = io.Source.fromFile(thisDir+"/comments.php").mkString
-  lazy val outScript      = io.Source.fromFile(thisDir+"/out.php").mkString
+  private def crudelyMinify(js: String) = js.replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "")
+  def keyValues(f: File) = io.Source.fromFile(f).getLines.collect(keyVal).toMap
+
+  lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js")).mkString)
+  lazy val commentsScript = io.Source.fromFile(file("comments.php")).mkString
+  lazy val outScript      = io.Source.fromFile(file("out.php")).mkString
 
   def init(args: Array[String]) = {
-    val cfg = keyValues(args(0))
-    val txl = keyValues(thisDir+"/lang."+cfg.getOrElse("language", "en"))
+    val cfg = keyValues(new File(args(0)))
+    val txl = keyValues(file("lang."+cfg.getOrElse("language", "en")))
     val blog = Blog.populate(cfg, args, txl)
     val markup = AsciiMarkup
     val base = makeBase(blog, markup)
-    (blog, markup, base)
+    (cfg, blog, markup, base)
   }
 
 
