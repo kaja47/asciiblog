@@ -1017,13 +1017,15 @@ object MakeFiles {
         }
         for ((thumbFile, w, h, sharpenStrength) <- jobs if !thumbFile.exists) {
           println(s"resizing image ${image.url} -> $thumbFile")
-            val suffix = image.url.split("\\.").last.toLowerCase
-            val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
-            val strength = if (s == "png" || s == "gif") 0f else sharpenStrength
-            file match {
-              case null => println(s"ImageIO.read(${image.url}) == null")
-              case full => ImageIO.write(ImageTools.resizeImage(full, w, h, strength), s, thumbFile)
-            }
+          file match {
+            case null => println(s"ImageIO.read(${image.url}) == null")
+            case full =>
+              val suffix = image.url.split("\\.").last.toLowerCase
+              val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
+              val leeway = if (s == "png" || s == "gif") 1.5 else 1
+              val strength = if (s == "png" || s == "gif") 0f else sharpenStrength
+              ImageIO.write(ImageTools.resizeImage(full, w, h, leeway, strength), s, thumbFile)
+          }
         }
       } catch { case e: IIOException => println(e) }
     }

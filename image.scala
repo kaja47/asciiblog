@@ -5,12 +5,15 @@ import java.awt.{ AlphaComposite, RenderingHints => RH }
 
 object ImageTools {
 
-  def resizeImage(src: BufferedImage, _width: Int, _height: Int = -1, sharpenStrength: Float): BufferedImage = {
+  def resizeImage(src: BufferedImage, targetWidth: Int, targetHeight: Int = -1, leeway: Double, sharpenStrength: Float): BufferedImage = {
+    require(leeway >= 1.0)
+
+    if (targetHeight <= 0 && targetWidth * leeway > src.getWidth) return src // never scale the image up
+    if (targetHeight * leeway > src.getHeight && targetWidth * leeway > src.getWidth) return src
+
     val (width, height) =
-      if (_height <= 0) {
-        if (_width > src.getWidth) return src /*(src.getWidth, src.getHeight)*/ // do not scale up
-        else (_width, (1.0 * _width / src.getWidth * src.getHeight).toInt)
-      } else (_width, _height)
+      if (targetHeight > 0) (targetWidth, targetHeight)
+      else (targetWidth, (1.0 * targetWidth / src.getWidth * src.getHeight).toInt)
 
     val zoom = math.min(1.0 * src.getWidth / width, 1.0 * src.getHeight / height)
     val wz = math.max(1, (width * zoom).toInt)
