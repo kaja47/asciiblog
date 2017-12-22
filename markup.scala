@@ -75,7 +75,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
 
   private val codeRegex     = """(?xs) `    (.+?) `    """.r
   private val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
-  private val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*)    (.+?) (?<!\*)           \*  (?!\*) """.r
+  private val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*)    ((?:.(?!`))+?) (?<!\*)  \*  (?!\*) """.r
   private val italic2Regex  = """(?xsUu) (?<!:)  // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) //         """.r
   private val altRegex      = """(?xm) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
   private val emRegex       = """---""".r
@@ -112,9 +112,6 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
     if (txt.contains(commentCheck)) {
       txt = commentRegex .replaceAllIn(txt, "")
     }
-    if (txt.contains(codeCheck)) {
-      txt = codeRegex    .replaceAllIn(txt, """<code>$1</code>""")
-    }
     if (txt.contains(boldCheck)) {
       txt = boldRegex    .replaceAllIn(txt, """<b>$1</b>""")
     }
@@ -126,6 +123,9 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
     }
     if (txt.contains(emCheck)) {
       txt = emRegex      .replaceAllIn(txt, "&mdash;")
+    }
+    if (txt.contains(codeCheck)) {
+      txt = codeRegex    .replaceAllIn(txt, """<code>$1</code>""")
     }
     if (txt.contains(noteCheck)) {
       txt = noteRegex.replaceAllIn(txt, m => Regex.quoteReplacement(s"""<a href="$noteUrl#fn${m.group(1)}"><sup>${m.group(1)}</sup></a> """))
