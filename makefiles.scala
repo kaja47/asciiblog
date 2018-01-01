@@ -301,6 +301,23 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
     def time(a: Article) = if (a.date != null) a.date.getTime else 0
     bs.map { b => (b, (~(b.tags.visible.toSet intersect atags).size, ~time(b), b.slug)) }.sortBy(_._2).map(_._1)
   }
+
+
+  private lazy val _similarTags: Map[Tag, Seq[Tag]] = {
+    val tags = tm.map { case (t, idxs) => (t,idxs.toSet) }
+
+    tags.map { case (t, idxs) =>
+      val sims = for {
+        (t2, idxs2) <- tags if t2 != t
+        in = idxs.intersect(idxs2).size
+      } yield (t2, in.toDouble / (in + idxs.size + idxs2.size))
+
+      (t, sims.toSeq.sortBy(-_._2).map(_._1))
+    }.toMap
+  }
+
+  def similarTags(t: Tag, count: Int): Seq[Article] =
+    _similarTags.get(t).getOrElse(Seq()).flatMap(base.tagByTitle.get).take(count)
 }
 
 
@@ -812,7 +829,7 @@ object MakeFiles {
     }
 
 
-    articles = timer("populate") { articles.par.map { a =>
+    articles = timer("populate") { (articles ++ base.extraTags).par.map { a =>
       val bs = backlinks.getOrElse(a.asSlug, Seq())
       val pubBy = pubsBy.getOrElse(a.asSlug, null)
 
@@ -823,7 +840,7 @@ object MakeFiles {
       a.copy(
         dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
         backlinks = sim.sortBySimilarity(bs, a),
-        similar = sim.similarByTags(a, count = blog.limitSimilar, without = bs),
+        similar = sim.similarByTags(a, count = blog.limitSimilar, without = bs) ++ (if (a.isTag) sim.similarTags(a.asTag, count = blog.limitSimilar) else Seq()),
         pub = refs(a, "pub"),
         pubBy = pubBy
       )
