@@ -4,8 +4,6 @@ import scala.util.matching.Regex
 import java.io.File
 
 object util {
-  def matches(r: Regex, s: String) = r.findFirstIn(s).nonEmpty
-
   private val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
 
   def globFiles(pattern: String): Array[File] = ((pattern match {

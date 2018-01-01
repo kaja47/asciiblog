@@ -645,10 +645,10 @@ object MakeFiles {
   }
 
   def readPosts(implicit blog: Blog): Vector[Article] = {
-    val lineRegex = """^===+$""".r
+    val lineRegex = """^===+$""".r.pattern
     blog.files.flatMap(globFiles).flatMap { f =>
       var ls = io.Source.fromFile(f).getLines.toVector
-      val starts = (0 until ls.length).collect { case i if matches(lineRegex, ls(i)) => i-1 }
+      val starts = (0 until ls.length).collect { case i if lineRegex.matcher(ls(i)).matches() => i-1 }
       (0 until starts.length).map { i =>
         parseArticle(ls.slice(starts(i), starts.lift(i+1).getOrElse(ls.length)))
       }
