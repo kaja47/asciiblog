@@ -44,11 +44,25 @@ object timer {
 
 class Timer {
   private val t = new java.util.concurrent.atomic.LongAdder()
+  private var _start = 0L
+
   def apply[T](f: => T) = {
     val s = System.nanoTime
     val r = f
     t.add(System.nanoTime - s)
     r
   }
+
+  def start(): Unit = {
+    if (_start != 0L) sys.error("what not yet ended cannot start again")
+    _start = System.nanoTime
+  }
+
+  def end(): Unit = {
+    if (_start == 0L) sys.error("what never started cannot end")
+    t.add(System.nanoTime - _start)
+    _start = 0L
+  }
+
   override def toString = "Timer "+(t.sum/1e6)+"ms"
 }
