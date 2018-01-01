@@ -424,23 +424,30 @@ object MakeFiles {
 
 
   private val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
-  private val dateRegex     = """^(\d+)-(\d+)-(\d+)(?: (\d+):(\d+)(?::(\d+))?)?""".r
+  private val dateRegex     = """^(\d++)-(\d++)-(\d++)(?: (\d++):(\d++)(?::(\d++))?)?""".r
   val licenses = Set("CC by", "CC by-nc", "CC by-nd", "CC by-sa", "CC by-nc-nd", "CC by-nc-sa")
 
   def parseDates(l: String): Option[Seq[Date]] = {
     if (!l.charAt(0).isDigit) return None
     val dates = l.split(",").map(l => parseDate(l.trim))
-    if (dates.nonEmpty && dates.forall(_.isDefined)) Some(dates.map(_.get)) else None
+    if (dates.nonEmpty && dates.forall(_ != null)) Some(dates) else None
   }
 
-  def parseDate(l: String): Option[Date] = l match {
-    case dateRegex(y, m, d, null, null, null) =>
-      Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime)
-    case dateRegex(y, m, d, h, mi, null) =>
-      Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt, h.toInt, mi.toInt, 0).getTime)
-    case dateRegex(y, m, d, h, mi, s) =>
-      Some(new GregorianCalendar(y.toInt, m.toInt-1, d.toInt, h.toInt, mi.toInt, s.toInt).getTime)
-    case _ => None
+  private def parseDate(l: String): Date = {
+    val matcher = dateRegex.pattern.matcher(l)
+
+    if (!matcher.matches()) null else {
+      def toInt(s: String) = if (s == null) 0 else s.toInt
+
+      val y  = toInt(matcher.group(1))
+      val m  = toInt(matcher.group(2))-1
+      val d  = toInt(matcher.group(3))
+      val h  = toInt(matcher.group(4))
+      val mi = toInt(matcher.group(5))
+      val s  = toInt(matcher.group(6))
+
+      new GregorianCalendar(y, m, d, h, mi, s).getTime
+    }
   }
 
   val parseLicense: PartialFunction[String, String] = {
