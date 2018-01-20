@@ -41,6 +41,7 @@ case class Blog (
   val albumsDir: String,
   val allowComments: Boolean,
   val shareLinks: Boolean,
+  val demandExplicitSlugs: Boolean,
 
   val openGraph: Boolean,
   val twitterSite: String,
@@ -86,6 +87,7 @@ object Blog {
       albumsDir              = cfg.getOrElse("albumsDir", ""),
       allowComments          = cfg.getOrElse("allowComments", "false").toBoolean,
       shareLinks             = cfg.getOrElse("shareLinks", "false").toBoolean,
+      demandExplicitSlugs    = cfg.getOrElse("demandExplicitSlugs", "false").toBoolean,
 
       openGraph              = cfg.getOrElse("openGraph", "false").toBoolean,
       twitterSite            = cfg.getOrElse("twitter.site", ""),
@@ -547,6 +549,9 @@ object MakeFiles {
       if (slug != null && slug != "") slug else
         if (isTag) tagSlug(title)
         else generateSlug(title)
+
+    if ((slug == null || slug == "") && blog.demandExplicitSlugs && !title.startsWith("???"))
+      sys.error(s"article ${title} is missing explicit slug")
 
     if ((dates.size + tags.size + license.size + links.size + notess.size + metas.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
