@@ -201,6 +201,9 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
       Article(t.title, tagSlug(t.title), meta = Meta(Map((if (t.supertag) "supertag" else "tag") -> null)), text = AsciiText.empty)
     }.toSeq
   }
+  lazy val allImages = all.flatMap { a => a.images.map(_.copy(inText = false, localSource = a)) }
+  def imageArchive = Article("imgs", "imgs", text = AsciiText.empty, images = allImages)
+
 
   private lazy val bySlug: Map[String, Article] = (all ++ extraTags).map(a => (a.slug, a)).toMap
   private lazy val byMeta: Map[String, Article] = (all ++ extraTags).flatMap(a => a.meta.scalars collect { case m: String => (m, a) }).toMap
@@ -966,7 +969,7 @@ object MakeFiles {
     fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
 
     timer("generate and save files - articles") {
-    base.articles.par foreach { a =>
+    (base.articles :+ base.imageArchive).par foreach { a =>
       var l = FlowLayout(blog.absUrl(a), base, blog, markup)
       val body = l.makeFullArticle(a)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
