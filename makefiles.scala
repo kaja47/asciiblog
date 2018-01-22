@@ -9,6 +9,7 @@ import java.util.{ Date, GregorianCalendar, Calendar, Locale, zip }
 import javax.imageio.{ ImageIO, IIOException }
 import scala.collection.{ mutable, immutable }
 import scala.util.matching.Regex
+import java.util.regex.Matcher
 import util._
 
 case class Blog (
@@ -457,19 +458,23 @@ object MakeFiles {
 
   private def parseDate(l: String): Date = {
     val matcher = dateRegex.pattern.matcher(l)
+    if (!matcher.matches()) null else _parseDate(matcher)
+  }
 
-    if (!matcher.matches()) null else {
-      def toInt(s: String) = if (s == null) 0 else s.toInt
+  private def parseDatePrefix(l: String): (Date, String) = {
+    val matcher = dateRegex.pattern.matcher(l)
+    if (!matcher.lookingAt()) (null, l) else (_parseDate(matcher), l.substring(matcher.end))
+  }
 
-      val y  = toInt(matcher.group(1))
-      val m  = toInt(matcher.group(2))-1
-      val d  = toInt(matcher.group(3))
-      val h  = toInt(matcher.group(4))
-      val mi = toInt(matcher.group(5))
-      val s  = toInt(matcher.group(6))
-
-      new GregorianCalendar(y, m, d, h, mi, s).getTime
-    }
+  private def _parseDate(matcher: Matcher) = {
+    def toInt(s: String) = if (s == null) 0 else s.toInt
+    val y  = toInt(matcher.group(1))
+    val m  = toInt(matcher.group(2))-1
+    val d  = toInt(matcher.group(3))
+    val h  = toInt(matcher.group(4))
+    val mi = toInt(matcher.group(5))
+    val s  = toInt(matcher.group(6))
+    new GregorianCalendar(y, m, d, h, mi, s).getTime
   }
 
   val parseLicense: PartialFunction[String, String] = {
@@ -533,7 +538,8 @@ object MakeFiles {
   def parseArticle(lines: Seq[String])(implicit blog: Blog): Article = {
     val ls = lines.map(l => if (l.length > 0 && l(l.length-1).isWhitespace) trailingWS.replaceAllIn(l, "") else l)
 
-    val titleRegex(xxx, title, slug) = ls(0)
+    val titleRegex(xxx, dateTitle, slug) = ls(0)
+    val (dateInTitle, title) = parseDatePrefix(dateTitle)
 
     val (metaLines, b) = ls.drop(2).span(l => l.nonEmpty)
     val body = b.slice(b.indexWhere(_.nonEmpty), b.lastIndexWhere(_.nonEmpty)+1)
@@ -562,9 +568,9 @@ object MakeFiles {
     links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
 
     new Article(
-      title   = title.trim,
+      title   = if (title.trim.nonEmpty) title.trim else dateTitle.trim,
       slug    = realSlug,
-      dates   = dates.flatten,
+      dates   = if (dateInTitle != null) dateInTitle +: dates.flatten else dates.flatten,
       tags    = tags.fold(Tags()) { (a, b) => a.merge(b) },
       meta    = meta,
       link    = links.headOption.getOrElse(null),
