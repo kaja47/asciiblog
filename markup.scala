@@ -80,9 +80,9 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
   private val altRegex      = """(?xm) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
   private val emRegex       = """---""".r
   private val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
-  private val list1Regex    = """(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n|\d+\)\ )) """.r
-  private val list2Regex    = """(?xm) ^((\d+)\)\ )(?!\ )(.*?)(?=\n(?:\d+\)\ |\n\n)) """.r
-  private val noteRegex     = """(?x) \[\[ (\d+) \]\]""".r
+  private val list1Regex    = """(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n|\d++\)\ )) """.r
+  private val list2Regex    = """(?xm) ^((\d++)\)\ )(?!\ )(.*?)(?=$|\n(?:\d++\)\ |\n\n)) """.r
+  private val noteRegex     = """(?x) \[\[ (\d++) \]\]""".r
 
   private val codeCheck     = """`"""
   private val boldCheck     = """**"""
