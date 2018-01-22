@@ -775,16 +775,18 @@ object MakeFiles {
 
     // maps all article slugs (main ones and aliases) to their absolute urls
     val globalNames: Map[String, String] = timer("global names") {
-      val allArticles: Seq[Article] = (Base(articles, tagMap).extraTags ++ articles)
+      val allArticles: Seq[Article] = Base(articles, tagMap).extraTags ++ articles
 
-      val slugs   = allArticles.map(_.slug)
-      val aliases = allArticles.flatMap(_.aliases)
+      val slugSet = new mutable.HashSet[String]() { override def initialSize = allArticles.size }
 
-      for ((s, ss) <- slugs.groupBy(s => s)) if (ss.size > 1) sys.error(s"duplicate slug $s")
+      for (a <- allArticles) {
+        if (slugSet.contains(a.slug)) sys.error(s"duplicate slug ${a.slug}")
+        slugSet += a.slug
+      }
+
       //for ((a, as) <- aliases.groupBy(a => a)) if (as.size > 1) sys.error(s"duplicate alias $a") // TODO
 
-      val slugSet = slugs.toSet
-      for (a <- aliases) if (slugSet.contains(a)) sys.error(s"alias $a is colliding with a slug")
+      for (art <- allArticles; a <- art.aliases) if (slugSet.contains(a)) sys.error(s"alias $a is colliding with a slug")
 
       allArticles.flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
     }
