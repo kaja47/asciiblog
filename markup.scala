@@ -96,7 +96,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
   private def mkParagraph(_txt: String, aliases: Map[String, String]): String = {
     var txt = _txt
     if (txt.contains(blackoutCheck)) {
-      txt = blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(7).mkString("<wbr>"))
+      txt = blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(5).mkString("<wbr>"))
     }
     if (txt.contains(altCheck)) {
       txt = altRegex     .replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
