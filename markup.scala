@@ -165,7 +165,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
 sealed trait Segment
 final case class Heading(txt: String) extends Segment
 final case class Hr() extends Segment
-final case class Linkref(linkMap: Map[String, String]) extends Segment
+final case class Linkref(linkMap: Seq[(String, String)]) extends Segment
 final case class Images(images: Seq[Image]) extends Segment
 final case class Paragraph(txt: String) extends Segment
 final case class Block(tpe: String, txt: String) extends Segment
@@ -202,7 +202,7 @@ object AsciiMarkup extends Markup {
           val ls = txt.lines.toVector
           matchAllLines(ls) {
             case linkRefRegex(r, url) => (r, url)
-          }.map(refs => Linkref(refs.toMap)).orElse {
+          }.map(refs => Linkref(refs)).orElse {
             matchAllLines(ls)(mkImage(imageRoot)).map(Images)
           }.orElse {
             matchAllLines(ls) {
