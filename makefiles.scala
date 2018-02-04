@@ -420,7 +420,10 @@ object MakeFiles {
         val bs = b.getPath.split("/").filter(_.nonEmpty)
         val prefixLen = (us zip bs).takeWhile { case (u, b) => u == b }.length
         val backLevels = bs.length - prefixLen - 1
-        (Seq.fill(backLevels)("..") ++ us.drop(prefixLen)).mkString("/") +
+        val parts = Seq.fill(backLevels)("..") ++ us.drop(prefixLen)
+        val partsWithoutLastDot = if (parts.length > 1 && parts.last == ".") parts.dropRight(1) else parts
+
+        partsWithoutLastDot.mkString("/") +
           (if (u.getRawQuery != null) "?"+u.getRawQuery else "")+
           (if (u.getRawFragment != null) "#"+u.getRawFragment else "")
       }
