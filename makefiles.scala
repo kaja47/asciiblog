@@ -249,7 +249,11 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
   private val arts: Array[Article] = (tagMap.values.flatten ++ articlesReferencedByRel).toArray.distinct
   private val artMap: Map[Article, Int] = arts.zipWithIndex.toMap
   private val slugMap: Map[Slug, Int] = artMap.map { case (k, v) => (k.asSlug, v) }
-  private val tm: Map[Tag, Array[Int]] = tagMap.map { case (t, as) => (t, as.map(artMap).toArray) }
+  private val tm: Map[Tag, Array[Int]] = tagMap.map { case (t, as) =>
+    val idxs = as.map(artMap).toArray
+    java.util.Arrays.sort(idxs)
+    (t, idxs)
+  }
 
   def similarByTags(a: Article, count: Int, without: Seq[Article]): Seq[Article] = {
     def dateDiff(a: Article, b: Article): Long = {
@@ -310,26 +314,51 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
 
   def sortBySimilarity(bs: Seq[Article], a: Article): Seq[Article] = {
     val atags = a.tags.visible.toSet
-    def time(a: Article) = if (a.date != null) a.date.getTime else 0
-    bs.map { b => (b, (~(b.tags.visible.toSet intersect atags).size, ~time(b), b.slug)) }.sortBy(_._2).map(_._1)
+    def timeOf(a: Article) = if (a.date != null) a.date.getTime else 0
+    def commonTags(b: Article) = b.tags.visible.count { bt => atags.contains(bt) }
+    bs.map { b => (b, (~commonTags(b), ~timeOf(b), b.slug)) }.sortBy(_._2).map(_._1)
   }
 
+  def similarTags(t: Tag, count: Int): Seq[Article] = {
 
-  private lazy val _similarTags: Map[Tag, Seq[Tag]] = {
-    val tags = tm.map { case (t, idxs) => (t,idxs.toSet) }
+    class TopN[T: Ordering](n: Int) {
+      val set = mutable.TreeSet[(Double, T)]()
+      var min = Double.MinValue
 
-    tags.map { case (t, idxs) =>
-      val sims = for {
-        (t2, idxs2) <- tags if t2 != t
-        in = idxs.intersect(idxs2).size
-      } yield (t2, in.toDouble / (in + idxs.size + idxs2.size))
+      def += (x: (Double, T)): Unit = {
+        if (x._1 < min) return
+        set += x
+        if (set.size > n) {
+          val h = set.head
+          min = h._1
+          set.remove(h)
+        }
+      }
+      def toSeq = set.toVector
+    }
 
-      (t, sims.toSeq.sortBy(-_._2).map(_._1))
-    }.toMap
+    def intersectionSize(a: Array[Int], b: Array[Int]): Int = {
+      var size, ai, bi = 0
+      while (ai < a.length && bi < b.length) {
+        val av = a(ai)
+        val bv = b(bi)
+        size += (if (av == bv) 1 else 0)
+        ai   += (if (av <= bv) 1 else 0)
+        bi   += (if (av >= bv) 1 else 0)
+      }
+      size
+    }
+
+    val idxs = tm.getOrElse(t, Array())
+    val topn = new TopN[Tag](count)(Ordering.by { t => t.title })
+
+    for ((t2, idxs2) <- tm if t2 != t) {
+      val in = intersectionSize(idxs, idxs2)
+      topn += (in.toDouble / (in + idxs.size + idxs2.size), t2)
+    }
+
+    topn.toSeq.map(_._2).flatMap(base.tagByTitle.get)
   }
-
-  def similarTags(t: Tag, count: Int): Seq[Article] =
-    _similarTags.get(t).getOrElse(Seq()).flatMap(base.tagByTitle.get).take(count)
 }
 
 
