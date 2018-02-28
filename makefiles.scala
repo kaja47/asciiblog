@@ -189,22 +189,28 @@ case class Tag(title: String, supertag: Boolean = false) {
 }
 
 
+object Base {
+  def tagsOfImages(all: Vector[Article]): Seq[Tag] = all.flatMap(_.images).flatMap(_.tags.visible)
+
+  // tags that have no particular article
+  def extraTags(all: Vector[Article], tagMap: Map[Tag, Seq[Article]]): Vector[Article] = {
+    val direct: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
+    tagMap.collect { case (t, as) if !direct.contains(t) =>
+      Article(t.title, tagSlug(t.title), meta = Meta(Map((if (t.supertag) "supertag" else "tag") -> null)), text = AsciiText.empty)
+    }.toVector
+  }
+}
+
 case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
-  private lazy val tagsOfImages: Seq[Tag] = all.flatMap(_.images).flatMap(_.tags.visible)
-  lazy val tagMap: Map[Tag, Seq[Article]] = tagsOfImages.map(_ -> Seq()).toMap ++ _tagMap
+  private lazy val tagMap: Map[Tag, Seq[Article]] = Base.tagsOfImages(all).map(_ -> Seq()).toMap ++ _tagMap
 
   private lazy val imageTagMap: Map[Tag, Seq[(Image, Article)]] = invert(all.flatMap(a => a.images.map(i => ((i, a), i.tags.visible.distinct))))
   private def taggedImages(t: Tag) = imageTagMap.getOrElse(t, Seq()).map { case (i, a) => i.copy(inText = false, localSource = a) }
 
-  lazy val extraTags: Seq[Article] = { // tags that have no particular article
-    val direct: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
-    tagMap.collect { case (t, as) if !direct.contains(t) =>
-      Article(t.title, tagSlug(t.title), meta = Meta(Map((if (t.supertag) "supertag" else "tag") -> null)), text = AsciiText.empty)
-    }.toSeq
-  }
   lazy val allImages = all.flatMap { a => a.images.map(_.copy(inText = false, localSource = a)) }
   def imageArchive = Article("imgs", "imgs", text = AsciiText.empty, images = allImages)
 
+  lazy val extraTags: IndexedSeq[Article] = Base.extraTags(all, tagMap)
 
   private lazy val bySlug: Map[String, Article] = (all ++ extraTags).map(a => (a.slug, a)).toMap
   private lazy val byMeta: Map[String, Article] = (all ++ extraTags).flatMap(a => a.meta.scalars collect { case m: String => (m, a) }).toMap
