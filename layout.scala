@@ -209,7 +209,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   def makeShortArticleBody(a: Article): String = {
     val img = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a.text, false)).getOrElse("")
-    val txt = truncate(stripTags(a.text.render(this), Seq("wbr")), 300)
+    val txt = truncate(plaintextDescription(a), 300)
+
     ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
   }
 
