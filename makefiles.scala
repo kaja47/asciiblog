@@ -418,7 +418,7 @@ object MakeFiles {
       } else {
         val us = u.getPath.split("/").filter(_.nonEmpty)
         val bs = b.getPath.split("/").filter(_.nonEmpty)
-        val prefixLen = (us zip bs).takeWhile { case (u, b) => u == b }.length
+        val prefixLen = (0 until us.length).prefixLength { i => us(i) == bs(i) }
         val backLevels = bs.length - prefixLen - 1
         val parts = Seq.fill(backLevels)("..") ++ us.drop(prefixLen)
         val partsWithoutLastDot = if (parts.length > 1 && parts.last == ".") parts.dropRight(1) else parts
@@ -644,11 +644,11 @@ object MakeFiles {
 
     val h = hash(content)
 
-    //if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
+    if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
       val fw = new FileWriter(ff)
       fw.write(content)
       fw.close()
-    //}
+    }
 
     Seq(f -> h)
   }
@@ -805,7 +805,8 @@ object MakeFiles {
 
     timer("parse text") {
     articles = articles.map { a =>
-      val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a), if (a.notes == null) "" else blog.absUrlFromSlug(a.notes), blog.imageRoot)
+      val noteUrl = if (a.notes == null) "" else blog.absUrlFromSlug(a.notes)
+      val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a), noteUrl, blog.imageRoot)
 
       txt.linkAliases.groupBy(_._1).filter(_._2.size > 1).foreach { case (l, _) =>
         sys.error(s"duplicate link refs [$l] in article '${a.slug}'")

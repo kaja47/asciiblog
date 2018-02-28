@@ -130,7 +130,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
     } else ""
 
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String = {
-    val defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
+    def defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
     val protoHeader = if (blog.header.nonEmpty) blog.header else defaultHeader
     val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
     val footer = ahrefRegex.replaceAllIn(blog.footer, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
