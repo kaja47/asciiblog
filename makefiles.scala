@@ -372,10 +372,7 @@ object Make extends App {
 
   val (_, blog, markup, base) = MakeFiles.init(args)
 
-  if (args.length >= 2 && args(1) == "tags") {
-    MakeFiles.tags(blog, base)
-
-  } else if (args.length >= 2 && args(1) == "checkLinks") {
+  if (args.length >= 2 && args(1) == "checkLinks") {
     MakeFiles.checkUrls(blog, base)
 
   } else {
@@ -952,11 +949,6 @@ object MakeFiles {
 //      }
 //    }
 
-  def tags(blog: Blog, base: Base) = {
-    val titleLine = io.Source.stdin.getLines.take(1).toSeq.head
-    val titleRegex(_, _, slug) = titleLine
-    RecommendTags(blog, base, slug)
-  }
 
 
 
