@@ -26,9 +26,13 @@ function show(i) {
 		img.src = "";
 		img.src = imgs[i].parentNode.href;
 		active = i;
-		let t = imgs[i].parentElement.parentElement.textContent;
-		label.style.display = (t ? 'block' : 'none');
-		label.textContent = t;
+		let t = imgs[i].parentElement.parentElement;
+		label.style.display = (t.textContent ? 'block' : 'none');
+		t = t.cloneNode(true);
+		t.removeChild(t.firstChild); // remove img tag itself
+		t.setAttribute('class', '');
+		label.textContent = '';
+		label.appendChild(t);
 	}
 }
 

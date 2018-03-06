@@ -398,7 +398,7 @@ object MakeFiles {
 
   private def file(f: String) = new File(thisDir, f)
 
-  private def crudelyMinify(js: String) = js.replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/", "")
+  private def crudelyMinify(js: String) = js.replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/|//.*\n", "")
   def keyValues(f: File) = io.Source.fromFile(f).getLines.collect(keyVal).toMap
 
   lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js")).mkString)
