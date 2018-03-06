@@ -13,7 +13,7 @@ box.appendChild(label);
 box.addEventListener('click', function(e) { hide(); });
 img.addEventListener('click', function(e) { move(1); e.stopPropagation(); });
 
-let imgs = null, active = null;
+let imgs = [], active = null;
 
 function move(n) { show(active + n); }
 function hide() { box.style.display = "none"; }
@@ -37,7 +37,12 @@ function show(i) {
 }
 
 window.addEventListener('load', function (e) {
-	imgs = document.querySelectorAll('img.thz');
+	let is = document.querySelectorAll('img.thz');
+	for (let i = 0; i < is.length; i++) {
+		if (is[i].parentNode.href.match(/.*(jpg|png|gif)/i)) {
+			imgs.push(is[i]);
+		}
+	}
 	for (let i = 0; i < imgs.length; i++) {
 		imgs[i].addEventListener('click', function (e) {
 			show(i);

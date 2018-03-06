@@ -18,7 +18,7 @@ trait Layout extends ImageLayout {
 
 // this type is passed into markup
 trait ImageLayout {
-  def imgTag(img: Image, t: Text, showDesc: Boolean = true): String
+  def imgTag(img: Image, t: Text, showDesc: Boolean = true, linkTo: String = null): String
 }
 
 object FlowLayout {
@@ -53,7 +53,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
   private def mainImageUrl(a: Article): String  = articleImages(a).find(_.mods == "main").map(_.url).getOrElse(null)
   private def otherImageUrl(a: Article): String = articleImages(a).map(_.url).headOption.getOrElse(null)
 
-  def imgTag(img: Image, t: Text, showDesc: Boolean = true) = {
+  def imgTag(img: Image, t: Text, showDesc: Boolean = true, linkTo: String = null) = {
     val (cl, srcPath) = img match {
       case i if i.mods == "main" && i.align == ">" => ("fr", blog.bigThumbnailUrl(img, true))
       case i if i.mods == "main" => ("main", blog.bigThumbnailUrl(img, false))
@@ -67,7 +67,10 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
       val locSrc  = ifs(img.localSource, articleLink(img.localSource, img.localSource.title))
       Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
     } else ""
-    s"""<span class=$cl><a href="${img.url}"><img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="${blog.absUrlFromPath(srcPath)}"/></a>$desc</span>"""
+
+    val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="${blog.absUrlFromPath(srcPath)}"/>"""
+    val aTag   = s"""<a href="${if (linkTo == null) img.url else linkTo}">$imgTag</a>"""
+    s"""<span class=$cl>$aTag$desc</span>"""
   }
 
   def gallerySample(a: Article) =
@@ -208,7 +211,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeShortArticleBody(a: Article): String = {
-    val img = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a.text, false)).getOrElse("")
+    val img = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
     val txt = truncate(plaintextDescription(a), 300)
 
     ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
