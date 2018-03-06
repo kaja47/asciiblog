@@ -7,7 +7,7 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.{ Date, GregorianCalendar, Calendar, Locale, zip }
 import javax.imageio.{ ImageIO, IIOException }
-import scala.collection.{ mutable, immutable }
+import scala.collection.mutable
 import scala.util.matching.Regex
 import java.util.regex.Matcher
 import util._
@@ -481,7 +481,7 @@ object MakeFiles {
   }
 
 
-  private val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
+  val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
   private val dateRegex     = """^(\d++)-(\d++)-(\d++)(?: (\d++):(\d++)(?::(\d++))?)?""".r
   val licenses = Set("CC by", "CC by-nc", "CC by-nd", "CC by-sa", "CC by-nc-nd", "CC by-nc-sa")
 
@@ -676,11 +676,11 @@ object MakeFiles {
 
     val h = hash(content)
 
-    if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
+    //if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
       val fw = new FileWriter(ff)
       fw.write(content)
       fw.close()
-    }
+    //}
 
     Seq(f -> h)
   }
