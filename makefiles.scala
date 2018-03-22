@@ -952,8 +952,6 @@ object MakeFiles {
 
 
 
-
-
   def makeFiles(blog: Blog, base: Base, markup: Markup) = {
     implicit val _blog = blog
 
@@ -1094,6 +1092,21 @@ object MakeFiles {
     }
 
     new File(blog.outDir, "t").mkdir()
+
+    import java.awt.image. { BufferedImage }
+    import javax.imageio. { IIOImage, ImageWriteParam }
+
+    def saveJpg(thumbFile: File, img: BufferedImage, quality: Float) = {
+      val ios = ImageIO.createImageOutputStream(thumbFile)
+      val writer = ImageIO.getImageWritersByFormatName("jpeg").next()
+      val params = writer.getDefaultWriteParam()
+      params.setCompressionMode(ImageWriteParam.MODE_EXPLICIT)
+      params.setCompressionQuality(quality)
+      writer.setOutput(ios)
+      writer.write(null, new IIOImage(img, null, null), params)
+      writer.dispose()
+    }
+
     for ((image, jobs) <- resizeJobs) {
       try {
         lazy val file = {
@@ -1109,7 +1122,12 @@ object MakeFiles {
               val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
               val leeway = if (s == "png" || s == "gif") 1.5 else 1
               val strength = if (s == "png" || s == "gif") 0f else sharpenStrength
-              ImageIO.write(ImageTools.resizeImage(full, w, h, leeway, strength), s, thumbFile)
+              val resized = ImageTools.resizeImage(full, w, h, leeway, strength)
+              if (s == "jpg" || s == "jpeg") {
+                saveJpg(thumbFile, resized, 0.85f)
+              } else {
+                ImageIO.write(resized, s, thumbFile)
+              }
           }
         }
       } catch { case e: IIOException => println(e) }
