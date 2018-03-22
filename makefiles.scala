@@ -228,10 +228,10 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   def isValidId(id: String): Boolean = find(id).nonEmpty
   def canonicSlug(id: String) = find(id).get.slug
 
-  def next(a: Article) = art2ord.get(a).flatMap { ord => feed.lift(ord+1) }.getOrElse(null)
-  def prev(a: Article) = art2ord.get(a).flatMap { ord => feed.lift(ord-1) }.getOrElse(null)
+  def next(a: Article): Article = art2ord.get(a).flatMap { ord => feed.lift(ord+1) }.getOrElse(null)
+  def prev(a: Article): Article = art2ord.get(a).flatMap { ord => feed.lift(ord-1) }.getOrElse(null)
 
-  private def move(a: Article, tag: Tag, n: Int) = {
+  private def move(a: Article, tag: Tag, n: Int): Article = {
     val as = tagMap(tag)
     val pos = as.indexWhere(_.slug == a.slug)
     require(pos != -1)
@@ -239,8 +239,8 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
     else as(pos+n)
   }
 
-  def next(a: Article, tag: Tag) = move(a, tag, +1)
-  def prev(a: Article, tag: Tag) = move(a, tag, -1)
+  def next(a: Article, tag: Tag): Article = move(a, tag, +1)
+  def prev(a: Article, tag: Tag): Article = move(a, tag, -1)
 }
 
 class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
@@ -642,8 +642,8 @@ object MakeFiles {
     cal.get(field)
   }
 
-  def year(d: Date) = calendar(d, Calendar.YEAR)
-  def month(d: Date) = calendar(d, Calendar.MONTH)+1
+  def year(d: Date): Int = calendar(d, Calendar.YEAR)
+  def month(d: Date): Int = calendar(d, Calendar.MONTH)+1
   def yearmonth(d: Date) = (year(d), month(d))
 
 
@@ -932,7 +932,7 @@ object MakeFiles {
 
 
 
-  def checkUrls(blog: Blog, base: Base) = ()
+  def checkUrls(blog: Blog, base: Base) = ???
 //    for {
 //      a <- base.all ; l <- a.links
 //      url = resolveLink(l, base, a) if !blog.isLocalLink(url)
