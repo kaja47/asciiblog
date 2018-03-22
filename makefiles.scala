@@ -208,7 +208,6 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   private def taggedImages(t: Tag) = imageTagMap.getOrElse(t, Seq()).map { case (i, a) => i.copy(inText = false, localSource = a) }
 
   lazy val allImages = all.flatMap { a => a.images.map(_.copy(inText = false, localSource = a)) }
-  def imageArchive = Article("imgs", "imgs", text = AsciiText.empty, images = allImages)
 
   lazy val extraTags: IndexedSeq[Article] = Base.extraTags(all, tagMap)
 
@@ -993,12 +992,12 @@ object MakeFiles {
 
 
     timer("generate and save files") {
-    val archiveLinks = archivePages.par.map { case (a, as) =>
+    val archiveLinks = archivePages.zipWithIndex.par.map { case ((a, as), idx) =>
       val l = FlowLayout(blog.absUrl(a), base, blog, markup)
-      val prev = archivePages((archivePages.indexWhere(_._1.slug == a.slug)-1) max 0 min (archivePages.length-1))._1
-      val next = archivePages((archivePages.indexWhere(_._1.slug == a.slug)+1) max 0 min (archivePages.length-1))._1
-      val body = l.makeIndex(Seq(), as, prev = prev, next = next)
-      fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, containImages = false /* only links, no full articles */), oldFileIndex)
+      val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
+      val next = archivePages.lift(idx+1).map(_._1).getOrElse(null)
+      val body = l.addArrows(l.makeIndex(Seq(), as), prev, next, true)
+      fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, containImages = as.exists(_.hasImageMarker)), oldFileIndex)
       a
     }.seq
 
@@ -1007,8 +1006,23 @@ object MakeFiles {
     val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month")
     fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
 
+    val groupedImages = base.allImages.reverse.grouped(100).toVector.zipWithIndex.reverse
+    val imgsPages = groupedImages.map { case (images, idx) =>
+      val isFirst = idx == (groupedImages.size-1)
+      Article(s"imgs ${idx+1}", if (isFirst) "imgs" else s"imgs-${idx+1}", text = AsciiText.empty, images = images)
+    }
+
+
+    imgsPages.zipWithIndex.par foreach { case (a, idx) =>
+      var l = FlowLayout(blog.absUrl(a), base, blog, markup)
+      val prev = imgsPages.lift(idx-1).getOrElse(null)
+      val next = imgsPages.lift(idx+1).getOrElse(null)
+      val body = l.addArrows(l.makeFullArticle(a), prev, next)
+      fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = true), oldFileIndex)
+    }
+
     timer("generate and save files - articles") {
-    (base.articles :+ base.imageArchive).par foreach { a =>
+    base.articles.par foreach { a =>
       var l = FlowLayout(blog.absUrl(a), base, blog, markup)
       val body = l.makeFullArticle(a)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)

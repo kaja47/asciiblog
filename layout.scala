@@ -11,9 +11,10 @@ import scala.util.matching.Regex
 
 trait Layout extends ImageLayout {
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String
-  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, prev: Article = null, next: Article = null): String
+  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String
   def makeFullArticle(a: Article): String
   def makeTagIndex(base: Base): String
+  def addArrows(content: String, next: Article, prev: Article, includeBottom: Boolean = false): String
 }
 
 // this type is passed into markup
@@ -157,7 +158,7 @@ span.main img, span.fr img {max-width:100%}
 h2 {display:inline;margin:0;font-size:1em}
 hr {border:0px dotted gray;border-top-width:1px;margin:0.8em 4em}
 p {margin:1.4em 0}
-.sh {float:left;clear:both;margin:0.7em 0}
+.sh {float:left;clear:both;margin:0.8em 0}
 .shimg {float:left;margin:0 0.5em 0 0}
 .bottom {font-size:0.9em}
 """, cats)+blog.cssStyle
@@ -176,12 +177,10 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 </html>"""
   }
 
-  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, prev: Article = null, next: Article = null): String =
-    "<span class=f>"+_makeNextPrevArrows(prev, next)+"</span>"+
+  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String =
     fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
-    (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"+
-    "<span class=f>"+_makeNextPrevArrows(prev, next)+"</span>"
+    (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"
 
   private def groupArchive(archiveLinks: Seq[Article]) =
     "<div style='clear:both'>"+
@@ -266,7 +265,13 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   def makeTagIndex(base: Base) =
     base.allTags.toSeq.sortBy { case (t, as) => (~as.size, t.slug) }.map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
-  def makeDateWithLinkToPubBy(a: Article, asLink: Boolean) =
+  def addArrows(content: String, next: Article, prev: Article, includeBottom: Boolean = false) = {
+    "<span class=f>"+_makeNextPrevArrows(next, prev)+"</span>"+
+    content+
+    (if (includeBottom) "<span class=f>"+_makeNextPrevArrows(next, prev)+"</span>" else "")
+  }
+
+  private def makeDateWithLinkToPubBy(a: Article, asLink: Boolean) =
     if (a.pubBy != null && !asLink) articleLink(a.pubBy, makeDate(a))
     else makeDate(a)
 
@@ -290,11 +295,14 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     ifs(base.prev(a), "««« "+makeLink(base.prev(a))+"<br/>") +
     ifs(base.next(a), "»»» "+makeLink(base.next(a))+"<br/>")
 
-  def makeNextPrevArrows(a: Article) = _makeNextPrevArrows(base.prev(a), base.next(a))
+  def makeNextPrevArrows(a: Article) = {
+    val (prev, next) = (base.prev(a), base.next(a))
+    if (prev == null && next == null) "" else  _makeNextPrevArrows(prev, next)
+  }
 
   def _makeNextPrevArrows(prev: Article, next: Article) =
-    (if (prev == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=prev href="${blog.absUrl(prev)}">«««</a>""")+" "+
-    (if (next == null) "&nbsp;&nbsp;&nbsp;" else s"""<a id=next href="${blog.absUrl(next)}">»»»</a>""")
+    (if (prev == null) "«««" else s"""<a id=prev href="${blog.absUrl(prev)}">«««</a>""")+" "+
+    (if (next == null) "»»»" else s"""<a id=next href="${blog.absUrl(next)}">»»»</a>""")
 
   def makeTagLinks(tags: Seq[Article], a: Article = null) =
     tags.map { t =>
