@@ -165,6 +165,7 @@ case class Article(
   dates: Seq[Date] = Seq(), // publishing date + dates of updates
   tags: Tags = Tags(),
   meta: Meta = Meta(),
+  rel: Seq[String] = Seq(),
   link: String = null,
   notes: String = null,
   license: String = null,
@@ -186,7 +187,6 @@ case class Article(
   def isTag      = meta.values.contains("tag") || isSupertag
   def asTag      = if (isTag) Tag(title, isSupertag) else null
   def extraImages = images.filter(!_.inText)
-  def rel: Seq[String] = meta.seq("rel")
   def aliases: Seq[String] = meta.scalars.toVector
   def links: Seq[String] = {
     text.links.foreach(l => require(isAbsolute(l), s"Text.links must return absolute urls, '$l' provided (in article $slug)"))
@@ -203,7 +203,6 @@ case class Meta(values: Map[String, Meta] = Map()) {
   def scalar(key: String): String = scalars.find(_.startsWith(key+":")).map(_.drop(key.length+1).trim).getOrElse(null)
   def scalars = values.collect { case (k, v) if v == null => k }
   def seq(k: String): Seq[String] = values.get(k).map(_.values.keys.toSeq).getOrElse(Seq())
-  def withSeq(k: String, xs: Seq[String]) = Meta(values.updated(k, Meta(xs.map(_ -> null).toMap)))
   def merge(that: Meta): Meta =
     Meta(that.values.foldLeft(values) { case (res, (k, v)) =>
       res.get(k) match {
@@ -586,12 +585,16 @@ object MakeFiles {
     } else None
 
   private def prefixedLine(prefix: String): PartialFunction[String, String] = {
-    case l if l.startsWith(prefix)  => l.drop(prefix.length).trim
+    case l if l.startsWith(prefix) => l.drop(prefix.length).trim
+  }
+  private def prefixedList(prefix: String): PartialFunction[String, Seq[String]] = {
+    case l if l.startsWith(prefix) => l.drop(prefix.length).split(",").map(_.trim)
   }
 
-  val parseLink: PartialFunction[String, String]   = prefixedLine("link:")
-  val parseNotes: PartialFunction[String, String]  = prefixedLine("notes:")
-  val parseAuthor: PartialFunction[String, String] = prefixedLine("by:")
+  val parseLink   = prefixedLine("link:")
+  val parseNotes  = prefixedLine("notes:")
+  val parseAuthor = prefixedLine("by:")
+  val parseRel    = prefixedList("rel:")
 
   def hash(txt: String): String = hash(txt.getBytes("utf-8"))
   def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
@@ -615,6 +618,7 @@ object MakeFiles {
     val metas   = metaLines.flatMap(parseMeta(_, "meta: "))
     val notess  = metaLines.collect(parseNotes)
     val authors = metaLines.collect(parseAuthor)
+    val rels    = metaLines.collect(parseRel)
     val meta = metas.foldLeft(Meta())(_ merge _)
 
     val isTag = meta.values.contains("supertag") || meta.values.contains("tag") || (slug != null && isTagSlug(slug))
@@ -627,7 +631,7 @@ object MakeFiles {
     if ((slug == null || slug == "") && blog.demandExplicitSlugs && !title.startsWith("???"))
       sys.error(s"article ${title} is missing explicit slug")
 
-    if ((dates.size + tags.size + license.size + links.size + notess.size + metas.size) < metaLines.size)
+    if ((dates.size + tags.size + license.size + links.size + notess.size + metas.size + rels.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
 
     links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
@@ -639,6 +643,7 @@ object MakeFiles {
       dates   = if (dateInTitle != null) dateInTitle +: dates.flatten else dates.flatten,
       tags    = tags.fold(Tags()) { (a, b) => a.merge(b) },
       meta    = meta,
+      rel     = rels.flatten,
       link    = links.headOption.getOrElse(null),
       notes   = notess.headOption.getOrElse(null),
       license = license.headOption.getOrElse(null),
@@ -892,15 +897,15 @@ object MakeFiles {
         }
       }
 
-      // translate meta:rel specified by local alias
-      val newMeta = if (a.rel.isEmpty) a.meta else {
+      // translate `rel` that is set to local alias
+      val newRel = if (a.rel.isEmpty) a.rel else {
         val localAliases = txt.linkAliases.toMap
-        a.meta.withSeq("rel", a.meta.seq("rel").map { r => localAliases.getOrElse(r, r) })
+        a.rel.map { r => localAliases.getOrElse(r, r) }
       }
 
       a.copy(
         text = txt,
-        meta = newMeta,
+        rel = newRel,
         // images might be already populated from readGallery()
         images = (a.images ++ txt.images)
       )
