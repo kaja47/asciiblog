@@ -47,6 +47,24 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
 
+  def eval(ast: Lispy.AST, article: Article = null, articles: Seq[Article] = Seq(), body : String = null) = {
+    val res = Lispy.eval(ast,
+      Lispy.env + (
+        "article" -> article, "articles" -> articles, "body" -> body, "base" -> base, "blog" -> blog,
+        "tag" -> Lispy.Func { case (t: String) :: s :: Nil => Tag(t, Lispy.truthy(s)) },
+        "article-url" -> Lispy.Func { case (a: Article) :: Nil => articleUrl(a) },
+        "article-link" -> Lispy.Func {
+          case (a: Article) :: Nil => articleLink(a, a.title)
+          case (a: Article) :: (t: String) :: Nil => articleLink(a, t)
+        },
+        "make-title"   -> Lispy.Func { case (a: Article) :: Nil => makeTitle(a, true) },
+        "find-article" -> Lispy.Func { case (slug: String) :: Nil => base.find(slug).getOrElse(null) },
+        "year" -> Lispy.Func { case (d: Date) :: Nil => year(d) }
+      )
+    )
+    ifs(res, res.toString)
+  }
+
   private def plaintextDescription(a: Article): String =
     stripTags(a.text.firstParagraph).replaceAll("\\n", " ")
 
@@ -178,6 +196,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String =
+    ifs(blog.scripts.indexPrepend != null && fullArticles.nonEmpty, eval(blog.scripts.indexPrepend, articles = fullArticles))+
     fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
     (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"
@@ -200,7 +219,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   // Bare article body, no title, no links to related articles, no tags. This method is used in RSS feeds.
   def makeArticleBody(a: Article, compact: Boolean): String = {
-    a.text.render(this)+
+    (if (blog.scripts.body != null) eval(blog.scripts.body, body = a.text.render(this))
+    else a.text.render(this))+
     ifs(a.isTag, {
       val linked = a.slugsOfLinkedArticles(blog).toSet
       listOfLinks(base.allTags(a).filter(a => !linked.contains(a.asSlug)), blog.tagFormat == "short")
@@ -227,7 +247,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
 
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
-    (if(!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
+    (if (blog.scripts.title != null) eval(blog.scripts.title, article = a) else
+    (if(!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>"))+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     ifs(a.isTag, {
       val sup = a.tags.visible.map(base.tagByTitle)
@@ -241,6 +262,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     })+
     "<br/>\n"+
     makeArticleBody(a, compact)+
+    ifs(!compact && blog.scripts.fullArticleBottom != null, eval(blog.scripts.fullArticleBottom, article = a))+
     ifs(!compact,
       """<div class=bottom>"""+
       ifs(blog.allowComments && !a.isTag, s"""<hr/><b><a href="comments.php?url=${blog.relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b> """)+
@@ -278,9 +300,11 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   def makeTitle(a: Article, asLink: Boolean = true) =
     makeDateWithLinkToPubBy(a, asLink)+" <h2>"+articleLink(a, a.title, asLink)+"</h2>"
 
+  def articleUrl(a: Article) = if (a.link != null) a.link else blog.absUrl(a)
+
   def articleLink(a: Article, title: String, asLink: Boolean = true) =
     if (a.link != null || asLink)
-      s"""<i><a href="${if (a.link != null) a.link else blog.absUrl(a)}">$title</a></i>"""+ifs(a.hasImageMarker, blog.imageMarker)
+      s"""<i><a href="${articleUrl(a)}">$title</a></i>"""+ifs(a.hasImageMarker, blog.imageMarker)
     else
       s"""<i>$title</i>"""+ifs(a.hasImageMarker, blog.imageMarker)
 

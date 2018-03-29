@@ -49,12 +49,20 @@ case class Blog (
   val twitterCreator: String,
 
   val args: Array[String],
-  val translation: Map[String, String]
+  val translation: Map[String, String],
+  val scripts: Scripts = Scripts()
 ) {
   def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
   def printTimes: Boolean  = false
   def printErrors: Boolean = !(args.length > 1 && args(1) == "tags")
 }
+
+case class Scripts(
+  indexPrepend: Lispy.AST = null,
+  title: Lispy.AST = null,
+  fullArticleBottom: Lispy.AST = null,
+  body: Lispy.AST = null
+)
 
 object Blog {
   def populate(cfg: Map[String, String], args: Array[String], translation: Map[String, String]) = {
@@ -147,6 +155,7 @@ case class Article(
 
   // image marker is shown only for images that are not from external sources
   def hasImageMarker = images.exists(i => i.source == null || i.source == "")
+  def hasTag(t: Tag) = tags.visible.contains(t)
 }
 
 case class Meta(values: Map[String, Meta] = Map()) {
@@ -409,8 +418,8 @@ object MakeFiles {
     val txl = keyValues(file("lang."+cfg.getOrElse("language", "en")))
     val blog = Blog.populate(cfg, args, txl)
     val markup = AsciiMarkup
-    val base = makeBase(blog, markup)
-    (cfg, blog, markup, base)
+    val (newBlog, base) = makeBase(blog, markup)
+    (cfg, newBlog, markup, base)
   }
 
 
@@ -732,8 +741,19 @@ object MakeFiles {
 
 
 
-  def makeBase(implicit blog: Blog, markup: Markup): Base = {
+  def makeBase(implicit blog: Blog, markup: Markup): (Blog, Base) = {
     var articles: Vector[Article] = timer("readfiles")(readGallery(blog) ++ readPosts(blog))
+
+    val specialSlugs = Set("script:indexPrepend", "script:fullArticleBottom", "script:title")
+    val (scriptArticles, contentArticles) = articles.partition(a => specialSlugs.contains(a.slug))
+    articles = contentArticles
+
+    val scripts = scriptArticles.foldLeft(Scripts()) { (scripts, a) => a.slug match {
+      case "script:indexPrepend"      => scripts.copy(indexPrepend      = Lispy.parse(a.rawText.trim))
+      case "script:fullArticleBottom" => scripts.copy(fullArticleBottom = Lispy.parse(a.rawText.trim))
+      case "script:title"             => scripts.copy(title             = Lispy.parse(a.rawText.trim))
+      case "script:body"              => scripts.copy(body              = Lispy.parse(a.rawText.trim))
+    }}
 
     timer("checks") {
     if (blog.articlesMustNotBeMixed) {
@@ -926,7 +946,7 @@ object MakeFiles {
       }
     }}
 
-    Base(articles, tagMap)
+    (blog.copy(scripts = scripts), Base(articles, tagMap))
   }
 
 
