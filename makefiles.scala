@@ -12,6 +12,44 @@ import scala.util.matching.Regex
 import java.util.regex.Matcher
 import util._
 
+
+object Make extends App {
+
+  if (args.length >= 2 && args(0) == "script-dry-run") {
+    val ast = Lispy.parse(io.Source.fromFile(args(1)).mkString)
+    val res = Lispy.eval(ast, Lispy.env)
+    println(res)
+    sys.exit()
+  }
+
+  if (args.length < 1) {
+    println("config file not specified")
+    sys.exit()
+  }
+
+  val (_, blog, markup, base) = MakeFiles.init(args)
+
+  if (args.length >= 2 && args(1) == "checkLinks") {
+    MakeFiles.checkUrls(blog, base)
+
+  } else if (args.length >= 3 && args(1) == "script") {
+
+    val ast = Lispy.parse(io.Source.fromFile(args(2)).mkString)
+    val res = Lispy.eval(ast, Lispy.env + (
+      "args" -> args,
+      "blog" -> blog,
+      "markup" -> markup,
+      "base" -> base
+    ))
+
+    println(res)
+
+  } else {
+    MakeFiles.makeFiles(blog, base, markup)
+  }
+}
+
+
 case class Blog (
   val title: String,
   val baseUrl: String,
@@ -370,26 +408,6 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
 
     topn.toSeq.map(_._2).flatMap(base.tagByTitle.get)
   }
-}
-
-
-
-object Make extends App {
-
-  if (args.length < 1) {
-    println("config file not specified")
-    sys.exit()
-  }
-
-  val (_, blog, markup, base) = MakeFiles.init(args)
-
-  if (args.length >= 2 && args(1) == "checkLinks") {
-    MakeFiles.checkUrls(blog, base)
-
-  } else {
-    MakeFiles.makeFiles(blog, base, markup)
-  }
-
 }
 
 
