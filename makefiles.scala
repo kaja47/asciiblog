@@ -44,6 +44,7 @@ case class Blog (
   val shareLinks: Boolean,
   val demandExplicitSlugs: Boolean,
 
+  val defaultUser: String,
   val openGraph: Boolean,
   val twitterSite: String,
   val twitterCreator: String,
@@ -98,6 +99,7 @@ object Blog {
       shareLinks             = cfg.getOrElse("shareLinks", "false").toBoolean,
       demandExplicitSlugs    = cfg.getOrElse("demandExplicitSlugs", "false").toBoolean,
 
+      defaultUser            = cfg.getOrElse("defaultUser", null),
       openGraph              = cfg.getOrElse("openGraph", "false").toBoolean,
       twitterSite            = cfg.getOrElse("twitter.site", ""),
       twitterCreator         = cfg.getOrElse("twitter.creator", ""),
@@ -121,6 +123,7 @@ object Blog {
 case class Article(
   title: String,
   slug: String,
+  author: String = null,
   dates: Seq[Date] = Seq(), // publishing date + dates of updates
   tags: Tags = Tags(),
   meta: Meta = Meta(),
@@ -564,13 +567,13 @@ object MakeFiles {
       Some(_parseMeta(l.drop(prefix.length)))
     } else None
 
-  val parseLink: PartialFunction[String, String] = {
-    case l if l.startsWith("link:") => l.drop("link:".length).trim
+  private def prefixedLine(prefix: String): PartialFunction[String, String] = {
+    case l if l.startsWith(prefix)  => l.drop(prefix.length).trim
   }
 
-  val parseNotes: PartialFunction[String, String] = {
-    case l if l.startsWith("notes:") => l.drop("notes:".length).trim
-  }
+  val parseLink: PartialFunction[String, String]   = prefixedLine("link:")
+  val parseNotes: PartialFunction[String, String]  = prefixedLine("notes:")
+  val parseAuthor: PartialFunction[String, String] = prefixedLine("by:")
 
   def hash(txt: String): String = hash(txt.getBytes("utf-8"))
   def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
@@ -593,6 +596,7 @@ object MakeFiles {
     val links   = metaLines.collect(parseLink)
     val metas   = metaLines.flatMap(parseMeta(_, "meta: "))
     val notess  = metaLines.collect(parseNotes)
+    val authors = metaLines.collect(parseAuthor)
     val meta = metas.foldLeft(Meta())(_ merge _)
 
     val isTag = meta.values.contains("supertag") || meta.values.contains("tag") || (slug != null && isTagSlug(slug))
@@ -613,6 +617,7 @@ object MakeFiles {
     new Article(
       title   = if (title.trim.nonEmpty) title.trim else dateTitle.trim,
       slug    = realSlug,
+      author  = authors.headOption.getOrElse(blog.defaultUser),
       dates   = if (dateInTitle != null) dateInTitle +: dates.flatten else dates.flatten,
       tags    = tags.fold(Tags()) { (a, b) => a.merge(b) },
       meta    = meta,
@@ -794,6 +799,7 @@ object MakeFiles {
         if (
           (a.dates.nonEmpty && b.dates.nonEmpty) ||
           (a.tags != Tags() && b.tags != Tags()) ||
+          (a.author != b.author && a.author != null && b.author != null) ||
           (a.license != null && b.license != null) ||
           (a.meta != Meta() && b.meta != Meta()) //||
         ) sys.error("two conflicting articles with the same slug '"+a.slug+"'")
