@@ -47,15 +47,17 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
 
-  def eval(ast: Lispy.AST, article: Article = null, articles: Seq[Article] = Seq(), body : String = null) = {
+  def eval(ast: Lispy.AST, article: Article = null, articles: Seq[Article] = Seq(), body : String = null, compact: Boolean = false) = {
     val res = Lispy.eval(ast,
       Lispy.env + (
-        "article" -> article, "articles" -> articles, "body" -> body, "base" -> base, "blog" -> blog,
+        "article" -> article, "articles" -> articles, "body" -> body, "compact" -> compact,
+        "base" -> base, "blog" -> blog,
         "tag" -> Lispy.Func { case (t: String) :: s :: Nil => Tag(t, Lispy.truthy(s)) },
         "article-url" -> Lispy.Func { case (a: Article) :: Nil => articleUrl(a) },
         "article-link" -> Lispy.Func {
           case (a: Article) :: Nil => articleLink(a, a.title)
           case (a: Article) :: (t: String) :: Nil => articleLink(a, t)
+          case (a: Article) :: (t: String) :: (b: Boolean) :: Nil => articleLink(a, t, b)
         },
         "make-title"   -> Lispy.Func { case (a: Article) :: Nil => makeTitle(a, true) },
         "find-article" -> Lispy.Func { case (slug: String) :: Nil => base.find(slug).getOrElse(null) },
@@ -247,7 +249,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
 
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
-    (if (blog.scripts.title != null) eval(blog.scripts.title, article = a) else
+    (if (blog.scripts.title != null) eval(blog.scripts.title, article = a, compact = compact) else
     (if(!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>"))+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     ifs(a.isTag, {
