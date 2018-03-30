@@ -166,6 +166,7 @@ case class Article(
   tags: Tags = Tags(),
   meta: Meta = Meta(),
   rel: Seq[String] = Seq(),
+  pub: Seq[String] = Seq(),
   link: String = null,
   notes: String = null,
   license: String = null,
@@ -174,7 +175,7 @@ case class Article(
   images: Seq[Image] = Seq(),
   backlinks: Seq[Article] = Seq(),
   similar: Seq[Article] = Seq(),
-  pub: Seq[Article] = Seq(),
+  pubAricles: Seq[Article] = Seq(),
   pubBy: Article = null,
   inFeed: Boolean = true
 ) {
@@ -597,6 +598,7 @@ object MakeFiles {
   val parseNotes  = prefixedLine("notes:")
   val parseAuthor = prefixedLine("by:")
   val parseRel    = prefixedList("rel:")
+  val parsePub    = prefixedList("pub:")
 
   def hash(txt: String): String = hash(txt.getBytes("utf-8"))
   def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
@@ -621,6 +623,8 @@ object MakeFiles {
     val notess  = metaLines.collect(parseNotes)
     val authors = metaLines.collect(parseAuthor)
     val rels    = metaLines.collect(parseRel)
+    val pubs    = metaLines.collect(parsePub)
+
     val meta = metas.foldLeft(Meta())(_ merge _)
 
     val isTag = meta.values.contains("supertag") || meta.values.contains("tag") || (slug != null && isTagSlug(slug))
@@ -633,7 +637,7 @@ object MakeFiles {
     if ((slug == null || slug == "") && blog.demandExplicitSlugs && !title.startsWith("???"))
       sys.error(s"article ${title} is missing explicit slug")
 
-    if ((dates.size + tags.size + license.size + links.size + notess.size + metas.size + rels.size) < metaLines.size)
+    if ((dates.size + tags.size + license.size + links.size + notess.size + metas.size + rels.size + pubs.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
 
     links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
@@ -646,6 +650,7 @@ object MakeFiles {
       tags    = tags.fold(Tags()) { (a, b) => a.merge(b) },
       meta    = meta,
       rel     = rels.flatten,
+      pub     = pubs.flatten,
       link    = links.headOption.getOrElse(null),
       notes   = notess.headOption.getOrElse(null),
       license = license.headOption.getOrElse(null),
@@ -834,11 +839,13 @@ object MakeFiles {
           dates   = a.dates ++ b.dates,
           tags    = a.tags merge b.tags,
           meta    = a.meta merge b.meta,
+          rel     = a.rel ++ b.rel,
+          pub     = a.pub ++ b.pub,
           license = if (a.license != null) a.license else b.license,
           rawText = if (a.rawText.length < b.rawText.length) a.rawText+"\n\n"+b.rawText else b.rawText+"\n\n"+a.rawText,
           images  = a.images ++ b.images,
           inFeed  = a.inFeed && b.inFeed
-        ) // backlinks, similar, pub, pubBy not yet populated
+        ) // backlinks, similar, pubAricles, pubBy not yet populated
 
         articleMap(a.slug) = merged
       }
@@ -918,7 +925,6 @@ object MakeFiles {
     val base = Base(articles, tagMap)
     val allTagMap: Map[Tag, Seq[Article]] = timer("invert tags 2") { invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) }) }
     val sim = new Similarities(base, allTagMap)
-    def refs(a: Article, k: String) = a.meta.seq(k) flatMap base.find
 
     val backlinks: Map[Slug, Seq[Article]] = timer("backlinks") {
       invert(articles.map { a => (a, a.slugsOfLinkedArticles) })
@@ -926,7 +932,7 @@ object MakeFiles {
     }
 
     val pubsBy: Map[Slug, Article] = timer("pubsBy") {
-      invert(articles.map { a => (a, refs(a, "pub").map(_.asSlug)) })
+      invert(articles.map { a => (a, (a.pub flatMap base.find).map(_.asSlug)) })
         .map { case (k, vs) => (k, vs.sortBy(_.date).head) }
     }
 
@@ -935,7 +941,7 @@ object MakeFiles {
       val bs = backlinks.getOrElse(a.asSlug, Seq())
       val pubBy = pubsBy.getOrElse(a.asSlug, null)
 
-      a.meta.seq("pub") foreach { id =>
+      a.pub foreach { id =>
         if (!base.isValidId(id)) undefId(id, a)
       }
 
@@ -943,7 +949,7 @@ object MakeFiles {
         dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
         backlinks = sim.sortBySimilarity(bs, a),
         similar = sim.similarByTags(a, count = blog.limitSimilar, without = bs) ++ (if (a.isTag) sim.similarTags(a.asTag, count = blog.limitSimilar) else Seq()),
-        pub = refs(a, "pub"),
+        pubAricles = a.pub flatMap base.find,
         pubBy = pubBy
       )
     }.seq }
