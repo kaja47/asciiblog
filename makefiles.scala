@@ -183,12 +183,12 @@ case class Article(
   def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy").format(date)
   override def toString = (if (isTag) "Article[Tag]" else "Article")+s"(<$prettyDate>$title)"
   def asSlug: Slug = Slug(slug)
-  def format = meta.scalar("format")
-  def isSupertag = meta.values.contains("supertag")
-  def isTag      = meta.values.contains("tag") || isSupertag
+  def format = meta.value("format")
+  def isSupertag = meta.contains("supertag")
+  def isTag      = meta.contains("tag") || isSupertag
   def asTag      = if (isTag) Tag(title, isSupertag) else null
   def extraImages = images.filter(!_.inText)
-  def aliases: Seq[String] = meta.scalars.toVector
+  def aliases: Seq[String] = meta.values.toVector
   def links: Seq[String] = {
     text.links.foreach(l => require(isAbsolute(l), s"Text.links must return absolute urls, '$l' provided (in article $slug)"))
     text.links
@@ -200,17 +200,10 @@ case class Article(
   def hasTag(t: Tag) = tags.visible.contains(t)
 }
 
-case class Meta(values: Map[String, Meta] = Map()) {
-  def scalar(key: String): String = scalars.find(_.startsWith(key+":")).map(_.drop(key.length+1).trim).getOrElse(null)
-  def scalars = values.collect { case (k, v) if v == null => k }
-  def seq(k: String): Seq[String] = values.get(k).map(_.values.keys.toSeq).getOrElse(Seq())
-  def merge(that: Meta): Meta =
-    Meta(that.values.foldLeft(values) { case (res, (k, v)) =>
-      res.get(k) match {
-        case None => res + ((k, v))
-        case Some(m) => res + ((k, v.merge(m)))
-      }
-    })
+case class Meta(values: Seq[String] = Seq()) {
+  def value(key: String): String = values.find(_.startsWith(key+":")).map(_.drop(key.length+1).trim).getOrElse(null)
+  def contains(x: String) = values.contains(x)
+  def merge(that: Meta): Meta = Meta(values ++ that.values)
 }
 
 case class Image(
@@ -246,7 +239,7 @@ object Base {
   def extraTags(all: Vector[Article], tagMap: Map[Tag, Seq[Article]]): Vector[Article] = {
     val direct: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
     tagMap.collect { case (t, as) if !direct.contains(t) =>
-      Article(t.title, tagSlug(t.title), meta = Meta(Map((if (t.supertag) "supertag" else "tag") -> null)), text = AsciiText.empty)
+      Article(t.title, tagSlug(t.title), meta = Meta(Seq(if (t.supertag) "supertag" else "tag")), text = AsciiText.empty)
     }.toVector
   }
 }
@@ -262,7 +255,7 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   lazy val extraTags: IndexedSeq[Article] = Base.extraTags(all, tagMap)
 
   private lazy val bySlug: Map[String, Article] = (all ++ extraTags).map(a => (a.slug, a)).toMap
-  private lazy val byMeta: Map[String, Article] = (all ++ extraTags).flatMap(a => a.meta.scalars collect { case m: String => (m, a) }).toMap
+  private lazy val byMeta: Map[String, Article] = (all ++ extraTags).flatMap(a => a.meta.values.map { m => (m, a) }).toMap
 
   lazy val articles = all.filter(a => !a.isTag)
   lazy val feed = all.filter(a => a.inFeed && !a.isTag)
@@ -566,27 +559,6 @@ object MakeFiles {
     case s if s.charAt(0) == '#' => getTags(s)
   }
 
-  val metaRegex = """(?x) \s+ | \[ | \] | , | \w+:\w+ | [\w/-]+ | :""".r
-
-  def _parseMeta(str: String) = {
-    def build(tokens: Seq[String]): Meta =
-      Meta(tokens.dropWhile(_ == ",") match {
-        case Seq(k, ":", "[", rest @ _*) =>
-          val (v, Seq("]", rest2 @ _*)) = rest.span(_ != "]") // 2 levels only
-          Map(k -> build(v)) ++ build(rest2).values
-        case Seq(k, ",", rest @ _*) => Map(k -> null) ++ build(rest).values
-        case Seq(k) => Map(k -> null)
-        case Seq() => Map()
-      })
-
-    build(metaRegex.findAllMatchIn(str).map(_.group(0).trim).filter(_.nonEmpty).toVector)
-  }
-
-  def parseMeta(l: String, prefix: String = "meta: "): Option[Meta] =
-    if (l.startsWith(prefix)) {
-      Some(_parseMeta(l.drop(prefix.length)))
-    } else None
-
   private def prefixedLine(prefix: String): PartialFunction[String, String] = {
     case l if l.startsWith(prefix) => l.drop(prefix.length).trim
   }
@@ -599,6 +571,7 @@ object MakeFiles {
   val parseAuthor = prefixedLine("by:")
   val parseRel    = prefixedList("rel:")
   val parsePub    = prefixedList("pub:")
+  val parseMeta   = prefixedList("meta:").andThen(xs => Meta(xs))
 
   def hash(txt: String): String = hash(txt.getBytes("utf-8"))
   def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
@@ -619,7 +592,7 @@ object MakeFiles {
     val tags    = metaLines.collect(parseTags)
     val license = metaLines.collect(parseLicense)
     val links   = metaLines.collect(parseLink)
-    val metas   = metaLines.flatMap(parseMeta(_, "meta: "))
+    val metas   = metaLines.collect(parseMeta)
     val notess  = metaLines.collect(parseNotes)
     val authors = metaLines.collect(parseAuthor)
     val rels    = metaLines.collect(parseRel)
@@ -627,7 +600,7 @@ object MakeFiles {
 
     val meta = metas.foldLeft(Meta())(_ merge _)
 
-    val isTag = meta.values.contains("supertag") || meta.values.contains("tag") || (slug != null && isTagSlug(slug))
+    val isTag = meta.contains("supertag") || meta.contains("tag") || (slug != null && isTagSlug(slug))
     val inFeed = blog.dumpAll || (xxx == null && !isTag)
     val realSlug =
       if (slug != null && slug != "") slug else
@@ -964,7 +937,7 @@ object MakeFiles {
 
     tagMap = timer("final tagmap") { tagMap.map { case (t, as) =>
       val tagArticle = base.tagByTitle(t)
-      val key = tagArticle.meta.scalar("sortby")
+      val key = tagArticle.meta.value("sortby")
 
       if (key == null) { // sort by order linked in article (order for << >> navigation)
         val linked = tagArticle.slugsOfLinkedArticles.distinct
@@ -977,7 +950,7 @@ object MakeFiles {
 
       } else {
         (t, as.sortBy { a =>
-          val k = a.meta.scalar(key)
+          val k = a.meta.value(key)
           if (k == null) 0 else ~k.toInt
         })
       }
