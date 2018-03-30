@@ -313,7 +313,7 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
     }
 
     val arrs = (a.tags.visible ++ a.tags.hidden).flatMap(tm.get)
-    if (arrs.size == 0) return Seq()
+    if (arrs.isEmpty && a.rel.isEmpty) return Seq()
 
     val freq = new Array[Int](arts.length) // article idx -> count
     for (arr <- arrs) {
@@ -329,7 +329,9 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
 
     for (a <- without ; i <- slugMap.get(a.asSlug)) freq(i) = 0
     for (i <- slugMap.get(a.asSlug)) freq(i) = 0
-    freq(slugMap(a.asSlug)) = 0
+    if (slugMap.contains(a.asSlug)) {
+      freq(slugMap(a.asSlug)) = 0
+    }
 
     case class Key(commonTags: Int, dateDiff: Long, idx: Int)
     implicit val o = new Ordering[Key]{
