@@ -566,13 +566,6 @@ object MakeFiles {
     case l if l.startsWith(prefix) => l.drop(prefix.length).split(",").map(_.trim)
   }
 
-  val parseLink   = prefixedLine("link:")
-  val parseNotes  = prefixedLine("notes:")
-  val parseAuthor = prefixedLine("by:")
-  val parseRel    = prefixedList("rel:")
-  val parsePub    = prefixedList("pub:")
-  val parseMeta   = prefixedList("meta:").andThen(xs => Meta(xs))
-
   def hash(txt: String): String = hash(txt.getBytes("utf-8"))
   def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
   def _md5(bytes: Array[Byte]) = MessageDigest.getInstance("MD5").digest(bytes)
@@ -591,12 +584,12 @@ object MakeFiles {
     val dates   = metaLines.flatMap(parseDates)
     val tags    = metaLines.collect(parseTags)
     val license = metaLines.collect(parseLicense)
-    val links   = metaLines.collect(parseLink)
-    val metas   = metaLines.collect(parseMeta)
-    val notess  = metaLines.collect(parseNotes)
-    val authors = metaLines.collect(parseAuthor)
-    val rels    = metaLines.collect(parseRel)
-    val pubs    = metaLines.collect(parsePub)
+    val links   = metaLines.collect(prefixedLine("link:"))
+    val notess  = metaLines.collect(prefixedLine("notes:"))
+    val authors = metaLines.collect(prefixedLine("by:"))
+    val metas   = metaLines.collect(prefixedList("meta:").andThen(xs => Meta(xs)))
+    val rels    = metaLines.collect(prefixedList("rel:"))
+    val pubs    = metaLines.collect(prefixedList("pub:"))
 
     val meta = metas.foldLeft(Meta())(_ merge _)
 
