@@ -610,7 +610,7 @@ object MakeFiles {
     if ((slug == null || slug == "") && blog.demandExplicitSlugs && !title.startsWith("???"))
       sys.error(s"article ${title} is missing explicit slug")
 
-    if ((dates.size + tags.size + license.size + links.size + notess.size + metas.size + rels.size + pubs.size) < metaLines.size)
+    if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
 
     links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
