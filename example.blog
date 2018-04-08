@@ -6,12 +6,14 @@ title [slug-that-will-show-in-a-post-url]
 Body of the post after one empty line.
 Everything except a title is optional.
 
-[* main.jpg .[main] *] *** this is main image
+[* main.jpg .[main] *] *** this is big image
 
 In a post body you can use:
 *italics*
 **bold text**
-"links":[l] 
+"links":[https://example.com/]
+"links to other articles":[another-article]
+"links by reference":[l]
 [|blacked out text|]
 
 > blockquotes
@@ -45,6 +47,16 @@ image galleries:
 [* image2.jpg *]
 [* image3.jpg *]
 
+---
+
+right aligned image
+
+[* image1.jpg .[main] >]
+
+---
+
+referenced links
+
 [l]: https://example.com/
 
 
@@ -54,7 +66,7 @@ image galleries:
 Post with titles starting with a ? won't be published
 
 
-XXX side post
+XXX side post [another-article]
 =====
 
 Post with titles starting with a XXX won't be shown on main feed and in RSS
