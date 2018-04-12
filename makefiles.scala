@@ -90,7 +90,7 @@ case class Blog (
   val args: Array[String],
   val translation: Map[String, String],
   val scripts: Scripts = Scripts()
-) {
+) extends UrlOps {
   def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
   def printTimes: Boolean  = false
   def printErrors: Boolean = !(args.length > 1 && args(1) == "tags")
@@ -457,7 +457,7 @@ object MakeFiles {
     if (imageSuffixes.contains(suffix)) "."+suffix else ""
   }
 
-  implicit class UrlOps(blog: Blog) {
+  trait UrlOps { blog: Blog =>
     def absUrlFromPath(path: String) = blog.baseUrl + "/" + path
     def absUrlFromSlug(slug: String) = blog.baseUrl + "/" + slug + blog.fileSuffix
     def relUrlFromSlug(slug: String) = slug + blog.fileSuffix

@@ -1,6 +1,6 @@
 package asciiblog
 
-import MakeFiles. { year, month, galleryScript, UrlOps, isAbsolute }
+import MakeFiles. { year, month, galleryScript, isAbsolute }
 import AsciiText. { ahrefRegex, ahrefCheck, imgsrcRegex, imgsrcCheck }
 import java.text.SimpleDateFormat
 import java.util.Date
