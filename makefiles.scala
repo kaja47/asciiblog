@@ -250,7 +250,8 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   private lazy val imageTagMap: Map[Tag, Seq[(Image, Article)]] = invert(all.flatMap(a => a.images.map(i => ((i, a), i.tags.visible.distinct))))
   private def taggedImages(t: Tag) = imageTagMap.getOrElse(t, Seq()).map { case (i, a) => i.copy(inText = false, localSource = a) }
 
-  lazy val allImages = all.flatMap { a => a.images.map(_.copy(inText = false, localSource = a)) }
+  lazy val allImages = all.sortBy { a => (Option(a.date), a.title) }.reverse
+    .flatMap { a => a.images.map(_.copy(inText = false, localSource = a)) }
 
   lazy val extraTags: IndexedSeq[Article] = Base.extraTags(all, tagMap)
 
