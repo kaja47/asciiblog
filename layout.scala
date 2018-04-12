@@ -47,23 +47,10 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
 
-  def eval(ast: Lispy.AST, article: Article = null, articles: Seq[Article] = Seq(), body : String = null, compact: Boolean = false) = {
-    val res = Lispy.eval(ast,
-      Lispy.env + (
-        "article" -> article, "articles" -> articles, "body" -> body, "compact" -> compact,
-        "base" -> base, "blog" -> blog,
-        "tag" -> Lispy.Func { case (t: String) :: s :: Nil => Tag(t, Lispy.truthy(s)) },
-        "article-url" -> Lispy.Func { case (a: Article) :: Nil => articleUrl(a) },
-        "article-link" -> Lispy.Func {
-          case (a: Article) :: Nil => articleLink(a, a.title)
-          case (a: Article) :: (t: String) :: Nil => articleLink(a, t)
-          case (a: Article) :: (t: String) :: (b: Boolean) :: Nil => articleLink(a, t, b)
-        },
-        "make-title"   -> Lispy.Func { case (a: Article) :: Nil => makeTitle(a, true) },
-        "find-article" -> Lispy.Func { case (slug: String) :: Nil => base.find(slug).getOrElse(null) },
-        "year" -> Lispy.Func { case (d: Date) :: Nil => year(d) }
-      )
-    )
+  def eval(engine: javax.script.ScriptEngine, args: Map[String, Any]) = {
+    val res = engine.asInstanceOf[javax.script.Invocable].invokeFunction("run", Map(
+      "base" -> base, "blog" -> blog, "layout" -> this,
+    ) ++ args)
     ifs(res, res.toString)
   }
 
@@ -198,7 +185,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String =
-    ifs(blog.scripts.indexPrepend != null && fullArticles.nonEmpty, eval(blog.scripts.indexPrepend, articles = fullArticles))+
+    ifs(blog.scripts.indexPrepend != null && fullArticles.nonEmpty, eval(blog.scripts.indexPrepend, Map("articles" -> fullArticles)))+
     fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
     (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"
@@ -221,7 +208,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   // Bare article body, no title, no links to related articles, no tags. This method is used in RSS feeds.
   def makeArticleBody(a: Article, compact: Boolean): String = {
-    (if (blog.scripts.body != null) eval(blog.scripts.body, body = a.text.render(this))
+    (if (blog.scripts.body != null) eval(blog.scripts.body, Map("body" -> a.text.render(this)))
     else a.text.render(this))+
     ifs(a.isTag, {
       val linked = a.slugsOfLinkedArticles(blog).toSet
@@ -249,7 +236,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
 
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
-    (if (blog.scripts.title != null) eval(blog.scripts.title, article = a, compact = compact) else
+    (if (blog.scripts.title != null) eval(blog.scripts.title, Map("article" -> a, "compact" -> compact)) else
     (if(!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>"))+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     ifs(a.isTag, {
@@ -262,9 +249,9 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
         "</div>"
       })
     })+
-    "<br/>\n"+
+    ifs(blog.scripts.title == null, "<br/>\n")+
     makeArticleBody(a, compact)+
-    ifs(!compact && blog.scripts.fullArticleBottom != null, eval(blog.scripts.fullArticleBottom, article = a))+
+    ifs(!compact && blog.scripts.fullArticleBottom != null, eval(blog.scripts.fullArticleBottom, Map("article" -> a)))+
     ifs(!compact,
       """<div class=bottom>"""+
       ifs(blog.allowComments && !a.isTag, s"""<hr/><b><a href="comments.php?url=${blog.relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b> """)+

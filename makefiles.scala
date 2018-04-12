@@ -15,13 +15,6 @@ import util._
 
 object Make extends App {
 
-  if (args.length >= 2 && args(0) == "script-dry-run") {
-    val ast = Lispy.parse(io.Source.fromFile(args(1)).mkString)
-    val res = Lispy.eval(ast, Lispy.env)
-    println(res)
-    sys.exit()
-  }
-
   if (args.length < 1) {
     println("config file not specified")
     sys.exit()
@@ -34,13 +27,11 @@ object Make extends App {
 
   } else if (args.length >= 3 && args(1) == "script") {
 
-    val ast = Lispy.parse(io.Source.fromFile(args(2)).mkString)
-    val res = Lispy.eval(ast, Lispy.env + (
-      "args" -> args,
-      "blog" -> blog,
-      "markup" -> markup,
-      "base" -> base
-    ))
+    val engine = new javax.script.ScriptEngineManager().getEngineByName("nashorn")
+    engine.eval(io.Source.fromFile(args(2)).mkString)
+    val res = engine.asInstanceOf[javax.script.Invocable].invokeFunction("run", Map(
+      "args" -> args, "base" -> base, "blog" -> blog, "markup" -> markup
+    ) ++ args)
 
     println(res)
 
@@ -97,10 +88,10 @@ case class Blog (
 }
 
 case class Scripts(
-  indexPrepend: Lispy.AST = null,
-  title: Lispy.AST = null,
-  fullArticleBottom: Lispy.AST = null,
-  body: Lispy.AST = null
+  indexPrepend:      javax.script.ScriptEngine = null,
+  title:             javax.script.ScriptEngine = null,
+  fullArticleBottom: javax.script.ScriptEngine = null,
+  body:              javax.script.ScriptEngine = null
 )
 
 object Blog {
@@ -750,11 +741,17 @@ object MakeFiles {
     val (scriptArticles, contentArticles) = articles.partition(a => specialSlugs.contains(a.slug))
     articles = contentArticles
 
+    def parseJavascript(code: String) = {
+      val engine = new javax.script.ScriptEngineManager().getEngineByName("nashorn")
+      engine.eval(code)
+      engine
+    }
+
     val scripts = scriptArticles.foldLeft(Scripts()) { (scripts, a) => a.slug match {
-      case "script:indexPrepend"      => scripts.copy(indexPrepend      = Lispy.parse(a.rawText.trim))
-      case "script:fullArticleBottom" => scripts.copy(fullArticleBottom = Lispy.parse(a.rawText.trim))
-      case "script:title"             => scripts.copy(title             = Lispy.parse(a.rawText.trim))
-      case "script:body"              => scripts.copy(body              = Lispy.parse(a.rawText.trim))
+      case "script:indexPrepend"      => scripts.copy(indexPrepend      = parseJavascript(a.rawText.trim))
+      case "script:fullArticleBottom" => scripts.copy(fullArticleBottom = parseJavascript(a.rawText.trim))
+      case "script:title"             => scripts.copy(title             = parseJavascript(a.rawText.trim))
+      case "script:body"              => scripts.copy(body              = parseJavascript(a.rawText.trim))
     }}
 
     timer("checks") {
