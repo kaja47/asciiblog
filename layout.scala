@@ -266,9 +266,9 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
       "</div>"+
       "<p>"+makeNextPrevLinks(a)+"</p>"+
       ifs(a.pubAricles.nonEmpty, txl("published")+"<br/>"+ a.pubAricles.map(makeLink).mkString("<br/>")+"<br/>")+
-      ifs(a.pubBy != null, txl("publishedBy")+" "+articleLink(a.pubBy, makeDate(a))+"<br/>")+
-      ifs(a.similar.nonEmpty,   "<p>"+txl("similar")+"<br/>"  +a.similar.map(s => articleLink(s, s.title)).mkString("<br/>")  +"</p>")+
-      ifs(a.backlinks.nonEmpty, "<p>"+txl("backlinks")+"<br/>"+a.backlinks.map(s => articleLink(s, s.title)).mkString("<br/>")+"</p>")+
+      ifs(a.pubBy != null, txl("publishedBy")+" "+articleLink(a.pubBy, makeDate(a), allowImageMarker = true)+"<br/>")+
+      ifs(a.similar.nonEmpty,   "<p>"+txl("similar")+"<br/>"  +a.similar.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString("<br/>")  +"</p>")+
+      ifs(a.backlinks.nonEmpty, "<p>"+txl("backlinks")+"<br/>"+a.backlinks.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString("<br/>")+"</p>")+
       "</div>"
     )
   }
@@ -291,13 +291,13 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   def articleUrl(a: Article) = if (a.link != null) a.link else blog.absUrl(a)
 
-  def articleLink(a: Article, title: String, asLink: Boolean = true) =
+  def articleLink(a: Article, title: String, asLink: Boolean = true, allowImageMarker: Boolean = false) =
     if (a.link != null || asLink)
-      s"""<i><a href="${articleUrl(a)}">$title</a></i>"""+ifs(a.hasImageMarker, blog.imageMarker)
+      s"""<i><a href="${articleUrl(a)}">$title</a></i>"""+ifs(allowImageMarker && a.hasImageMarker, blog.imageMarker)
     else
-      s"""<i>$title</i>"""+ifs(a.hasImageMarker, blog.imageMarker)
+      s"""<i>$title</i>"""+ifs(allowImageMarker && a.hasImageMarker, blog.imageMarker)
 
-  def makeLink(a: Article) = makeDate(a)+" "+articleLink(a, a.title)
+  def makeLink(a: Article) = makeDate(a)+" "+articleLink(a, a.title, allowImageMarker = true)
 
   def makeTagLink(t: Article) = {
     val html = s"""#<i><a href="${blog.absUrlFromSlug(t.slug)}">${t.title}</a></i>"""
