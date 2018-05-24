@@ -197,7 +197,8 @@ case class Article(
 }
 
 case class Meta(values: Seq[String] = Seq()) {
-  def value(key: String): String = values.find(_.startsWith(key+":")).map(_.drop(key.length+1).trim).getOrElse(null)
+  val kvPairs: Map[String, String] = values.filter(_.indexOf(':') >= 0).map { x => val Array(k, v) = x.split(":", 2); (k, v) }.toMap
+  def value(key: String): String = kvPairs.getOrElse(key, null)
   def contains(x: String) = values.contains(x)
   def merge(that: Meta): Meta = Meta(values ++ that.values)
 }
