@@ -1036,7 +1036,7 @@ object MakeFiles {
       var l = FlowLayout(blog.absUrl(a), base, blog, markup)
       val prev = imgsPages.lift(idx-1).getOrElse(null)
       val next = imgsPages.lift(idx+1).getOrElse(null)
-      val body = l.addArrows(l.makeFullArticle(a), prev, next)
+      val body = l.addArrows(l.makeFullArticle(a), prev, next, true)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = true), oldFileIndex)
     }
 
