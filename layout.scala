@@ -212,7 +212,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     else a.text.render(this))+
     ifs(a.isTag, {
       val linked = a.slugsOfLinkedArticles(blog).toSet
-      listOfLinks(base.allTags(a).filter(a => !linked.contains(a.asSlug)), blog.tagFormat == "short")
+      listOfLinks(base.allTags(a.asTag)._2.filter(a => !linked.contains(a.asSlug)), blog.tagFormat == "short")
     })+
     ifs(!compact, a.extraImages.map(img => imgTag(img.asSmallThumbnail, if (img.localSource != null) img.localSource.text else a.text)).mkString(" "))+
     ifs( compact, gallerySample(a))
@@ -241,7 +241,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     ifs(a.isTag, {
       val sup = a.tags.visible.map(base.tagByTitle)
-      val sub = base.allTags(a).filter(_.isTag)
+      val sub = base.allTags(a.asTag)._2.filter(_.isTag)
       ifs(sub.nonEmpty || sup.nonEmpty, {
         "<div style='font-size:0.85em'>"+
         ifs(sup.nonEmpty, txl("supersections")+" "+rowOfLinks(sup)+" ")+
@@ -274,7 +274,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeTagIndex(base: Base) =
-    base.allTags.toSeq.sortBy { case (t, as) => (~as.size, t.slug) }.map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
+    base.allTags.toSeq.sortBy { case (_, (t, as)) => (~as.size, t.slug) }.map { case (_, (t, as)) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
   def addArrows(content: String, next: Article, prev: Article, includeBottom: Boolean = false) = {
     "<span class=f>"+_makeNextPrevArrows(next, prev)+"</span>"+

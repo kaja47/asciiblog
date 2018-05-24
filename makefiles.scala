@@ -257,10 +257,12 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   lazy val articles = all.filter(a => !a.isTag)
   lazy val feed = all.filter(a => a.inFeed && !a.isTag)
 
-  lazy val allTags: Map[Article, Seq[Article]] =
-    (all ++ extraTags).filter(_.isTag).map { t => (t.copy(images = t.images ++ taggedImages(t.asTag)), tagMap.getOrElse(t.asTag, Seq())) }.toMap
+  lazy val allTags: Map[Tag, (Article, Seq[Article])] =
+    (all ++ extraTags).filter(_.isTag).map { t =>
+      t.asTag -> (t.copy(images = t.images ++ taggedImages(t.asTag)), tagMap.getOrElse(t.asTag, Seq()))
+    }.toMap
 
-  lazy val tagByTitle: Map[Tag, Article] = allTags.map { case (t, _) => (t.asTag, t) }
+  lazy val tagByTitle: Map[Tag, Article] = allTags.map { case (t, (a, _)) => (t, a) }
 
   private lazy val art2ord = feed.zipWithIndex.toMap
 
@@ -1053,12 +1055,12 @@ object MakeFiles {
     }
     }
 
-    base.allTags.keys.par foreach { a =>
+    base.allTags.par foreach { case (t, (a, as)) =>
       var l = FlowLayout(blog.absUrl(a), base, blog, markup)
-      val body = l.makeFullArticle(a)
-      val hasImages = a.images.nonEmpty || base.allTags(a).exists(_.images.nonEmpty)
+      val body = l.makeFullArticle(a.imagesWithoutArticleTags)
+      val hasImages = a.images.nonEmpty || as.exists(_.images.nonEmpty)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")), oldFileIndex)
-      fileIndex ++= saveXml(a.slug, makeRSS(base.allTags(a).take(blog.limitRss), null), oldFileIndex)
+      fileIndex ++= saveXml(a.slug, makeRSS(as.take(blog.limitRss), null), oldFileIndex)
     }
 
     {
