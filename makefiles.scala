@@ -919,7 +919,7 @@ object MakeFiles {
       a.copy(
         dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
         backlinks = sim.sortBySimilarity(bs, a),
-        similar = sim.similarByTags(a, count = blog.limitSimilar, without = bs) ++ (if (a.isTag) sim.similarTags(a.asTag, count = blog.limitSimilar) else Seq()),
+        similar = if (!a.isTag) sim.similarByTags(a, count = blog.limitSimilar, without = bs) else sim.similarTags(a.asTag, count = blog.limitSimilar),
         pubAricles = a.pub flatMap base.find,
         pubBy = pubBy
       )
