@@ -179,7 +179,7 @@ case class Article(
   def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy").format(date)
   override def toString = (if (isTag) "Article[Tag]" else "Article")+s"(<$prettyDate>$title)"
   def asSlug: Slug = Slug(slug)
-  def format = meta.value("format")
+  def format = meta.value("format") // TODO
   def isSupertag = meta.contains("supertag")
   def isTag      = meta.contains("tag") || isSupertag
   def asTag      = if (isTag) Tag(title, isSupertag) else null
@@ -306,7 +306,7 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
       }
     }
 
-    val arrs = (a.tags.visible ++ a.tags.hidden).flatMap(tm.get)
+    val arrs = (a.tags.visible ++ a.tags.hidden).map(tm)
     if (arrs.isEmpty && a.rel.isEmpty) return Seq()
 
     val freq = new Array[Int](arts.length) // article idx -> count
