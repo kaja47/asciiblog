@@ -1104,12 +1104,18 @@ object MakeFiles {
     timer("resize images") {
     def smallThumbJob(img: Image) = (new File(blog.outDir, blog.thumbnailUrl(img)),           blog.thumbWidth,      blog.thumbHeight, 0.05f)
     def mainThumbJob(img: Image)  = (new File(blog.outDir, blog.bigThumbnailUrl(img, false)), blog.bigThumbWidth,   -1,               0.1f)
-    def rightThumbJob(img: Image) = (new File(blog.outDir, blog.bigThumbnailUrl(img, true)),  blog.bigThumbWidth/2, -1,               0.1f)
+    def halfThumbJob(img: Image)  = (new File(blog.outDir, blog.bigThumbnailUrl(img, true)),  blog.bigThumbWidth/2, -1,               0.1f)
 
-    val resizeJobs = base.all.flatMap(_.images).map {
-      case i if i.mods == "main" && i.align == ">" => (i, Seq(smallThumbJob(i), rightThumbJob(i)))
-      case i if i.mods == "main"                   => (i, Seq(smallThumbJob(i), mainThumbJob(i)))
-      case i                                       => (i, Seq(smallThumbJob(i)))
+    // always make small thumbnails
+    // make big thumbnails for the first image in article
+    val resizeJobs = base.all.flatMap { a =>
+      def first = a.images.head
+      a.images.map {
+        case i if i == first                         => (i, Seq(smallThumbJob(i), mainThumbJob(i), halfThumbJob(i)))
+        case i if i.mods == "main" && i.align == ">" => (i, Seq(smallThumbJob(i), halfThumbJob(i)))
+        case i if i.mods == "main"                   => (i, Seq(smallThumbJob(i), mainThumbJob(i)))
+        case i                                       => (i, Seq(smallThumbJob(i)))
+      }
     }
 
     new File(blog.outDir, "t").mkdir()
