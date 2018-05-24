@@ -12,8 +12,10 @@ import scala.util.matching.Regex
 import java.util.regex.Matcher
 import util._
 
-
 object Make extends App {
+
+  val timer = new Timer()
+  timer.start()
 
   if (args.length < 1) {
     println("config file not specified")
@@ -38,6 +40,9 @@ object Make extends App {
   } else {
     MakeFiles.makeFiles(blog, base, markup)
   }
+
+  timer.end()
+  println("total: "+timer)
 }
 
 
