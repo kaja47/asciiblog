@@ -571,6 +571,7 @@ object MakeFiles {
   def _md5(bytes: Array[Byte]) = MessageDigest.getInstance("MD5").digest(bytes)
 
   private val trailingWS = "\\s*$".r
+  private val slugRegex = """[\w./+-]+""".r
 
   def parseArticle(lines: Seq[String])(implicit blog: Blog): Article = {
     val ls = lines.map(l => if (l.length > 0 && l(l.length-1).isWhitespace) trailingWS.replaceAllIn(l, "") else l)
@@ -602,6 +603,9 @@ object MakeFiles {
 
     if ((slug == null || slug == "") && blog.demandExplicitSlugs && !title.startsWith("???"))
       sys.error(s"article ${title} is missing explicit slug")
+
+    if (slug != null && slug.nonEmpty && !slug.startsWith("script:") && !slugRegex.pattern.matcher(slug).matches())
+      sys.error(s"slug '$slug' is not valid, only letters, numbers and ./+- allowed")
 
     if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
