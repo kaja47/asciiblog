@@ -921,9 +921,11 @@ object MakeFiles {
         if (!base.isValidId(id)) undefId(id, a)
       }
 
+      val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
+
       a.copy(
         dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
-        backlinks = sim.sortBySimilarity(bs, a),
+        backlinks = bs.sortBy(byDate), //sim.sortBySimilarity(bs, a),
         similar = if (!a.isTag) sim.similarByTags(a, count = blog.limitSimilar, without = bs) else sim.similarTags(a.asTag, count = blog.limitSimilar),
         pubAricles = a.pub flatMap base.find,
         pubBy = pubBy
