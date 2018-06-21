@@ -83,6 +83,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
   private val list1Regex    = """(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n|\d++\)\ )) """.r
   private val list2Regex    = """(?xm) ^((\d++)\)\ )(?!\ )(.*?)(?=$|\n(?:\d++\)\ |\n\n)) """.r
   private val noteRegex     = """(?x) \[\[ (\d++) \]\]""".r
+  private val preposRegex   = """(?xuUms) (?<=^|\W)([ksvzouiKSVZOUIA])\s++(?=\w)""".r // for unbreakable space between preposition and word
 
   private val codeCheck     = """`"""
   private val boldCheck     = """**"""
@@ -130,6 +131,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
     if (txt.contains(noteCheck)) {
       txt = noteRegex.replaceAllIn(txt, m => Regex.quoteReplacement(s"""<a href="$noteUrl#fn${m.group(1)}"><sup>${m.group(1)}</sup></a> """))
     }
+    txt = preposRegex.replaceAllIn(txt, "$1\u00A0")
     txt
   }
 
