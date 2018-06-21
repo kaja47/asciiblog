@@ -265,14 +265,14 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
 
   lazy val tagByTitle: Map[Tag, Article] = allTags.map { case (t, (a, _)) => (t, a) }
 
-  private lazy val art2ord = feed.zipWithIndex.toMap
+  private lazy val slug2ord: Map[String, Int] = feed.map(_.slug).zipWithIndex.toMap
 
   def find(id: String): Option[Article] = bySlug.get(id).orElse(byMeta.get(id))
   def isValidId(id: String): Boolean = find(id).nonEmpty
   def canonicSlug(id: String) = find(id).get.slug
 
-  def next(a: Article): Article = art2ord.get(a).flatMap { ord => feed.lift(ord+1) }.getOrElse(null)
-  def prev(a: Article): Article = art2ord.get(a).flatMap { ord => feed.lift(ord-1) }.getOrElse(null)
+  def next(a: Article): Article = slug2ord.get(a.slug).flatMap { ord => feed.lift(ord+1) }.getOrElse(null)
+  def prev(a: Article): Article = slug2ord.get(a.slug).flatMap { ord => feed.lift(ord-1) }.getOrElse(null)
 
   private def move(a: Article, tag: Tag, n: Int): Article = {
     val as = tagMap(tag)
