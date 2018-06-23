@@ -163,6 +163,7 @@ case class Article(
   meta: Meta = Meta(),
   rel: Seq[String] = Seq(),
   pub: Seq[String] = Seq(),
+  implies: Seq[Tag] = Seq(), // only for tags
   link: String = null,
   notes: String = null,
   license: String = null,
@@ -611,6 +612,7 @@ object MakeFiles {
     val metas   = metaLines.collect(prefixedList("meta:").andThen(xs => Meta(xs)))
     val rels    = metaLines.collect(prefixedList("rel:"))
     val pubs    = metaLines.collect(prefixedList("pub:"))
+    val implies = metaLines.collect(prefixedLine("implies:") andThen parseTags)
 
     val meta = metas.foldLeft(Meta())(_ merge _)
 
@@ -627,7 +629,7 @@ object MakeFiles {
     if (slug != null && slug.nonEmpty && !slug.startsWith("script:") && !slugRegex.pattern.matcher(slug).matches())
       sys.error(s"slug '$slug' is not valid, only letters, numbers and ./+- allowed")
 
-    if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size) < metaLines.size)
+    if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size + implies.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
 
     links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
@@ -641,6 +643,7 @@ object MakeFiles {
       meta    = meta,
       rel     = rels.flatten,
       pub     = pubs.flatten,
+      implies = implies.flatMap(_.visible),
       link    = links.headOption.getOrElse(null),
       notes   = notess.headOption.getOrElse(null),
       license = license.headOption.getOrElse(null),
