@@ -8,7 +8,9 @@ import scala.util.matching.Regex
 trait Markup {
   type ResolveLinkFunc = (String, Map[String, String]) => String
 
-  def process(a: Article, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): Text
+  def process(text: String, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): Text
+  def process(a: Article, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): Text =
+    process(a.rawText, resolveLink, noteUrl, imageRoot)
 
 }
 
@@ -65,6 +67,8 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
     case Heading(txt)   => extractLinks(txt)
     case Images(images) => images.iterator.flatMap(i => extractLinks(i.title))
     case Blockquote(sx) => _links(sx)
+    case BulletList(items)   => _links(items)
+    case NumberedList(items) => _links(items.map(_._2))
     case Table(rows, _) => rows.iterator.flatten.flatMap(cell => extractLinks(cell.txt))
     case _ => Iterator()
   }
@@ -80,8 +84,6 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
   private val altRegex      = """(?xm) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
   private val emRegex       = """---""".r
   private val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
-  private val list1Regex    = """(?xm) ^(-\ |\ \ )(?!\ )(.*?)(?=\n(?:-\ |\n\n|\d++\)\ )) """.r
-  private val list2Regex    = """(?xm) ^((\d++)\)\ )(?!\ )(.*?)(?=$|\n(?:\d++\)\ |\n\n)) """.r
   private val noteRegex     = """(?x) \[\[ (\d++) \]\]""".r
   private val preposRegex   = """(?xuUms) (?<=^|\W)([ksvzouiKSVZOUIA])\s++(?=\w)""".r // for unbreakable space between preposition and word
 
@@ -108,8 +110,6 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
     if (txt.contains(linkCheck)) {
       txt = linkRegex    .replaceAllIn(txt, m => Regex.quoteReplacement(s"""<a href="${aliases(m.group(2))}">${m.group(1)}</a>"""))
     }
-    txt = list1Regex   .replaceAllIn(txt, """$1$2<br/>""")
-    txt = list2Regex   .replaceAllIn(txt, """<span id="fn$2"></span>$1$3<br/>""")
     if (txt.contains(commentCheck)) {
       txt = commentRegex .replaceAllIn(txt, "")
     }
@@ -137,19 +137,21 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
 
   private def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String]): String =
     segments.map {
-      case Heading(txt)   => "<h3>"+mkParagraph(txt, aliases)+"</h3>"
-      case Hr()           => "<hr/>"
-      case Linkref(txt)   => ""
-      case Block("html", txt) => txt
-      case Block("div",  txt) => s"<div>$txt</div>"
-      case Block("code", txt) => s"<pre>$txt</pre>"
-      case Block("pre",  txt) => s"<pre>$txt</pre>"
-      case Block("comment",_) => ""
-      case Block(tpe, _)  => sys.error(s"unknown block type $tpe")
-      case Images(images) => images.map(img => l.imgTag(img, this)).mkString(" ")
-      case Paragraph(txt) => "<p>"+mkParagraph(txt, aliases)+"</p>"
-      case Blockquote(sx) => "<blockquote>"+mkText(sx, l, aliases)+"</blockquote>"
-      case Inline(txt)    => mkParagraph(txt, aliases)
+      case Heading(txt)         => "<h3>"+mkParagraph(txt, aliases)+"</h3>"
+      case Hr()                 => "<hr/>\n"
+      case Linkref(txt)         => ""
+      case Block("html", txt)   => txt
+      case Block("div",  txt)   => s"<div>$txt</div>"
+      case Block("code", txt)   => s"<pre>$txt</pre>"
+      case Block("pre",  txt)   => s"<pre>$txt</pre>"
+      case Block("comment",_)   => ""
+      case Block(tpe, _)        => sys.error(s"unknown block type $tpe")
+      case Images(images)       => images.map(img => l.imgTag(img, this)).mkString(" ")
+      case Paragraph(txt)       => "<p>"+mkParagraph(txt, aliases)+"</p>"
+      case Blockquote(sx)       => "<blockquote>"+mkText(sx, l, aliases)+"</blockquote>"
+      case Inline(txt)          => mkParagraph(txt, aliases)
+      case BulletList(items)    => "<ul>"+items.map{ i => "<li>"+mkText(Seq(i), l, aliases)+"</li>" }.mkString("\n")+"</ul>"
+      case NumberedList(items)  => "<ol>"+items.map{ case (num, i) => "<li value="+num+" id=\"fn"+num+"\">"+mkText(Seq(i), l, aliases)+"</li>" }.mkString("\n")+"</ol>"
       case Table(rows, columns) =>
         "<table>"+
         rows.map(cols =>
@@ -173,13 +175,15 @@ final case class Paragraph(txt: String) extends Segment
 final case class Block(tpe: String, txt: String) extends Segment
 final case class Blockquote(segments: Seq[Segment]) extends Segment
 final case class Inline(txt: String) extends Segment
+final case class BulletList(items: Seq[Inline]) extends Segment
+final case class NumberedList(items: Seq[(Int, Inline)]) extends Segment
 final case class Table(rows: Seq[Seq[Cell]], columns: Int) extends Segment
 
 case class Cell(txt: String, span: Int = 1)
 
 
 object AsciiMarkup extends Markup {
-  def process(a: Article, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = segmentText(a.rawText, resolveLink, noteUrl, imageRoot)
+  def process(text: String, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = segmentText(text, resolveLink, noteUrl, imageRoot)
 
   private val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
   private val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r
@@ -202,18 +206,31 @@ object AsciiMarkup extends Markup {
         case hrRegex() => Hr()
         case txt =>
           val ls = txt.lines.toVector
-          matchAllLines(ls) {
-            case linkRefRegex(r, url) => (r, url)
-          }.map(refs => Linkref(refs)).orElse {
+
+          None.orElse {
+            matchAllLines(ls) {
+              case linkRefRegex(r, url) => (r, url)
+            }.map(Linkref)
+
+          }.orElse {
             matchAllLines(ls)(mkImage(imageRoot)).map(Images)
+
           }.orElse {
             matchAllLines(ls) {
               case l if l.startsWith("> ") || l == ">"  => l.drop(2)
             }.map { ls => Blockquote(splitBlocks(ls.mkString("\n"))) }
+
           }.orElse {
             matchAllLines(ls) {
               case l if l.startsWith("|") => l
-            }.map { ls => mkTable(ls) }
+            }.map(mkTable)
+
+          }.orElse {
+            if (ls(0).startsWith("-")) Some(mkBulletList(ls)) else None
+
+          }.orElse {
+            if (ls(0).matches("""^\d+\).*""")) Some(mkNumberedList(ls)) else None
+
           }.getOrElse {
             Paragraph(txt)
           }
@@ -275,6 +292,28 @@ object AsciiMarkup extends Markup {
     val rows = ls.map { l => l.split("\\|").toSeq.tail.map { cell => Cell(cell, 1) } }
     val columns = rows.map(_.map(_.span).sum).max
     Table(rows, columns)
+  }
+
+  private def mkBulletList(lines: Seq[String]): BulletList = {
+    val starts = (0 until lines.length).filter(i => lines(i).startsWith("-"))
+    val items = (0 until starts.length)
+      .map(i => lines.slice(starts(i), starts.lift(i+1).getOrElse(lines.length)))
+      .map(ls => Inline(ls.map(l => l.stripPrefix("-").trim).mkString("\n")))
+
+    BulletList(items)
+  }
+
+  private def mkNumberedList(lines: Seq[String]): NumberedList = {
+    val starts = (0 until lines.length).filter(i => lines(i).matches("""^\d+\).*"""))
+    val items = (0 until starts.length)
+      .map(i => lines.slice(starts(i), starts.lift(i+1).getOrElse(lines.length)))
+      .map { ls =>
+        val Array(num, _) = ls(0).split("\\)", 2)
+        num.toInt -> Inline(ls.map(l => l.replaceFirst("""^\d+\)""", "").trim).mkString("\n"))
+      }
+
+
+    NumberedList(items)
   }
 
 }
