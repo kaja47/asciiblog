@@ -194,6 +194,24 @@ case class Article(
   // image marker is shown only for images that are not from external sources
   def hasImageMarker = images.exists(i => i.source == null || i.source == "")
   def hasTag(t: Tag) = tags.visible.contains(t)
+
+  def imagesWithoutArticleTags = { // TODO This method is bit hacky. Where it should be called from?
+    val ts = if (isTag) Set(asTag) else tags.visible.toSet
+    def strip(i: Image) = i.copy(tags = i.tags.copy(visible = i.tags.visible.filter(t => !ts.contains(t))))
+    def stripSegments(ss: Seq[Segment]): Seq[Segment] = ss.map {
+      case Images(is) => Images(is.map(strip))
+      case Blockquote(ss) => Blockquote(stripSegments(ss))
+      case s => s
+    }
+
+    copy(
+      images = images.map(strip),
+      text = text match { // TODO this sould not be there
+        case t: AsciiText => t.copy(segments = stripSegments(t.segments))
+        case t => t
+      }
+    )
+  }
 }
 
 case class Meta(values: Seq[String] = Seq()) {
@@ -262,6 +280,8 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
     (all ++ extraTags).filter(_.isTag).map { t =>
       t.asTag -> (t.copy(images = t.images ++ taggedImages(t.asTag)), tagMap.getOrElse(t.asTag, Seq()))
     }.toMap
+
+  def slugOfTag(t: Tag) = allTags(t)._1
 
   lazy val tagByTitle: Map[Tag, Article] = allTags.map { case (t, (a, _)) => (t, a) }
 
@@ -1057,7 +1077,7 @@ object MakeFiles {
     timer("generate and save files - articles") {
     base.articles.par foreach { a =>
       var l = FlowLayout(blog.absUrl(a), base, blog, markup)
-      val body = l.makeFullArticle(a)
+      val body = l.makeFullArticle(a.imagesWithoutArticleTags)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
     }
     }
