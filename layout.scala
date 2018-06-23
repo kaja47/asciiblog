@@ -167,7 +167,7 @@ hr {border:0px dotted gray;border-top-width:1px;margin:0.8em 4em}
 p {margin:1.4em 0}
 .sh {float:left;clear:both;margin:0.8em 0}
 .shimg {float:left;margin:0 0.5em 0 0}
-.bottom {font-size:0.9em}
+.low {font-size:0.9em}
 """, cats)+blog.cssStyle
 
 s"""<!DOCTYPE html>
@@ -253,8 +253,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     makeArticleBody(a, compact)+
     ifs(!compact && blog.scripts.fullArticleBottom != null, eval(blog.scripts.fullArticleBottom, Map("article" -> a)))+
     ifs(!compact,
-      """<div class=bottom>"""+
-      ifs(blog.allowComments && !a.isTag, s"""<hr/><b><a href="comments.php?url=${blog.relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b> """)+
+      """<div class=low>"""+
+      ifs(blog.allowComments && !a.isTag, s"""<hr/><b><a href="comments.php?url=${blog.relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b>""")+
       ifs(blog.shareLinks && !a.isTag, {
         val url = URLEncoder.encode(blog.absUrl(a), "UTF-8")
         s""" &nbsp;&nbsp; ${txl("share.share")} <a href="https://www.facebook.com/sharer/sharer.php?u=$url">${txl("share.facebook")}</a>, <a href="https://twitter.com/intent/tweet?url=$url">${txl("share.twitter")}</a>, <a href="https://plus.google.com/share?url=$url">${txl("share.googleplus")}</a>"""
@@ -314,8 +314,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def _makeNextPrevArrows(prev: Article, next: Article) =
-    (if (prev == null) "«««" else s"""<a id=prev href="${blog.absUrl(prev)}">«««</a>""")+" "+
-    (if (next == null) "»»»" else s"""<a id=next href="${blog.absUrl(next)}">»»»</a>""")
+    (if (prev == null) "«««" else s"""<a href="${blog.absUrl(prev)}">«««</a>""")+" "+
+    (if (next == null) "»»»" else s"""<a href="${blog.absUrl(next)}">»»»</a>""")
 
   def makeTagLinks(tags: Seq[Article], a: Article = null) =
     tags.map { t =>
