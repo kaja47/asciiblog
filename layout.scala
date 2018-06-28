@@ -28,7 +28,31 @@ trait ImageLayout {
 
 
 class FlowLayoutMill(base: Base, blog: Blog, markup: Markup) {
-  def make(baseUrl: String): FlowLayout = FlowLayout(baseUrl, base, blog, markup)
+  def make(baseUrl: String): FlowLayout = FlowLayout(baseUrl, base, blog, markup, this)
+
+  def inlineStyles = s"""
+a          { color: inherit; }
+.r         { text-align: right; }
+.f         { float: right; }
+.b         { max-width: 46em; font-family: monospace; line-height: 1.3; }
+blockquote { margin:0; padding:0; font-style:italic; }
+.about     { text-decoration: underline red; }
+.thz, .fr, .main
+           { font-size: 0.8em }
+span.thz   { width: ${blog.thumbWidth}px; display: inline-block; vertical-align: top; }
+span.fr    { text-align: right; max-width: 45%; float: right; }
+span.main  { text-align: right; display: block; margin-bottom: 0.5em; }
+span.main img, span.fr img
+           { max-width: 100%; }
+h2         { display: inline; margin: 0; font-size:1em; }
+hr         { border: 0px dotted gray; border-top-width: 1px; margin: 0.8em 4em; }
+p          { margin: 1.4em 0; }
+.sh        { float: left; clear: both; margin: 0.8em 0; }
+.shimg     { float: left; margin: 0 0.5em 0 0; }
+.low       { font-size: 0.9em; }
+""".trim
+
+//styles(..., cats)+blog.cssStyle
 }
 
 
@@ -44,7 +68,7 @@ object FlowLayout {
 }
 
 
-case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) extends Layout {
+case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, layoutMill: FlowLayoutMill) extends Layout {
   import FlowLayout._
 
   def rel(url: String): String =
@@ -159,25 +183,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
     val body = "<body><div class=b>"+header+c2+footer+"</div></body>"
     val cats: String => Boolean = if (includeCompleteStyle) _ => true else classesAndTags(body)
 
-    def inlineStyles = styles(s"""
-a{color:inherit}
-.r{text-align:right}
-.f{float:right}
-.b{max-width:46em;font-family:monospace;line-height:1.3}
-blockquote{margin:0;padding:0;font-style:italic}
-.about{text-decoration:underline red}
-.thz,.fr,.main{font-size:0.8em}
-span.thz {width:${blog.thumbWidth}px;display:inline-block;vertical-align:top}
-span.fr {text-align:right;max-width:45%;float:right}
-span.main {text-align:right;display:block;margin-bottom:0.5em}
-span.main img, span.fr img {max-width:100%}
-h2 {display:inline;margin:0;font-size:1em}
-hr {border:0px dotted gray;border-top-width:1px;margin:0.8em 4em}
-p {margin:1.4em 0}
-.sh {float:left;clear:both;margin:0.8em 0}
-.shimg {float:left;margin:0 0.5em 0 0}
-.low {font-size:0.9em}
-""", cats)+blog.cssStyle
 
 s"""<!DOCTYPE html>
 <html${ifs(blog.hasOgTags, " prefix=\"og: http://ogp.me/ns#\"")}>
@@ -186,7 +191,7 @@ s"""<!DOCTYPE html>
 <title>${ifs(title, title+" | ")+blog.title}</title>
 ${rssLink("rss.xml")}
 ${ifs(headers)}
-${if (blog.cssFile.isEmpty) { s"""<style>$inlineStyles</style>""" }
+${if (blog.cssFile.isEmpty) { s"""<style>${styles(layoutMill.inlineStyles, cats)+blog.cssStyle}</style>""" }
   else { s"""<link rel="stylesheet" href="${rel("style.css")}" type="text/css"/>""" } }
 ${ifs(containImages, s"<script>$galleryScript</script>")}
 </head>$body
