@@ -87,7 +87,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup) e
     }.mkString(" ")
 
   val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
-
   val tagRegex   = """\<([a-zA-Z]\w*?)\W""".r
   def classesAndTags(txt: String): Set[String] = {
     val classes = classRegex.findAllMatchIn(txt).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
