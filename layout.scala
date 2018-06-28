@@ -8,6 +8,9 @@ import java.net.URLEncoder
 import scala.util.matching.Regex
 
 
+trait LayoutMill {
+  def make(baseUrl: String): Layout
+}
 
 trait Layout extends ImageLayout {
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String
@@ -21,6 +24,13 @@ trait Layout extends ImageLayout {
 trait ImageLayout {
   def imgTag(img: Image, t: Text, showDesc: Boolean = true, linkTo: String = null): String
 }
+
+
+
+class FlowLayoutMill(base: Base, blog: Blog, markup: Markup) {
+  def make(baseUrl: String): FlowLayout = FlowLayout(baseUrl, base, blog, markup)
+}
+
 
 object FlowLayout {
   def stripTags(html: String, except: Seq[String] = Seq()) = {

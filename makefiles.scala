@@ -1046,10 +1046,11 @@ object MakeFiles {
       }
     }
 
+    val layout = new FlowLayoutMill(base, blog, markup)
 
     timer("generate and save files") {
     val archiveLinks = archivePages.zipWithIndex.par.map { case ((a, as), idx) =>
-      val l = FlowLayout(blog.absUrl(a), base, blog, markup)
+      val l = layout.make(blog.absUrl(a))
       val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
       val next = archivePages.lift(idx+1).map(_._1).getOrElse(null)
       val body = l.addArrows(l.makeIndex(Seq(), as), prev, next, true)
@@ -1058,7 +1059,7 @@ object MakeFiles {
     }.seq
 
     val path = blog.relUrlFromSlug("index")
-    val l = FlowLayout(blog.absUrlFromPath(path), base, blog, markup)
+    val l = layout.make(blog.absUrlFromPath(path))
     val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month")
     fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
 
@@ -1070,7 +1071,7 @@ object MakeFiles {
 
 
     imgsPages.zipWithIndex.par foreach { case (a, idx) =>
-      var l = FlowLayout(blog.absUrl(a), base, blog, markup)
+      var l = layout.make(blog.absUrl(a))
       val prev = imgsPages.lift(idx-1).getOrElse(null)
       val next = imgsPages.lift(idx+1).getOrElse(null)
       val body = l.addArrows(l.makeFullArticle(a), prev, next, true)
@@ -1079,14 +1080,14 @@ object MakeFiles {
 
     timer("generate and save files - articles") {
     base.articles.par foreach { a =>
-      var l = FlowLayout(blog.absUrl(a), base, blog, markup)
+      var l = layout.make(blog.absUrl(a))
       val body = l.makeFullArticle(a.imagesWithoutArticleTags)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
     }
     }
 
     base.allTags.par foreach { case (t, (a, as)) =>
-      var l = FlowLayout(blog.absUrl(a), base, blog, markup)
+      var l = layout.make(blog.absUrl(a))
       val body = l.makeFullArticle(a.imagesWithoutArticleTags)
       val hasImages = a.images.nonEmpty || as.exists(_.images.nonEmpty)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")), oldFileIndex)
@@ -1095,18 +1096,18 @@ object MakeFiles {
 
     {
       val path = blog.relUrlFromSlug("tags")
-      val l = FlowLayout(blog.absUrlFromPath(path), base, blog, markup)
+      val l = layout.make(blog.absUrlFromPath(path))
       fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)), oldFileIndex)
     }
 
     def mkBody(a: Article) = {
-      val body = FlowLayout(null, base, blog, markup).makeArticleBody(a, true)
+      val body = layout.make(null).makeArticleBody(a, true)
       FlowLayout.updateLinks(body, url => blog.addParamMediumFeed(url))
     }
     fileIndex ++= saveXml("rss", makeRSS(base.feed.take(blog.limitRss), if (blog.articlesInRss) mkBody else null), oldFileIndex)
 
     if (blog.allowComments) {
-      val l = FlowLayout(blog.absUrlFromPath("comments.php"), base, blog, markup)
+      val l = layout.make(blog.absUrlFromPath("comments.php"))
       val p = l.makePage("{comments.body}", null, false,  null, includeCompleteStyle = true)
       val Array(pre, post) = p.split(Regex.quote("{comments.body}"))
 
