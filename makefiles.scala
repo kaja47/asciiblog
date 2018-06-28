@@ -712,11 +712,11 @@ object MakeFiles {
 
     val h = hash(content)
 
-    //if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
+    if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
       val fw = new FileWriter(ff)
       fw.write(content)
       fw.close()
-    //}
+    }
 
     Seq(f -> h)
   }
@@ -1010,7 +1010,7 @@ object MakeFiles {
 
 
 
-  def makeFiles(blog: Blog, base: Base, markup: Markup) = {
+  def makeFiles(blog: Blog, base: Base, markup: Markup) = try {
     implicit val _blog = blog
 
     val oldFileIndex: Map[String, String] = {
@@ -1198,6 +1198,18 @@ object MakeFiles {
     }
     }
 
+  } catch {
+    case e: Exception =>
+      // If anything goes wrong nuke .files index.
+      // It's necessary for correct conditional save in `saveFile` method.
+      // In cases when I make some changes, program may overwrite few files and
+      // than explode without updating .files index. Then if I revert that
+      // change, program incorrectly thinks (according to index) that all files
+      // are unchanged and it not save correct version. Deleting .files index
+      // prevents this problem, because after every error, all files are
+      // regenerated.
+     new File(blog.outDir, ".files").delete()
+     throw new Exception(e)
   }
 
 }
