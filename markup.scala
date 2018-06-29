@@ -243,7 +243,7 @@ object AsciiMarkup extends Markup {
           }
       }
 
-    def mergeParagraphsIntoLists(segments: Seq[Segment]): Seq[Segment] = { // TODO more general mechanism for not only paragraphs
+    def mergeParagraphsIntoLists(segments: Seq[Segment]): Seq[Segment] = // TODO more general mechanism for not only paragraphs
       segments.foldLeft(Vector[Segment]()) { (res, s) =>
         (s, res.lastOption) match {
           case (s @ Paragraph(txt), Some(BulletList(items))) if txt.lines.forall(_.startsWith("  ")) =>
@@ -265,7 +265,17 @@ object AsciiMarkup extends Markup {
           case (s, _) => res :+ s
         }
       }
-    }
+
+    def joinNeighboringLists(segments: Seq[Segment]): Seq[Segment] =
+      segments.foldLeft(Vector[Segment]()) { (res, s) =>
+        (res.lastOption, s) match {
+          case (Some(BulletList(items1)), BulletList(items2)) =>
+            res.init :+ BulletList(items1 ++ items2)
+          case (Some(NumberedList(items1)), NumberedList(items2)) =>
+            res.init :+ NumberedList(items1 ++ items2)
+          case (_, s) => res :+ s
+        }
+      }
 
     var txt = commentRegex.replaceAllIn(_txt, "")
 
@@ -279,7 +289,8 @@ object AsciiMarkup extends Markup {
       }).toVector.flatten ++ (if (prev > txt.length) Seq() else splitBlocks(txt.substring(prev)))
     }
 
-    AsciiText(mergeParagraphsIntoLists(segments), resolveLink, noteUrl)
+    val finalSegments = joinNeighboringLists(mergeParagraphsIntoLists(segments))
+    AsciiText(finalSegments, resolveLink, noteUrl)
   }
 
   private val imgRegexFragment = """
