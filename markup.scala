@@ -152,8 +152,13 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
       case Blockquote(sx)       => "<blockquote>"+mkText(sx, l, aliases)+"</blockquote>"
       case Inline(txt)          => mkParagraph(txt, aliases)
       case SegmentSeq(sx)       => mkText(sx, l, aliases)
-      case BulletList(items)    => "<ul>"+items.map{ i => "<li>"+mkText(Seq(i), l, aliases)+"</li>" }.mkString("\n")+"</ul>"
-      case NumberedList(items)  => "<ol>"+items.map{ case (num, i) => "<li value="+num+" id=\"fn"+num+"\">"+mkText(Seq(i), l, aliases)+"</li>" }.mkString("\n")+"</ol>"
+      case BulletList(items)    =>
+        "<ul>"+items.map { it => "<li>"+mkText(Seq(it), l, aliases)+"</li>" }.mkString("\n")+"</ul>"
+      case NumberedList(items)  =>
+        "<ol>"+items.zipWithIndex.map {
+          case ((num, it), i) if num == i+1 => "<li id=\"fn"+num+"\">"+mkText(Seq(it), l, aliases)+"</li>"
+          case ((num, it), _)               => "<li id=\"fn"+num+"\" value="+num+">"+mkText(Seq(it), l, aliases)+"</li>"
+        }.mkString("\n")+"</ol>"
       case Table(rows, columns) =>
         "<table>"+
         rows.map(cols =>
@@ -163,7 +168,6 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
         ).mkString+
         "</table>"
     }.mkString("")
-
 
 }
 
