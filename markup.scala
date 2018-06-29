@@ -67,6 +67,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
     case Heading(txt)   => extractLinks(txt)
     case Images(images) => images.iterator.flatMap(i => extractLinks(i.title))
     case Blockquote(sx) => _links(sx)
+    case SegmentSeq(sx) => _links(sx)
     case BulletList(items)   => _links(items)
     case NumberedList(items) => _links(items.map(_._2))
     case Table(rows, _) => rows.iterator.flatten.flatMap(cell => extractLinks(cell.txt))
@@ -150,6 +151,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
       case Paragraph(txt)       => "<p>"+mkParagraph(txt, aliases)+"</p>"
       case Blockquote(sx)       => "<blockquote>"+mkText(sx, l, aliases)+"</blockquote>"
       case Inline(txt)          => mkParagraph(txt, aliases)
+      case SegmentSeq(sx)       => mkText(sx, l, aliases)
       case BulletList(items)    => "<ul>"+items.map{ i => "<li>"+mkText(Seq(i), l, aliases)+"</li>" }.mkString("\n")+"</ul>"
       case NumberedList(items)  => "<ol>"+items.map{ case (num, i) => "<li value="+num+" id=\"fn"+num+"\">"+mkText(Seq(i), l, aliases)+"</li>" }.mkString("\n")+"</ol>"
       case Table(rows, columns) =>
@@ -175,8 +177,9 @@ final case class Paragraph(txt: String) extends Segment
 final case class Block(tpe: String, txt: String) extends Segment
 final case class Blockquote(segments: Seq[Segment]) extends Segment
 final case class Inline(txt: String) extends Segment
-final case class BulletList(items: Seq[Inline]) extends Segment
-final case class NumberedList(items: Seq[(Int, Inline)]) extends Segment
+final case class SegmentSeq(segments: Seq[Segment]) extends Segment
+final case class BulletList(items: Seq[Segment]) extends Segment
+final case class NumberedList(items: Seq[(Int, Segment)]) extends Segment
 final case class Table(rows: Seq[Seq[Cell]], columns: Int) extends Segment
 
 case class Cell(txt: String, span: Int = 1)
@@ -236,6 +239,30 @@ object AsciiMarkup extends Markup {
           }
       }
 
+    def mergeParagraphsIntoLists(segments: Seq[Segment]): Seq[Segment] = { // TODO more general mechanism for not only paragraphs
+      segments.foldLeft(Vector[Segment]()) { (res, s) =>
+        (s, res.lastOption) match {
+          case (s @ Paragraph(txt), Some(BulletList(items))) if txt.lines.forall(_.startsWith("  ")) =>
+            items.last match {
+              case SegmentSeq(ss) =>
+                res.init :+ BulletList(items.init :+ SegmentSeq(ss :+ s))
+              case last =>
+                res.init :+ BulletList(items.init :+ SegmentSeq(Seq(last, s)))
+            }
+
+          case (Paragraph(txt), Some(NumberedList(items))) if txt.lines.forall(_.startsWith("  ")) =>
+            items.last match {
+              case (i, SegmentSeq(ss)) =>
+                res.init :+ NumberedList(items.init :+ (i, SegmentSeq(ss :+ s)))
+              case (i, last) =>
+                res.init :+ NumberedList(items.init :+ ((i, SegmentSeq(Seq(last, s)))))
+            }
+
+          case (s, _) => res :+ s
+        }
+      }
+    }
+
     var txt = commentRegex.replaceAllIn(_txt, "")
 
     val segments: Seq[Segment] = {
@@ -248,7 +275,7 @@ object AsciiMarkup extends Markup {
       }).toVector.flatten ++ (if (prev > txt.length) Seq() else splitBlocks(txt.substring(prev)))
     }
 
-    AsciiText(segments, resolveLink, noteUrl)
+    AsciiText(mergeParagraphsIntoLists(segments), resolveLink, noteUrl)
   }
 
   private val imgRegexFragment = """
@@ -311,7 +338,6 @@ object AsciiMarkup extends Markup {
         val Array(num, _) = ls(0).split("\\)", 2)
         num.toInt -> Inline(ls.map(l => l.replaceFirst("""^\d+\)""", "").trim).mkString("\n"))
       }
-
 
     NumberedList(items)
   }
