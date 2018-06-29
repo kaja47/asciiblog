@@ -30,7 +30,7 @@ trait ImageLayout {
 class FlowLayoutMill(base: Base, blog: Blog, markup: Markup) {
   def make(baseUrl: String): FlowLayout = FlowLayout(baseUrl, base, blog, markup, this)
 
-  def inlineStyles = s"""
+  private def inlineStyles = s"""
 a          { color: inherit; }
 .r         { text-align: right; }
 .f         { float: right; }
@@ -52,7 +52,13 @@ p          { margin: 1.4em 0; }
 .low       { font-size: 0.9em; }
 """.trim
 
-//styles(..., cats)+blog.cssStyle
+  import CssMinimizer._
+  private val optStyle = optimize(parseCSS(inlineStyles) ++ parseCSS(blog.cssStyle))
+
+  def style(cats: Set[String]) = cats match {
+    case null => render(optStyle)
+    case cats => render(minimize(optStyle, cats))
+  }
 }
 
 
@@ -121,30 +127,14 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
     }.mkString(" ")
 
   val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
+  val idRegex    = """(?x) id=   (?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
   val tagRegex   = """\<([a-zA-Z]\w*?)\W""".r
   def classesAndTags(txt: String): Set[String] = {
     val classes = classRegex.findAllMatchIn(txt).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
+    val ids     = idRegex   .findAllMatchIn(txt).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
     val tags    = tagRegex.findAllMatchIn(txt).map(_.group(1))
-    (tags ++ classes.map("."+_)).toSet
+    (tags ++ classes.map("."+_) ++ ids.map("#"+_)).toSet
   }
-
-  val selectorRegex = """^(\w+)?(\.\w+)?$""".r
-  def style(styleLine: String, cats: String => Boolean): Option[String] = {
-    val (selectorList, rule) = styleLine.span(_ != '{')
-    val matchingSelectors = selectorList.split(",").map(_.trim).flatMap { selector =>
-      val matches = selector.split(" ").forall { s =>
-        selectorRegex.findFirstMatchIn(s) match {
-          case Some(m) => (Option(m.group(1)) ++ Option(m.group(2))).forall(cats)
-          case None => true
-        }
-      }
-      if (matches) Some(selector) else None
-    }
-    if (matchingSelectors.nonEmpty) Some(matchingSelectors.mkString(",")+rule) else None
-  }
-
-  def styles(styleTxt: String, cats: String => Boolean) =
-    styleTxt.lines.map(_.trim).filter(_.nonEmpty).flatMap(l => style(l, cats)).mkString("")
 
   def resolveGlobalLink(link: String, base: Base) = link match {
     case l if isAbsolute(l) => l
@@ -181,7 +171,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
     val c1 = ahrefRegex.replaceAllIn(content, l => Regex.quoteReplacement(rel(l.group(1))))
     val c2 = if (!c1.contains(imgsrcCheck)) c1 else imgsrcRegex.replaceAllIn(c1,     l => Regex.quoteReplacement(rel(l.group(1))))
     val body = "<body><div class=b>"+header+c2+footer+"</div></body>"
-    val cats: String => Boolean = if (includeCompleteStyle) _ => true else classesAndTags(body)
+    val cats: Set[String] = if (includeCompleteStyle) null else classesAndTags(body)
 
 
 s"""<!DOCTYPE html>
@@ -191,7 +181,7 @@ s"""<!DOCTYPE html>
 <title>${ifs(title, title+" | ")+blog.title}</title>
 ${rssLink("rss.xml")}
 ${ifs(headers)}
-${if (blog.cssFile.isEmpty) { s"""<style>${styles(layoutMill.inlineStyles, cats)+blog.cssStyle}</style>""" }
+${if (blog.cssFile.isEmpty) { s"""<style>${layoutMill.style(cats)}</style>""" }
   else { s"""<link rel="stylesheet" href="${rel("style.css")}" type="text/css"/>""" } }
 ${ifs(containImages, s"<script>$galleryScript</script>")}
 </head>$body
