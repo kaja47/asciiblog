@@ -112,5 +112,5 @@ object CssMinimizer {
     css.map {
       case xRule(selector, _, styles) => selector.mkString(",")+"{"+styles+"}"
       case xMedia(media, rules) => "@media "+media+"{"+render(rules)+"}"
-    }.mkString("\n")
+    }.mkString
 }
