@@ -905,17 +905,9 @@ object MakeFiles {
         }
       }
 
-      // translate `rel` that is set to local alias
-      val newRel = if (a.rel.isEmpty) a.rel else {
-        val localAliases = txt.linkAliases.toMap
-        a.rel.map { r => localAliases.getOrElse(r, r) }
-      }
-
       a.copy(
         text = txt,
-        rel = newRel,
-        // images might be already populated from readGallery()
-        images = (a.images ++ txt.images)
+        images = (a.images ++ txt.images) // images might be already populated from readGallery()
       )
     }
     }

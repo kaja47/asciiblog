@@ -23,9 +23,8 @@ trait Text {
   // must return absolute urls
   def links: Seq[String]
 
-  // Outside Markup and Text this is intended only for
-  // - expanding `meta: rel: [ x ]` specified by a local alias, not a valid slug
-  // - check if there are not duplicate aliases
+  // Outside Markup and Text this is intended only to
+  // check if there are not duplicate aliases
   def linkAliases: Seq[(String, String)]
 }
 
