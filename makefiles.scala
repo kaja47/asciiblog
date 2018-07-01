@@ -883,7 +883,7 @@ object MakeFiles {
     }
 
     // globalMapping maps from slugs to absolute urls
-    def resolveLink(link: String, localAliases: Map[String, String], globalMapping: Map[String, String], a: Article) = {
+    def resolveLink(link: String, localAliases: Map[String, String], globalMapping: Map[String, String], a: Article): String = {
       val Array(base, hash) = link.split("#", 2).padTo(2, "")
       val Array(b, h) = localAliases.getOrElse(base, base).split("#", 2).padTo(2, "")
       if (blog.printErrors && b.nonEmpty && !isAbsolute(b) && !b.startsWith("#") && !b.startsWith("..") && !b.matches(".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$") && !globalMapping.contains(b))
