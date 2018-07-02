@@ -144,7 +144,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
     segments.map {
       case Heading(txt)         => "<h3>"+mkParagraph(txt, aliases)+"</h3>"
       case Hr()                 => "<hr/>\n"
-      case Linkref(txt)         => ""
+      case Linkref(_)           => ""
       case Block("html", txt)   => txt
       case Block("div",  txt)   => s"<div>$txt</div>"
       case Block("code", txt)   => s"<pre>$txt</pre>"
@@ -196,7 +196,7 @@ case class Cell(txt: String, span: Int = 1)
 object AsciiMarkup extends Markup {
   def process(text: String, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = segmentText(text, resolveLink, noteUrl, imageRoot)
 
-  private val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ (.+)$""".r
+  private val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
   private val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r
   private val hrRegex       = """(?xm) ---+|\*\*\*+ """.r
   private val blockRegex    = """(?xs) /---(\w+)[^\n]*\n (.*?) \\--- """.r
