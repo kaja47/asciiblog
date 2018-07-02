@@ -186,7 +186,7 @@ case class Article(
   def asTag      = if (isTag) Tag(title, isSupertag) else null
   def extraImages = images.filter(!_.inText)
   def aliases: Seq[String] = meta.values.toVector
-  def links: Seq[String] = {
+  private def links: Seq[String] = {
     text.links.foreach(l => require(isAbsolute(l), s"Text.links must return absolute urls, '$l' provided (in article $slug)"))
     text.links
   }
@@ -895,16 +895,6 @@ object MakeFiles {
     articles = articles.map { a =>
       val noteUrl = if (a.notes == null) "" else blog.absUrlFromSlug(a.notes)
       val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a), noteUrl, blog.imageRoot)
-
-      txt.linkAliases.groupBy(_._1).filter(_._2.size > 1).foreach { case (l, _) =>
-        sys.error(s"duplicate link refs [$l] in article '${a.slug}'")
-      }
-      txt.linkAliases.foreach { case (r, url) =>
-        if (url.trim.startsWith("???")) {
-          sys.error(s"undefined linkRef $r -> $url in article '${a.slug} (link prefixed by ??? in considered placeholder for missing url)'")
-        }
-      }
-
       a.copy(
         text = txt,
         images = (a.images ++ txt.images) // images might be already populated from readGallery()

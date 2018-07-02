@@ -3,6 +3,7 @@ package asciiblog
 import MakeFiles. { licenses, peelOffTags, isAbsolute }
 import AsciiMarkup._
 import scala.util.matching.Regex
+import scala.collection.mutable
 
 
 trait Markup {
@@ -22,10 +23,6 @@ trait Text {
   def images: Seq[Image]
   // must return absolute urls
   def links: Seq[String]
-
-  // Outside Markup and Text this is intended only to
-  // check if there are not duplicate aliases
-  def linkAliases: Seq[(String, String)]
 }
 
 
@@ -53,13 +50,6 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
 
   val images: Seq[Image] = segments.collect { case Images(imgs) => imgs }.flatten
 
-  // this is before links method because links uses this one
-  val linkAliases: Seq[(String, String)] = segments.collect { case Linkref(lm) => lm }.flatMap { _.iterator }
-  val linkAliasesMap = linkAliases.toMap
-
-  lazy val resolvedLinks = _links(segments).map { l => (l, resolveLink(l, linkAliasesMap)) }.toMap
-  lazy val links: Seq[String] = resolvedLinks.valuesIterator.filter(isAbsolute).toVector
-
   private def _links(segments: Seq[Segment]): Seq[String] = segments.flatMap {
     case Paragraph(txt) => extractLinks(txt)
     case Inline(txt)    => extractLinks(txt)
@@ -76,6 +66,21 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
   private def extractLinks(txt: String): Iterator[String] =
     (if (txt.contains(ahrefCheck)) ahrefRegex.findAllMatchIn(txt).map(_.group(1)) else Iterator()) ++
     (if (txt.contains(linkCheck))  linkRegex.findAllMatchIn(txt).map(_.group(2))  else Iterator())
+
+  private lazy val localLinkAliases = {
+    val linkAliases: Seq[(String, String)] = segments.collect { case Linkref(lm) => lm }.flatten
+    val as = mutable.Set[String]()
+    for ((l, url) <- linkAliases) {
+      if (as.contains(l))      sys.error(s"duplicate link refs [$l]")
+      if (url.startsWith("?")) sys.error(s"undefined link ref $l -> $url (link prefixed by ??? is placeholder for missing url)")
+      as += l
+    }
+    linkAliases.toMap
+  }
+
+  private lazy val resolvedLinks =_links(segments).map { l => (l, resolveLink(l, localLinkAliases)) }.toMap
+  lazy val links: Seq[String] = resolvedLinks.valuesIterator.filter(isAbsolute).toVector
+
 
   private val codeRegex     = """(?xs) `    (.+?) `    """.r
   private val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
