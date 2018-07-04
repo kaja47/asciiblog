@@ -28,6 +28,21 @@ object util {
       val f = new File(pattern)
       if (f.isDirectory) f.listFiles else Array(f)
     }): Array[File]).filter(f => !f.getName.startsWith("."))
+
+  def escape(s: String): String = {
+    val sb = new StringBuilder()
+    var i = 0; while (i < s.length) {
+      s.charAt(i) match {
+        case '"' => sb append "&quot;"
+        case '&' => sb append "&amp;"
+        case '<' => sb append "&lt;"
+        case '>' => sb append "&gt;"
+        case ch  => sb append ch
+      }
+      i += 1
+    }
+    sb.toString
+  }
 }
 
 object timer {

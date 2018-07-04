@@ -131,7 +131,7 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
       txt = emRegex      .replaceAllIn(txt, "&mdash;")
     }
     if (txt.contains(codeCheck)) {
-      txt = codeRegex    .replaceAllIn(txt, """<code>$1</code>""")
+      txt = codeRegex    .replaceAllIn(txt, m => "<code>"+Regex.quoteReplacement(util.escape(m.group(1)))+"</code>")
     }
     if (txt.contains(noteCheck)) {
       txt = noteRegex.replaceAllIn(txt, m => Regex.quoteReplacement(s"""<a href="$noteUrl#fn${m.group(1)}"><sup>${m.group(1)}</sup></a> """))
@@ -147,8 +147,8 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
       case Linkref(_)           => ""
       case Block("html", txt)   => txt
       case Block("div",  txt)   => s"<div>$txt</div>"
-      case Block("code", txt)   => s"<pre>$txt</pre>"
-      case Block("pre",  txt)   => s"<pre>$txt</pre>"
+      case Block("code", txt)   => s"<pre>${util.escape(txt)}</pre>"
+      case Block("pre",  txt)   => s"<pre>${util.escape(txt)}</pre>"
       case Block("comment",_)   => ""
       case Block(tpe, _)        => sys.error(s"unknown block type $tpe")
       case Images(images)       => images.map(img => l.imgTag(img, this)).mkString(" ")
