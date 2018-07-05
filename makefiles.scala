@@ -323,7 +323,7 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
       (a.date, b.date) match {
         case (null, null) => 0
         case (null, _) | (_, null) => Long.MaxValue/2
-        case (a, b) => math.abs(a.getTime - b.getTime)
+        case (a, b) => Math.abs(a.getTime - b.getTime)
       }
     }
 
@@ -386,9 +386,8 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
 
   def similarTags(t: Tag, count: Int): Seq[Article] = {
 
-    class TopN[T: Ordering](n: Int) {
+    class TopN[T: Ordering](n: Int, var min: Double = Double.MinValue) {
       val set = mutable.TreeSet[(Double, T)]()
-      var min = Double.MinValue
 
       def += (x: (Double, T)): Unit = {
         if (x._1 < min) return
@@ -415,11 +414,14 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
     }
 
     val idxs = tm.getOrElse(t, Array())
-    val topn = new TopN[Tag](count)(Ordering.by { t => t.title })
+    val topn = new TopN[Tag](count, 0.001 /* zero is never added */)(Ordering.by { t => t.title })
 
     for ((t2, idxs2) <- tm if t2 != t) {
-      val in = intersectionSize(idxs, idxs2)
-      topn += (in.toDouble / (in + idxs.size + idxs2.size), t2)
+      val maxSim = 1.0 * Math.min(idxs.length, idxs2.length) / Math.max(idxs.length, idxs2.length)
+      if (maxSim >= topn.min) {
+        val in = intersectionSize(idxs, idxs2)
+        topn += (in.toDouble / (idxs.size + idxs2.size - in), t2)
+      }
     }
 
     topn.toSeq.map(_._2).flatMap(base.tagByTitle.get)
