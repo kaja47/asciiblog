@@ -97,9 +97,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
   private def plaintextDescription(a: Article): String =
     stripTags(a.text.firstParagraph).replaceAll("\\n", " ")
 
-  private def articleImages(a: Article): Seq[Image] = a.images
-  private def mainImageUrl(a: Article): String  = articleImages(a).find(_.mods == "main").map(_.url).getOrElse(null)
-  private def otherImageUrl(a: Article): String = articleImages(a).map(_.url).headOption.getOrElse(null)
+  private def mainImageUrl(a: Article): String  = a.images.find(_.mods == "main").map(_.url).getOrElse(null)
+  private def otherImageUrl(a: Article): String = a.images.headOption.map(_.url).getOrElse(null)
 
   def imgTag(img: Image, t: Text, showDesc: Boolean = true, linkTo: String = null) = {
     val (cl, srcPath) = img match {
@@ -223,7 +222,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeShortArticleBody(a: Article): String = {
-    val img = articleImages(a).sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
+    val img = a.images.sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
     val txt = truncate(plaintextDescription(a), 300)
 
     ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
