@@ -63,12 +63,19 @@ p          { margin: 1.4em 0; }
 
 
 object FlowLayout {
-  def stripTags(html: String, except: Seq[String] = Seq()) = {
-    val exceptRegex = (if (except.isEmpty) "" else "(?!"+except.mkString("|")+")")
-    html.replaceAll(s"\\<$exceptRegex.*?\\>", "") // TODO less crude way to strip tags
-  }
+  private val stripTagRegex = """\<.*?\>""".r
+  private val truncateRegex = """\s+(\w+)?$|\<\w+$""".r
+
+  def stripTags(html: String) =
+    stripTagRegex.replaceAllIn(html, "") // TODO less crude way to strip tags
+
   def truncate(txt: String, len: Int, append: String = "\u2026"): String =
-    if (txt.length <= len) txt else txt.take(len).replaceAll("""\s+(\w+)?$|\<\w+$""", "")+append
+    if (txt.length <= len) txt else {
+      //truncateRegex.replaceAllIn(txt.take(len), "")+append
+      val lastSpace = txt.lastIndexOf(" ", len)
+      txt.substring(0, if (lastSpace < 0) len else lastSpace)+append
+    }
+
   def updateLinks(content: String, f: String => String) =
     ahrefRegex.replaceAllIn(content, m => Regex.quoteReplacement(f(m.group(1))))
 }
@@ -95,7 +102,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
   }
 
   private def plaintextDescription(a: Article): String =
-    stripTags(a.text.firstParagraph).replaceAll("\\n", " ")
+    stripTags(a.text.firstParagraph).replace('\n', ' ')
 
   private def mainImageUrl(a: Article): String  = a.images.find(_.mods == "main").map(_.url).getOrElse(null)
   private def otherImageUrl(a: Article): String = a.images.headOption.map(_.url).getOrElse(null)
