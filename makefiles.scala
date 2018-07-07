@@ -424,7 +424,7 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
       }
     }
 
-    topn.toSeq.map(_._2).flatMap(base.tagByTitle.get)
+    topn.toSeq.map(_._2).flatMap(base.tagByTitle.get) // filter out tags that are only hidden
   }
 }
 
@@ -1208,5 +1208,4 @@ object MakeFiles {
      new File(blog.outDir, ".files").delete()
      throw new Exception(e)
   }
-
 }
