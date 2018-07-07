@@ -81,6 +81,8 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
   private lazy val resolvedLinks =_links(segments).map { l => (l, resolveLink(l, localLinkAliases)) }.toMap
   lazy val links: Seq[String] = resolvedLinks.valuesIterator.filter(isAbsolute).toVector
 
+  private val references: Set[Int] = segments.collect { case NumberedList(items) => items.map(_._1) }.flatten.toSet
+
 
   private val codeRegex     = """(?xs) `    (.+?) `    """.r
   private val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
@@ -134,7 +136,11 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
       txt = codeRegex    .replaceAllIn(txt, m => "<code>"+Regex.quoteReplacement(util.escape(m.group(1)))+"</code>")
     }
     if (txt.contains(noteCheck)) {
-      txt = noteRegex.replaceAllIn(txt, m => Regex.quoteReplacement(s"""<a href="$noteUrl#fn${m.group(1)}"><sup>${m.group(1)}</sup></a> """))
+      txt = noteRegex.replaceAllIn(txt, m => {
+        val num = m.group(1).toInt
+        if (noteUrl.isEmpty && !references.contains(num)) sys.error(s"invalid reference $num")
+        Regex.quoteReplacement(s"""<a href="$noteUrl#fn${num}"><sup>${num}</sup></a> """)
+      })
     }
     txt = preposRegex.replaceAllIn(txt, "$1\u00A0")
     txt
