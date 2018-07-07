@@ -7,21 +7,15 @@ import scala.collection.mutable
 
 
 trait Markup {
-  type ResolveLinkFunc = (String, Map[String, String]) => String
-
-  def process(text: String, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): Text
-  def process(a: Article, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): Text =
-    process(a.rawText, resolveLink, noteUrl, imageRoot)
-
+  type ResolveLinkFunc = String => String
+  def process(text: String, resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): Text
 }
 
 trait Text {
   def render(l: ImageLayout): String
   def firstParagraph: String
   def paragraph(text: String): String
-
   def images: Seq[Image]
-  // must return absolute urls
   def links: Seq[String]
 }
 
@@ -40,13 +34,13 @@ object AsciiText {
   def empty = AsciiText(Seq(), null, "")
 }
 
-case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteUrl: String) extends Text {
+case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl: String) extends Text {
   import AsciiText._
   import AsciiMarkup.{ commentRegex, commentCheck }
 
   def render(l: ImageLayout): String = mkText(segments, l, resolvedLinks)
   def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), resolvedLinks)
-  def paragraph(text: String): String = AsciiText(Seq(Inline(text)), (l, _) => resolvedLinks(l), "").render(null)
+  def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l), "").render(null)
 
   val images: Seq[Image] = segments.collect { case Images(imgs) => imgs }.flatten
 
@@ -67,19 +61,26 @@ case class AsciiText(segments: Seq[Segment], resolveLink: ResolveLinkFunc, noteU
     (if (txt.contains(ahrefCheck)) ahrefRegex.findAllMatchIn(txt).map(_.group(1)) else Iterator()) ++
     (if (txt.contains(linkCheck))  linkRegex.findAllMatchIn(txt).map(_.group(2))  else Iterator())
 
-  private lazy val localLinkAliases = {
-    val linkAliases: Seq[(String, String)] = segments.collect { case Linkref(lm) => lm }.flatten
+  private def checkAliases(aliases: Seq[(String, String)]) = {
     val as = mutable.Set[String]()
-    for ((l, url) <- linkAliases) {
+    for ((l, url) <- aliases) {
       if (as.contains(l))      sys.error(s"duplicate link refs [$l]")
       if (url.startsWith("?")) sys.error(s"undefined link ref $l -> $url (link prefixed by ??? is placeholder for missing url)")
       as += l
     }
-    linkAliases.toMap
   }
 
-  private lazy val resolvedLinks =_links(segments).map { l => (l, resolveLink(l, localLinkAliases)) }.toMap
-  lazy val links: Seq[String] = resolvedLinks.valuesIterator.filter(isAbsolute).toVector
+  private lazy val resolvedLinks = {
+    val aliases = segments.collect { case Linkref(lm) => lm }.flatten
+    checkAliases(aliases)
+    val aliasMap = aliases.toMap
+    _links(segments).map { l =>
+      val (base, hash) = util.splitByHash(l)
+      (l, resolver(aliasMap.getOrElse(base, base)+hash))
+    }.toMap
+  }
+
+  lazy val links: Seq[String] = resolvedLinks.valuesIterator.toVector
 
   private val references: Set[Int] = segments.collect { case NumberedList(items) => items.map(_._1) }.flatten.toSet
 
@@ -200,7 +201,7 @@ case class Cell(txt: String, span: Int = 1)
 
 
 object AsciiMarkup extends Markup {
-  def process(text: String, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = segmentText(text, resolveLink, noteUrl, imageRoot)
+  def process(text: String, resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = segmentText(text, resolver, noteUrl, imageRoot)
 
   private val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
   private val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r
@@ -211,7 +212,7 @@ object AsciiMarkup extends Markup {
   private val blockCheck    = """/---"""
   val commentCheck          = """<!--"""
 
-  private def segmentText(_txt: String, resolveLink: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = {
+  private def segmentText(_txt: String, resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = {
     def matchAllLines[T](ls: Seq[String])(f: PartialFunction[String, T]): Option[Seq[T]] = {
       val ms = ls.map(f.lift)
       if (ms.forall(_.isDefined)) Some(ms.map(_.get)) else None
@@ -300,7 +301,7 @@ object AsciiMarkup extends Markup {
     }
 
     val finalSegments = joinNeighboringLists(mergeParagraphsIntoLists(segments))
-    AsciiText(finalSegments, resolveLink, noteUrl)
+    AsciiText(finalSegments, resolver, noteUrl)
   }
 
   private val imgRegexFragment = """

@@ -29,6 +29,12 @@ object util {
       if (f.isDirectory) f.listFiles else Array(f)
     }): Array[File]).filter(f => !f.getName.startsWith("."))
 
+  def splitByHash(l: String): (String, String) = {
+    val pos = l.indexOf('#')
+    if (pos >= 0) (l.substring(0, pos), l.substring(pos))
+    else          (l, "")
+  }
+
   def escape(s: String): String = {
     val sb = new StringBuilder()
     var i = 0; while (i < s.length) {

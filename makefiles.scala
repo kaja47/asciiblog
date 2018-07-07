@@ -85,7 +85,9 @@ case class Blog (
 
   val args: Array[String],
   val translation: Map[String, String],
-  val scripts: Scripts = Scripts()
+  val scripts: Scripts = Scripts(),
+
+  val invalidLinkMarker: String = "@@INVALIDLINK@@"
 ) extends UrlOps {
   def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
   def printTimes: Boolean  = false
@@ -186,11 +188,7 @@ case class Article(
   def asTag      = if (isTag) Tag(title, isSupertag) else null
   def extraImages = images.filter(!_.inText)
   def aliases: Seq[String] = meta.values.toVector
-  private def links: Seq[String] = {
-    text.links.foreach(l => require(isAbsolute(l), s"Text.links must return absolute urls, '$l' provided (in article $slug)"))
-    text.links
-  }
-  def slugsOfLinkedArticles(implicit blog: Blog): Seq[Slug] = links.filter(blog.isLocalLink).map(blog.extractSlug)
+  def slugsOfLinkedArticles(implicit blog: Blog): Seq[Slug] = text.links.filter(isAbsolute).filter(blog.isLocalLink).map(blog.extractSlug)
 
   // image marker is shown only for images that are not from external sources
   def hasImageMarker = images.exists(i => i.source == null || i.source == "")
@@ -897,18 +895,20 @@ object MakeFiles {
     }
 
     // globalMapping maps from slugs to absolute urls
-    def resolveLink(link: String, localAliases: Map[String, String], globalMapping: Map[String, String], a: Article): String = {
-      val Array(base, hash) = link.split("#", 2).padTo(2, "")
-      val Array(b, h) = localAliases.getOrElse(base, base).split("#", 2).padTo(2, "")
-      if (blog.printErrors && b.nonEmpty && !isAbsolute(b) && !b.startsWith("#") && !b.startsWith("..") && !b.matches(".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$") && !globalMapping.contains(b))
+    def resolveLink(link: String, globalMapping: Map[String, String], a: Article): String = {
+      val (b, h) = util.splitByHash(link)
+      if (blog.printErrors && b.nonEmpty && !isAbsolute(b) && !b.startsWith("#") && !b.startsWith("..") && !b.matches(".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$") && !globalMapping.contains(b)) {
         println(s"bad link [$link -> $b] (in ${a.slug})")
-      globalMapping.getOrElse(b, b)+(if (hash.nonEmpty) "#"+hash else "")+(if (h.nonEmpty) "#"+h else "")
+        blog.invalidLinkMarker
+      } else {
+        globalMapping.getOrElse(b, b)+h
+      }
     }
 
     timer("parse text") {
     articles = articles.map { a =>
       val noteUrl = if (a.notes == null) "" else blog.absUrlFromSlug(a.notes)
-      val txt = markup.process(a, (link, localAliases) => resolveLink(link, localAliases, globalNames, a), noteUrl, blog.imageRoot)
+      val txt = markup.process(a.rawText, link => resolveLink(link, globalNames, a), noteUrl, blog.imageRoot)
       a.copy(
         text = txt,
         images = (a.images ++ txt.images) // images might be already populated from readGallery()

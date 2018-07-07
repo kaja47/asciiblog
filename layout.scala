@@ -6,6 +6,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.net.URLEncoder
 import scala.util.matching.Regex
+import util.escape
 
 
 trait LayoutMill {
@@ -174,7 +175,10 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
     val protoHeader = if (blog.header.nonEmpty) blog.header else defaultHeader
     val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
     val footer = ahrefRegex.replaceAllIn(blog.footer, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
-    val c1 = ahrefRegex.replaceAllIn(content, l => Regex.quoteReplacement(rel(l.group(1))))
+    val c1 = __ahrefRegex.replaceAllIn(content, { l =>
+      if (l.group(2) == blog.invalidLinkMarker) Regex.quoteReplacement(l.group(4))
+      else Regex.quoteReplacement(l.group(1)+rel(l.group(2))+l.group(3)+l.group(4)+l.group(5))
+    })
     val c2 = if (!c1.contains(imgsrcCheck)) c1 else imgsrcRegex.replaceAllIn(c1,     l => Regex.quoteReplacement(rel(l.group(1))))
     val body = "<body><div class=b>"+header+c2+footer+"</div></body>"
     val cats: Set[String] = if (includeCompleteStyle) null else classesAndTags(body)
