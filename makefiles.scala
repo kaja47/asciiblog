@@ -864,6 +864,18 @@ object MakeFiles {
     }
     }
 
+    val tagImplications: Map[Tag, Seq[Tag]] =
+      (for (a <- articles if a.isTag && a.implies.nonEmpty) yield (a.asTag, a.implies)).toMap
+
+    articles = articles.map { a =>
+      if (a.tags.visible.forall(t => !tagImplications.contains(t))) { // nothing to imply
+        a
+      } else {
+        val implied = a.tags.visible.flatMap { t => tagImplications.getOrElse(t, Seq()) }
+        a.copy(tags = a.tags.copy(visible = (a.tags.visible ++ implied).distinct))
+      }
+    }
+
     var tagMap: Map[Tag, Seq[Article]] = timer("invert tags 1") { invert(articles.map { a => (a, (a.tags.visible).distinct) }) }
 
     // maps all article slugs (main ones and aliases) to their absolute urls
