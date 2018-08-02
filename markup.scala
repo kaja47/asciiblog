@@ -89,7 +89,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
   private val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
   private val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*)    ((?:.(?!`))+?) (?<!\*)  \*  (?!\*) """.r
   private val italic2Regex  = """(?xsUu) (?<!:)  // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) //         """.r
-  private val altRegex      = """(?xm) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
+  private val altRegex      = """(?xs) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
   private val emRegex       = """---""".r
   private val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
   private val noteRegex     = """(?x) \[\[ (\d++) \]\]""".r
