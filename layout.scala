@@ -42,7 +42,7 @@ blockquote { margin:0; padding:0; font-style:italic; }
            { font-size: 0.8em }
 span.thz   { width: ${blog.thumbWidth}px; display: inline-block; vertical-align: top; }
 span.fr    { text-align: right; max-width: 45%; float: right; }
-span.main  { text-align: right; display: block; margin-bottom: 0.5em; }
+span.main  { text-align: center; display: block; margin-bottom: 0.5em; }
 span.main img, span.fr img
            { max-width: 100%; }
 h2         { display: inline; margin: 0; font-size:1em; }
