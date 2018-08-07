@@ -466,8 +466,7 @@ object MakeFiles {
       .map { case (b, bas) => (b, bas.map(_._2).toVector) }
 
 
-  def isAbsolute(url: String) = new URI(fixPath(url)).isAbsolute
-  def fixPath(path: String) = path.replaceAll(" ", "%20") // TODO hackity hack
+  def isAbsolute(url: String) = new URI(url).isAbsolute
   def addParam(url: String, param: String) =
     if (url.contains("?")) url+"&"+param
     else                   url+"?"+param
@@ -740,8 +739,8 @@ object MakeFiles {
         if (y == null) (null, t)
         else (new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime, t)
 
-      val imgUrls = albumDir.list collect { case f if f.toLowerCase.endsWith(".jpg") =>
-        fixPath(blog.baseUrl+"/albums/"+albumDir.getName+"/"+f)
+      val imgUrls = albumDir.list collect { case f if f.toLowerCase.endsWith(".jpg") => // TODO png, gif
+        blog.baseUrl + new URI(null, null, "/albums/"+albumDir.getName+"/"+f, null).toASCIIString
       }
 
       new Article(
@@ -1172,7 +1171,7 @@ object MakeFiles {
       try {
         lazy val file = {
           println(s"downloading ${image.url}")
-          ImageIO.read(new URL(fixPath(image.url)))
+          ImageIO.read(new URL(image.url))
         }
         for ((thumbFile, w, h, sharpenStrength) <- jobs if !thumbFile.exists) {
           println(s"resizing image ${image.url} -> $thumbFile")
