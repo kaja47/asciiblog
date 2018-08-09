@@ -1185,7 +1185,7 @@ object MakeFiles {
             case full =>
               val suffix = image.url.split("\\.").last.toLowerCase
               val s = if (ImageIO.getWriterFileSuffixes.contains(suffix)) suffix else "jpg"
-              val leeway = if (s == "png" || s == "gif") 1.5 else 1
+              val leeway = if (s == "png" || s == "gif") 1.6 else 1.6
               val strength = if (s == "png" || s == "gif") 0f else sharpenStrength
               val resized = ImageTools.resizeImage(full, w, h, leeway, strength)
               if (s == "jpg" || s == "jpeg") {
