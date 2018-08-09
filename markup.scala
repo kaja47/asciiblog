@@ -42,6 +42,14 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
   def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), resolvedLinks)
   def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l), "").render(null)
 
+  // Overwrites segments, doesn't resolve links again. This saves some work but
+  // mainly it's there se error messages during link resolution are not
+  // displayed twice
+  def overwriteSegments(newSegments: Seq[Segment]) =
+    new AsciiText(newSegments, null, noteUrl) {
+      override protected val resolvedLinks = _resolvedLinks
+    }
+
   val images: Seq[Image] = segments.collect { case Images(imgs) => imgs }.flatten
 
   private def processTexts[T](segments: Seq[Segment], f: String => Iterator[T]): Seq[T] = segments.flatMap {
@@ -68,7 +76,8 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     }
   }
 
-  private lazy val resolvedLinks = {
+  protected def resolvedLinks = _resolvedLinks
+  private lazy val _resolvedLinks = {
     val aliases = segments.collect { case Linkref(lm) => lm }.flatten
     checkAliases(aliases)
     val aliasMap = aliases.toMap

@@ -205,7 +205,7 @@ case class Article(
     copy(
       images = images.map(strip),
       text = text match { // TODO this sould not be there
-        case t: AsciiText => t.copy(segments = stripSegments(t.segments))
+        case t: AsciiText => t.overwriteSegments(stripSegments(t.segments))
         case t => t
       }
     )
