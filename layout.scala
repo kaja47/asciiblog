@@ -79,6 +79,16 @@ object FlowLayout {
 
   def updateLinks(content: String, f: String => String) =
     ahrefRegex.replaceAllIn(content, m => Regex.quoteReplacement(f(m.group(1))))
+
+  private val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
+  private val idRegex    = """(?x) id=   (?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
+  private val tagRegex   = """\<([a-zA-Z]\w*?)\W""".r
+  def classesAndTags(html: String): Set[String] = {
+    val classes = classRegex.findAllMatchIn(html).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
+    val ids     = idRegex   .findAllMatchIn(html).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
+    val tags    = tagRegex.findAllMatchIn(html).map(_.group(1))
+    (tags ++ classes.map("."+_) ++ ids.map("#"+_)).toSet
+  }
 }
 
 
@@ -133,15 +143,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
       s"""<a href="${blog.relUrlFromSlug(a.slug)}"><img class=th src="${blog.thumbnailUrl(i)}"/></a>"""
     }.mkString(" ")
 
-  val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
-  val idRegex    = """(?x) id=   (?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
-  val tagRegex   = """\<([a-zA-Z]\w*?)\W""".r
-  def classesAndTags(txt: String): Set[String] = {
-    val classes = classRegex.findAllMatchIn(txt).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
-    val ids     = idRegex   .findAllMatchIn(txt).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
-    val tags    = tagRegex.findAllMatchIn(txt).map(_.group(1))
-    (tags ++ classes.map("."+_) ++ ids.map("#"+_)).toSet
-  }
 
   def resolveGlobalLink(link: String, base: Base) = link match {
     case l if isAbsolute(l) => l
