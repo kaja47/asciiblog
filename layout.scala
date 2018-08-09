@@ -170,6 +170,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
       ifs(blog.twitterCreator, <meta name="twitter:creator" content={blog.twitterCreator}/>.toString)
     } else ""
 
+  val __ahrefRegex = """(?xs) (<a [^>]* href=") ([^"]+) (" [^>]* >) (.*?) (</a>)""".r
+
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String = {
     def defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
     val protoHeader = if (blog.header.nonEmpty) blog.header else defaultHeader
@@ -182,7 +184,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
     val c2 = if (!c1.contains(imgsrcCheck)) c1 else imgsrcRegex.replaceAllIn(c1,     l => Regex.quoteReplacement(rel(l.group(1))))
     val body = "<body><div class=b>"+header+c2+footer+"</div></body>"
     val cats: Set[String] = if (includeCompleteStyle) null else classesAndTags(body)
-
 
 s"""<!DOCTYPE html>
 <html${ifs(blog.hasOgTags, " prefix=\"og: http://ogp.me/ns#\"")}>
