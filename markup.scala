@@ -85,24 +85,6 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
   private val references: Set[Int] = segments.collect { case NumberedList(items) => items.map(_._1) }.flatten.toSet
 
 
-  private val codeRegex     = """(?xs) `    (.+?) `    """.r
-  private val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
-  private val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*)    ((?:.(?!`))+?) (?<!\*)  \*  (?!\*) """.r
-  private val italic2Regex  = """(?xsUu) (?<!:)  // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) //         """.r
-  private val altRegex      = """(?xs) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
-  private val emRegex       = """---""".r
-  private val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
-  private val noteRegex     = """(?x) \[\[ (\d++) \]\]""".r
-  private val preposRegex   = """(?xuUms) (?<=^|\W)([ksvzouiKSVZOUIA])\s++(?=\w)""".r // for unbreakable space between preposition and word
-
-  private val codeCheck     = """`"""
-  private val boldCheck     = """**"""
-  private val italicCheck   = """*"""
-  private val italic2Check  = """//"""
-  private val altCheck      = """.("""
-  private val emCheck       = """---"""
-  private val blackoutCheck = """[|"""
-  private val noteCheck     = """[["""
 
   private def mkParagraph(_txt: String, aliases: Map[String, String]): String = {
     var txt = _txt
@@ -202,6 +184,25 @@ case class Cell(txt: String, span: Int = 1)
 
 object AsciiMarkup extends Markup {
   def process(text: String, resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = segmentText(text, resolver, noteUrl, imageRoot)
+
+  val codeRegex     = """(?xs) `    (.+?) `    """.r
+  val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
+  val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*)    ((?:.(?!`))+?) (?<!\*)  \*  (?!\*) """.r
+  val italic2Regex  = """(?xsUu) (?<!:)  // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) //         """.r
+  val altRegex      = """(?xs) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
+  val emRegex       = """---""".r
+  val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
+  val noteRegex     = """(?x) \[\[ (\d++) \]\]""".r
+  val preposRegex   = """(?xuUms) ((?:^|\W)[ksvzouiKSVZOUIA])\s++(?=\w)""".r // for unbreakable space between preposition and word (czech)
+
+  val codeCheck     = """`"""
+  val boldCheck     = """**"""
+  val italicCheck   = """*"""
+  val italic2Check  = """//"""
+  val altCheck      = """.("""
+  val emCheck       = """---"""
+  val blackoutCheck = """[|"""
+  val noteCheck     = """[["""
 
   private val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
   private val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r

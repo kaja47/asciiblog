@@ -459,10 +459,13 @@ object MakeFiles {
   }
 
 
-  def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] =
-    m.flatMap { case (a, bs) => bs.map { b => (b, a) }  }
-      .groupBy(_._1)
-      .map { case (b, bas) => (b, bas.map(_._2).toVector) }
+  def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] = {
+    val res = mutable.Map[B, mutable.ArrayBuffer[A]]()
+    for ((a, bs) <- m; b <- bs) {
+      res.getOrElseUpdate(b, new mutable.ArrayBuffer[A]) += a
+    }
+    res.iterator.map { case (b, as) => (b, as.toVector) }.toMap
+  }
 
 
   def isAbsolute(url: String) = new URI(url).isAbsolute
