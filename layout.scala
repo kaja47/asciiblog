@@ -201,7 +201,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String =
-    ifs(blog.scripts.indexPrepend != null && fullArticles.nonEmpty, eval(blog.scripts.indexPrepend, Map("articles" -> fullArticles)))+
+    ifs(blog.scripts.indexPrepend != null && fullArticles.nonEmpty, eval(blog.scripts.indexPrepend, Map("articles" -> fullArticles, "isMainIndex" -> archiveLinks.nonEmpty)))+
     fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
     (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"
