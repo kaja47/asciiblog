@@ -182,7 +182,6 @@ case class Article(
   def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy").format(date)
   override def toString = (if (isTag) "Article[Tag]" else "Article")+s"(<$prettyDate>$title)"
   def asSlug: Slug = Slug(slug)
-  def format = meta.value("format") // TODO
   def isSupertag = meta.contains("supertag")
   def isTag      = meta.contains("tag") || isSupertag
   def asTag      = if (isTag) Tag(title, isSupertag) else null
