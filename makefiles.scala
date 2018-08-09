@@ -1043,6 +1043,7 @@ object MakeFiles {
     val layout = new FlowLayoutMill(base, blog, markup)
 
     timer("generate and save files") {
+    timer("generate and save files - archive") {
     val archiveLinks = archivePages.zipWithIndex.par.map { case ((a, as), idx) =>
       val l = layout.make(blog.absUrl(a))
       val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
@@ -1056,13 +1057,14 @@ object MakeFiles {
     val l = layout.make(blog.absUrlFromPath(path))
     val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month")
     fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
+    }
 
+    timer("generate and save files - image pages") {
     val groupedImages = base.allImages.reverse.grouped(100).toVector.zipWithIndex.reverse
     val imgsPages = groupedImages.map { case (images, idx) =>
       val isFirst = idx == (groupedImages.size-1)
       Article(s"imgs ${idx+1}", if (isFirst) "imgs" else s"imgs-${idx+1}", text = AsciiText.empty, images = images)
     }
-
 
     imgsPages.zipWithIndex.par foreach { case (a, idx) =>
       var l = layout.make(blog.absUrl(a))
@@ -1070,6 +1072,7 @@ object MakeFiles {
       val next = imgsPages.lift(idx+1).getOrElse(null)
       val body = l.addArrows(l.makeFullArticle(a), prev, next, true)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = true), oldFileIndex)
+    }
     }
 
     timer("generate and save files - articles") {
