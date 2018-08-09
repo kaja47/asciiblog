@@ -741,7 +741,12 @@ object MakeFiles {
         if (y == null) (null, t)
         else (new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime, t)
 
-      val imgUrls = albumDir.list collect { case f if f.toLowerCase.endsWith(".jpg") => // TODO png, gif
+      def validSuffix(f: String) = {
+        val ff = f.toLowerCase
+        ff.endsWith(".jpg") || ff.endsWith(".png") || ff.endsWith(".gif")
+      }
+
+      val imgUrls = albumDir.list collect { case f if validSuffix(f) =>
         blog.baseUrl + new URI(null, null, "/albums/"+albumDir.getName+"/"+f, null).toASCIIString
       }
 
