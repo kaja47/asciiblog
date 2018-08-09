@@ -44,16 +44,14 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
 
   val images: Seq[Image] = segments.collect { case Images(imgs) => imgs }.flatten
 
-  private def _links(segments: Seq[Segment]): Seq[String] = segments.flatMap {
-    case Paragraph(txt) => extractLinks(txt)
-    case Inline(txt)    => extractLinks(txt)
-    case Heading(txt)   => extractLinks(txt)
-    case Images(images) => images.iterator.flatMap(i => extractLinks(i.title))
-    case Blockquote(sx) => _links(sx)
-    case SegmentSeq(sx) => _links(sx)
-    case BulletList(items)   => _links(items)
-    case NumberedList(items) => _links(items.map(_._2))
-    case Table(rows, _) => rows.iterator.flatten.flatMap(cell => extractLinks(cell.txt))
+  private def processTexts[T](segments: Seq[Segment], f: String => Iterator[T]): Seq[T] = segments.flatMap {
+    case t: Textual     => f(t.txt)
+    case Images(images) => images.iterator.flatMap(i => f(i.title))
+    case Blockquote(sx) => processTexts(sx, f)
+    case SegmentSeq(sx) => processTexts(sx, f)
+    case BulletList(items)   => processTexts(items, f)
+    case NumberedList(items) => processTexts(items.map(_._2), f)
+    case Table(rows, _) => rows.iterator.flatten.flatMap(cell => f(cell.txt))
     case _ => Iterator()
   }
 
@@ -74,7 +72,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     val aliases = segments.collect { case Linkref(lm) => lm }.flatten
     checkAliases(aliases)
     val aliasMap = aliases.toMap
-    _links(segments).map { l =>
+    processTexts(segments, extractLinks).map { l =>
       val (base, hash) = util.splitByHash(l)
       (l, resolver(aliasMap.getOrElse(base, base)+hash))
     }.toMap
@@ -82,9 +80,22 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
 
   lazy val links: Seq[String] = resolvedLinks.valuesIterator.toVector
 
-  private val references: Set[Int] = segments.collect { case NumberedList(items) => items.map(_._1) }.flatten.toSet
+  private lazy val validRefTargets: Map[Int, NumberedList] = {
+    val refLinks = processTexts(segments, txt => noteRegex.findAllMatchIn(txt).map(_.group(1).toInt)).toSet
 
+    if (noteUrl.isEmpty) {
+      val refTargets = segments.collect { case NumberedList(items) => items.map(_._1) }.flatten.toSet
+      refLinks.foreach { num =>
+        if (!refTargets.contains(num)) sys.error(s"invalid reference $num")
+      }
+    }
 
+    segments.flatMap {
+      case list @ NumberedList(items) =>
+        items.map { case (num, _) => (num, list) }
+      case _ => Seq()
+    }.toMap // last key should be used
+  }
 
   private def mkParagraph(_txt: String, aliases: Map[String, String]): String = {
     var txt = _txt
@@ -120,9 +131,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     }
     if (txt.contains(noteCheck)) {
       txt = noteRegex.replaceAllIn(txt, m => {
-        val num = m.group(1).toInt
-        if (noteUrl.isEmpty && !references.contains(num)) sys.error(s"invalid reference $num")
-        Regex.quoteReplacement(s"""<a href="$noteUrl#fn${num}"><sup>${num}</sup></a> """)
+        Regex.quoteReplacement(s"""<a href="$noteUrl#fn${m.group(1)}"><sup>${m.group(1)}</sup></a> """)
       })
     }
     txt = preposRegex.replaceAllIn(txt, "$1\u00A0")
@@ -147,10 +156,12 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
       case SegmentSeq(sx)       => mkText(sx, l, aliases)
       case BulletList(items)    =>
         "<ul>"+items.map { it => "<li>"+mkText(Seq(it), l, aliases)+"</li>" }.mkString("\n")+"</ul>"
-      case NumberedList(items)  =>
+      case list @ NumberedList(items) =>
         "<ol>"+items.zipWithIndex.map {
-          case ((num, it), i) if num == i+1 => "<li id=\"fn"+num+"\">"+mkText(Seq(it), l, aliases)+"</li>"
-          case ((num, it), _)               => "<li id=\"fn"+num+"\" value="+num+">"+mkText(Seq(it), l, aliases)+"</li>"
+          case ((num, it), i) =>
+            val id    = if (validRefTargets(num) == list) s""" id="fn$num""""  else ""
+            val value = if (num != i+1)                   s""" value="$num"""" else ""
+            s"""<li${id}${value}>${mkText(Seq(it), l, aliases)}</li>"""
         }.mkString("\n")+"</ol>"
       case Table(rows, columns) =>
         "<table>"+
@@ -166,14 +177,15 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
 
 
 sealed trait Segment
-final case class Heading(txt: String) extends Segment
+sealed trait Textual extends Segment { def txt: String }
+final case class Heading(txt: String) extends Segment with Textual
+final case class Paragraph(txt: String) extends Segment with Textual
+final case class Inline(txt: String) extends Segment with Textual
 final case class Hr() extends Segment
 final case class Linkref(linkMap: Seq[(String, String)]) extends Segment
 final case class Images(images: Seq[Image]) extends Segment
-final case class Paragraph(txt: String) extends Segment
 final case class Block(tpe: String, txt: String) extends Segment
 final case class Blockquote(segments: Seq[Segment]) extends Segment
-final case class Inline(txt: String) extends Segment
 final case class SegmentSeq(segments: Seq[Segment]) extends Segment
 final case class BulletList(items: Seq[Segment]) extends Segment
 final case class NumberedList(items: Seq[(Int, Segment)]) extends Segment
