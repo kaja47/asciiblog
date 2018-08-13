@@ -204,7 +204,26 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     ifs(blog.scripts.indexPrepend != null && fullArticles.nonEmpty, eval(blog.scripts.indexPrepend, Map("articles" -> fullArticles, "isMainIndex" -> archiveLinks.nonEmpty)))+
     fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
+    (if (archiveLinks.nonEmpty) "<div>"+lastYearTags+"</div><br/>" else "")+
     (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"
+
+
+  def lastYearTags = { // TODO move to makefiles
+    import java.util.Calendar
+    val cal = Calendar.getInstance()
+    cal.add(Calendar.YEAR, -1)
+    val yearAgo = cal.getTime()
+
+    base.all.filter(a => a.date != null && a.date.after(yearAgo))
+      .flatMap(_.tags.visible)
+      .groupBy(a => a).toSeq
+      .filter { case (t, ts) => ts.size >= 3 }
+      .sortBy { case (t, ts) => ~ts.size }
+      .take(25)
+      .map { case (t, _) => makeTagLink(base.allTags(t)._1) }
+      .mkString(" ")
+  }
+
 
   private def groupArchive(archiveLinks: Seq[Article]) =
     "<div style='clear:both'>"+
