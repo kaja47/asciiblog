@@ -280,7 +280,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
         ifs(a.tags.visible.nonEmpty, makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"<br/>\n")+
         ifs(a.license, a.license+"<br/>")+
       "</div>"+
-      "<p>"+makeNextPrevLinks(a)+"</p>"+
+      //"<p>"+makeNextPrevLinks(a)+"</p>"+
       ifs(a.pubAricles.nonEmpty, txl("published")+"<br/>"+ a.pubAricles.map(makeLink).mkString("<br/>")+"<br/>")+
       ifs(a.pubBy != null, txl("publishedBy")+" "+articleLink(a.pubBy, makeDate(a), allowImageMarker = true)+"<br/>")+
       ifs(a.similar.nonEmpty,   "<p>"+txl("similar")+"<br/>"  +a.similar.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString("<br/>")  +"</p>")+
