@@ -5,6 +5,7 @@ similar příbuzné články:
 backlinks sem odkazují:
 archive archiv
 tagged texty označené
+tags štítky:
 continueReading celý článek →
 subsections podsekce
 supersections nadřazená sekce

@@ -50,7 +50,7 @@ hr         { border: 0px dotted gray; border-top-width: 1px; margin: 0.8em 4em; 
 p          { margin: 1.4em 0; }
 .sh        { float: left; clear: both; margin: 0.8em 0; }
 .shimg     { float: left; margin: 0 0.5em 0 0; }
-.low       { font-size: 0.9em; }
+.low       { font-size: 0.9em; border-top: 1px dashed gray; margin-top: 2em; padding-top: 1em; color: #222; }
 """.trim
 
   import CssMinimizer._
@@ -288,22 +288,20 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     makeArticleBody(a, compact)+
     ifs(!compact && blog.scripts.fullArticleBottom != null, eval(blog.scripts.fullArticleBottom, Map("article" -> a)))+
     ifs(!compact,
-      """<div class=low>"""+
-      ifs(blog.allowComments && !a.isTag, s"""<hr/><b><a href="comments.php?url=${blog.relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b>""")+
+      "<div class=low>"+
+      ifs(blog.allowComments && !a.isTag, s"""<b><a href="comments.php?url=${blog.relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b>""")+
       ifs(blog.shareLinks && !a.isTag, {
         val url = URLEncoder.encode(blog.absUrl(a), "UTF-8")
         s""" &nbsp;&nbsp; ${txl("share.share")} <a href="https://www.facebook.com/sharer/sharer.php?u=$url">${txl("share.facebook")}</a>, <a href="https://twitter.com/intent/tweet?url=$url">${txl("share.twitter")}</a>, <a href="https://plus.google.com/share?url=$url">${txl("share.googleplus")}</a>"""
       })+
       "<hr/>"+
-      """<div class="f r" style="max-width:50%">"""+
-        ifs(a.tags.visible.nonEmpty, makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"<br/>\n")+
-        ifs(a.license, a.license+"<br/>")+
-      "</div>"+
+      ifs(a.tags.visible.nonEmpty, "<p>"+txl("tags")+" "+makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"</p>")+
+      ifs(a.license, a.license+"<br/>")+
       //"<p>"+makeNextPrevLinks(a)+"</p>"+
-      ifs(a.pubAricles.nonEmpty, txl("published")+"<br/>"+ a.pubAricles.map(makeLink).mkString("<br/>")+"<br/>")+
-      ifs(a.pubBy != null, txl("publishedBy")+" "+articleLink(a.pubBy, makeDate(a), allowImageMarker = true)+"<br/>")+
-      ifs(a.similar.nonEmpty,   "<p>"+txl("similar")+"<br/>"  +a.similar.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString("<br/>")  +"</p>")+
-      ifs(a.backlinks.nonEmpty, "<p>"+txl("backlinks")+"<br/>"+a.backlinks.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString("<br/>")+"</p>")+
+      ifs(a.pubAricles.nonEmpty, "<p>"+txl("published")  +"<br/>"+a.pubAricles.map(makeLink).mkString("<br/>")+"</p>")+
+      ifs(a.pubBy != null,       "<p>"+txl("publishedBy")+" "    +articleLink(a.pubBy, makeDate(a), allowImageMarker = true)+"</p>")+
+      ifs(a.similar.nonEmpty,    "<p>"+txl("similar")    +"<br/>"+a.similar.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString("<br/>")  +"</p>")+
+      ifs(a.backlinks.nonEmpty,  "<p>"+txl("backlinks")  +"<br/>"+a.backlinks.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString("<br/>")+"</p>")+
       "</div>"
     )
   }
