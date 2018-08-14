@@ -178,7 +178,7 @@ case class Article(
   pubBy: Article = null,
   inFeed: Boolean = true
 ) {
-  def date = dates.headOption.getOrElse(null)
+  val date = if (dates.isEmpty) null else dates.head
   def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy").format(date)
   override def toString = (if (isTag) "Article[Tag]" else "Article")+s"(<$prettyDate>$title)"
   def asSlug: Slug = Slug(slug)
@@ -353,22 +353,29 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
       }
     }
 
-    val sortedMap = mutable.TreeMap[Key, Article]()
-    var min = Key(0,0,0)
 
-    for (i <- 0 until arts.length) if (freq(i) >= 1) {
-      val key = Key(freq(i), dateDiff(a, arts(i)), i) // most common tags, published closest together
-      if (!o.gt(key, min)) {
-        sortedMap.put(key, arts(i))
-        if (sortedMap.size > count) {
-          val last = sortedMap.last._1
-          sortedMap.remove(last)
-          min = last
+    val sortedMap = mutable.TreeSet[Key]()
+    var min = Key(0, 0, 0)
+    var size = 0
+
+    var i = 0; while (i < arts.length) {
+      if (freq(i) >= 1 && freq(i) > min.commonTags) {
+        val key = Key(freq(i), dateDiff(a, arts(i)), i) // most common tags, published closest together
+        if (!o.gt(key, min)) {
+          sortedMap.add(key)
+          if (size <= count) {
+            size += 1
+          } else {
+            val last = sortedMap.last
+            sortedMap.remove(last)
+            min = last
+          }
         }
       }
+      i += 1
     }
 
-    sortedMap.values.toVector
+    sortedMap.iterator.map(key => arts(key.idx)).toVector
   }
 
   def sortBySimilarity(bs: Seq[Article], a: Article): Seq[Article] = {
