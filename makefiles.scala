@@ -341,9 +341,6 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
 
     for (a <- without ; i <- slugMap.get(a.asSlug)) freq(i) = 0
     for (i <- slugMap.get(a.asSlug)) freq(i) = 0
-    if (slugMap.contains(a.asSlug)) {
-      freq(slugMap(a.asSlug)) = 0
-    }
 
     case class Key(commonTags: Int, dateDiff: Long, idx: Int)
     implicit val o = new Ordering[Key]{
