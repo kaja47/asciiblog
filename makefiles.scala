@@ -245,37 +245,21 @@ case class Tag(title: String, supertag: Boolean = false) {
 }
 
 
-object Base {
-  def tagsOfImages(all: Vector[Article]): Seq[Tag] = all.flatMap(_.images).flatMap(_.tags.visible)
-
-  // tags that have no particular article
-  def extraTags(all: Vector[Article], tagMap: Map[Tag, Seq[Article]]): Vector[Article] = {
-    val direct: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
-    tagMap.collect { case (t, as) if !direct.contains(t) =>
-      Article(t.title, tagSlug(t.title), meta = Meta(Seq(if (t.supertag) "supertag" else "tag")), text = AsciiText.empty)
-    }.toVector
-  }
-}
-
-case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
-  private lazy val tagMap: Map[Tag, Seq[Article]] = Base.tagsOfImages(all).map(_ -> Seq()).toMap ++ _tagMap
-
+case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
   private lazy val imageTagMap: Map[Tag, Seq[(Image, Article)]] = invert(all.flatMap(a => a.images.map(i => ((i, a), i.tags.visible.distinct))))
   private def taggedImages(t: Tag) = imageTagMap.getOrElse(t, Seq()).map { case (i, a) => i.copy(inText = false, localSource = a) }
 
   lazy val allImages = all.sortBy { a => (Option(a.date), a.title) }.reverse
     .flatMap { a => a.images.map(_.copy(inText = false, localSource = a)) }
 
-  lazy val extraTags: IndexedSeq[Article] = Base.extraTags(all, tagMap)
-
-  private lazy val bySlug: Map[String, Article] = (all ++ extraTags).map(a => (a.slug, a)).toMap
+  private lazy val bySlug: Map[String, Article]  = all.map(a => (a.slug, a)).toMap
   private lazy val byAlias: Map[String, Article] = all.flatMap(a => a.aliases.map { m => (m, a) }).toMap
 
   lazy val articles = all.filter(a => !a.isTag)
   lazy val feed     = all.filter(a => !a.isTag && a.inFeed)
 
   lazy val allTags: Map[Tag, (Article, Seq[Article])] = // [tag -> (article reprsenting this tag, articles tagged by this tag)]
-    (all ++ extraTags).filter(_.isTag).map { t =>
+    all.filter(_.isTag).map { t =>
       t.asTag -> (t.copy(images = t.images ++ taggedImages(t.asTag)), tagMap.getOrElse(t.asTag, Seq()))
     }.toMap
 
@@ -304,7 +288,8 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   def prev(a: Article, tag: Tag): Article = move(a, tag, -1)
 }
 
-class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
+class Similarities(base: Base) {
+  private val tagMap: Map[Tag, Seq[Article]] = invert(base.all.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) })
   private val articlesReferencedByRel: Seq[Article] = base.all.flatMap(_.rel).map(id => base.find(id).get)
   private val arts: Array[Article] = (tagMap.values.flatten ++ articlesReferencedByRel).toArray.distinct
   private val artMap: Map[Article, Int] = arts.zipWithIndex.toMap
@@ -464,10 +449,14 @@ object MakeFiles {
 
   def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] = {
     val res = mutable.Map[B, mutable.ArrayBuffer[A]]()
-    for ((a, bs) <- m; b <- bs) {
-      res.getOrElseUpdate(b, new mutable.ArrayBuffer[A]) += a
-    }
+    for ((a, bs) <- m; b <- bs) { res.getOrElseUpdate(b, new mutable.ArrayBuffer[A]) += a }
     res.iterator.map { case (b, as) => (b, as.toVector) }.toMap
+  }
+
+  def invert1[A, B](m: Seq[(A, Seq[B])]): Map[B, A] = {
+    val res = mutable.Map[B, A]()
+    for ((a, bs) <- m; b <- bs) { res.getOrElseUpdate(b, a) }
+    res.toMap
   }
 
 
@@ -862,24 +851,15 @@ object MakeFiles {
       }
     }
 
-    var tagMap: Map[Tag, Seq[Article]] = timer("invert tags 1") { invert(articles.map { a => (a, (a.tags.visible).distinct) }) }
+    // TODO autotag images
 
-    // maps all article slugs (main ones and aliases) to their absolute urls
-    val globalNames: Map[String, String] = timer("global names") {
-      val allArticles: Seq[Article] = Base(articles, tagMap).extraTags ++ articles
-
-      val slugSet = new mutable.HashSet[String]() { override def initialSize = allArticles.size }
-
-      for (a <- allArticles) {
-        if (slugSet.contains(a.slug)) sys.error(s"duplicate slug ${a.slug}")
-        slugSet += a.slug
-      }
-
-      //for ((a, as) <- aliases.groupBy(a => a)) if (as.size > 1) sys.error(s"duplicate alias $a") // TODO
-
-      for (art <- allArticles; a <- art.aliases) if (slugSet.contains(a)) sys.error(s"alias $a is colliding with a slug")
-
-      allArticles.flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
+    // Maps all article slugs (main ones and aliases) to their absolute urls.
+    // Bit of a hack, this lazy function closes over mutable variable articles.
+    // So when it's finally called it sould use the most recent and up to date
+    // collection of articles. This is needed to resolve circular dependency:
+    // global names -> parse text -> materializeNonexplicitTags -> global names
+    lazy val globalNames: Map[String, String] = timer("global names") {
+      articles.flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
     }
 
     // globalMapping maps from slugs to absolute urls
@@ -904,8 +884,36 @@ object MakeFiles {
     }
     }
 
+    def materializeNonexplicitTags(all: Vector[Article]): Vector[Article] = {
+      val explicitTags: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
+      val mentionedTags: Set[Tag] = all.flatMap { a => a.tags.visible ++ a.images.flatMap(_.tags.visible) }.toSet
+      (mentionedTags -- explicitTags).map { t =>
+        Article(t.title, tagSlug(t.title), meta = Meta(Seq(if (t.supertag) "supertag" else "tag")), text = AsciiText.empty)
+      }.toVector
+    }
 
-    val base = Base(articles, tagMap)
+    articles = articles ++ materializeNonexplicitTags(articles)
+
+    val canonicalSlugs: Map[String, String] = // [alias -> canonical slug]
+      invert1(articles.collect { case a if a.aliases.nonEmpty => (a.slug, a.aliases) })
+
+    val allIds = new mutable.HashSet[String]()
+    for (a <- articles.iterator.map(_.slug) ++ articles.iterator.flatMap(_.aliases)) {
+      if (allIds.contains(a)) sys.error(s"duplicate slug/alias ${a}")
+      allIds += a
+    }
+
+    articles foreach { a =>
+      a.pub foreach { id => if (!allIds(id)) sys.error(s"id [$id] is not defined (used as pub in article '${a.title})'") }
+      a.rel foreach { id => if (!allIds(id)) sys.error(s"id [$id] is not defined (used as rel in article '${a.title})'") }
+    }
+
+    articles = articles.map { a =>
+      a.copy(
+        pub = a.pub.map(id => canonicalSlugs.getOrElse(id, id)),
+        rel = a.rel.map(id => canonicalSlugs.getOrElse(id, id))
+      )
+    }
 
     val backlinks: Map[Slug, Seq[Article]] = timer("backlinks") {
       invert(articles.map { a => (a, a.slugsOfLinkedArticles) })
@@ -913,19 +921,15 @@ object MakeFiles {
     }
 
     val pubsBy: Map[Slug, Article] = timer("pubsBy") {
-      invert(articles.map { a => (a, (a.pub flatMap base.find).map(_.asSlug)) })
+      invert(articles.map { a => (a, a.pub.map(Slug)) })
         .map { case (k, vs) => (k, vs.sortBy(_.date).head) }
     }
 
-    articles foreach { a =>
-      a.pub foreach { id => if (!base.isValidId(id)) sys.error(s"id [$id] is not defined (used as pub in article '${a.title})'") }
-      a.rel foreach { id => if (!base.isValidId(id)) sys.error(s"id [$id] is not defined (used as rel in article '${a.title})'") }
-    }
+    var tagMap = invert(articles.map { a => (a, (a.tags.visible).distinct) })
+    val base = Base(articles, tagMap)
+    val sim = timer("create similarities") { new Similarities(base) }
 
-    val allTagMap: Map[Tag, Seq[Article]] = timer("invert tags 2") { invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) }) }
-    val sim = new Similarities(base, allTagMap)
-
-    articles = timer("populate") { (articles ++ base.extraTags).par.map { a =>
+    articles = timer("populate") { articles.map { a =>
       val bs = backlinks.getOrElse(a.asSlug, Seq())
       val pubBy = pubsBy.getOrElse(a.asSlug, null)
       val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
