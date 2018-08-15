@@ -937,7 +937,7 @@ object MakeFiles {
         pubAricles = a.pub flatMap base.find,
         pubBy = pubBy
       )
-    }.seq }
+    } }
 
     tagMap = invert(articles.map { a => (a, (a.tags.visible).distinct) }) // ??? recompute tag map
 
@@ -1034,14 +1034,14 @@ object MakeFiles {
 
     timer("generate and save files") {
     timer("generate and save files - archive") {
-    val archiveLinks = archivePages.zipWithIndex.par.map { case ((a, as), idx) =>
+    val archiveLinks = archivePages.zipWithIndex.map { case ((a, as), idx) =>
       val l = layout.make(blog.absUrl(a))
       val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
       val next = archivePages.lift(idx+1).map(_._1).getOrElse(null)
       val body = l.addArrows(l.makeIndex(Seq(), as), prev, next, true)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, containImages = as.exists(_.hasImageMarker)), oldFileIndex)
       a
-    }.seq
+    }
 
     val path = blog.relUrlFromSlug("index")
     val l = layout.make(blog.absUrlFromPath(path))
@@ -1056,7 +1056,7 @@ object MakeFiles {
       Article(s"imgs ${idx+1}", if (isFirst) "imgs" else s"imgs-${idx+1}", text = AsciiText.empty, images = images)
     }
 
-    imgsPages.zipWithIndex.par foreach { case (a, idx) =>
+    imgsPages.zipWithIndex foreach { case (a, idx) =>
       var l = layout.make(blog.absUrl(a))
       val prev = imgsPages.lift(idx-1).getOrElse(null)
       val next = imgsPages.lift(idx+1).getOrElse(null)
@@ -1073,7 +1073,7 @@ object MakeFiles {
     }
     }
 
-    base.allTags.par foreach { case (t, (a, as)) =>
+    base.allTags foreach { case (t, (a, as)) =>
       var l = layout.make(blog.absUrl(a))
       val body = l.makeFullArticle(a.imagesWithoutArticleTags)
       val hasImages = a.images.nonEmpty || as.exists(_.images.nonEmpty)
