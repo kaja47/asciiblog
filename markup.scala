@@ -266,7 +266,7 @@ object AsciiMarkup extends Markup {
             }.map(mkTable)
 
           }.orElse {
-            if (ls(0).startsWith("-")) Some(mkBulletList(ls)) else None
+            if (ls(0).startsWith("-") && !(ls.length == 1 && ls(0) == "--")) Some(mkBulletList(ls)) else None
 
           }.orElse {
             if (ls(0).matches("""^\d+\).*""")) Some(mkNumberedList(ls)) else None
