@@ -19,6 +19,9 @@ trait Layout extends ImageLayout {
   def makeFullArticle(a: Article): String
   def makeTagIndex(base: Base): String
   def addArrows(content: String, next: Article, prev: Article, includeBottom: Boolean = false): String
+
+  def articleUrl(a: Article): String
+  def articleLink(a: Article, title: String, asLink: Boolean = true, allowImageMarker: Boolean = false): String
 }
 
 // this type is passed into markup
@@ -104,13 +107,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
   def ifs(x: String, body: => String) = if (x != null && x.nonEmpty) body else ""
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
-
-  def eval(engine: javax.script.ScriptEngine, args: Map[String, Any]) = {
-    val res = engine.asInstanceOf[javax.script.Invocable].invokeFunction("run", Map(
-      "base" -> base, "blog" -> blog, "layout" -> this,
-    ) ++ args)
-    ifs(res, res.toString)
-  }
 
   private def plaintextDescription(a: Article): String =
     stripTags(a.text.firstParagraph).replace('\n', ' ')
@@ -201,7 +197,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String =
-    ifs(blog.scripts.indexPrepend != null && fullArticles.nonEmpty, eval(blog.scripts.indexPrepend, Map("articles" -> fullArticles, "isMainIndex" -> archiveLinks.nonEmpty)))+
+    blog.hooks.indexPrepend(base, blog, this, fullArticles, archiveLinks.nonEmpty)+
     fullArticles.map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
     (if (archiveLinks.nonEmpty) "<div>"+lastYearTags+"</div><br/>" else "")+
@@ -243,8 +239,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   // Bare article body, no title, no links to related articles, no tags. This method is used in RSS feeds.
   def makeArticleBody(a: Article, compact: Boolean): String = {
-    (if (blog.scripts.body != null) eval(blog.scripts.body, Map("body" -> a.text.render(this)))
-    else a.text.render(this))+
+    a.text.render(this)+
     ifs(a.isTag, {
       val linked = a.slugsOfLinkedArticles(blog).toSet
       listOfLinks(base.allTags(a.asTag)._2.filter(a => !linked.contains(a.asSlug)), blog.tagFormat == "short")
@@ -271,9 +266,10 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
 
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
-    (if (blog.scripts.title != null) eval(blog.scripts.title, Map("article" -> a, "compact" -> compact)) else
-    (if(!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>"))+
+    val title = blog.hooks.title(base, blog, this, a, compact)
+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
+    (if (title != null) title else if (!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
     ifs(a.isTag, {
       val sup = a.tags.visible.map(base.tagByTitle)
       val sub = base.allTags(a.asTag)._2.filter(_.isTag)
@@ -284,9 +280,9 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
         "</div>"
       })
     })+
-    ifs(blog.scripts.title == null, "<br/>\n")+
+    ifs(title == null, "<br/>\n")+
     makeArticleBody(a, compact)+
-    ifs(!compact && blog.scripts.fullArticleBottom != null, eval(blog.scripts.fullArticleBottom, Map("article" -> a)))+
+    ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
     ifs(!compact,
       "<div class=low>"+
       ifs(blog.allowComments && !a.isTag, s"""<b><a href="comments.php?url=${blog.relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b>""")+

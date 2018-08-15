@@ -23,23 +23,7 @@ object Make extends App {
   }
 
   val (_, blog, markup, base) = MakeFiles.init(args)
-
-  if (args.length >= 2 && args(1) == "checkLinks") {
-    MakeFiles.checkUrls(blog, base)
-
-  } else if (args.length >= 3 && args(1) == "script") {
-
-    val engine = new javax.script.ScriptEngineManager().getEngineByName("nashorn")
-    engine.eval(io.Source.fromFile(args(2)).mkString)
-    val res = engine.asInstanceOf[javax.script.Invocable].invokeFunction("run", Map(
-      "args" -> args, "base" -> base, "blog" -> blog, "markup" -> markup
-    ) ++ args)
-
-    println(res)
-
-  } else {
-    MakeFiles.makeFiles(blog, base, markup)
-  }
+  MakeFiles.makeFiles(blog, base, markup)
 
   timer.end()
   println("total: "+timer)
@@ -85,7 +69,7 @@ case class Blog (
 
   val args: Array[String],
   val translation: Map[String, String],
-  val scripts: Scripts = Scripts(),
+  val hooks: Hooks = NoHooks,
 
   val invalidLinkMarker: String = "@@INVALIDLINK@@"
 ) extends UrlOps {
@@ -94,12 +78,19 @@ case class Blog (
   def printErrors: Boolean = !(args.length > 1 && args(1) == "tags")
 }
 
-case class Scripts(
-  indexPrepend:      javax.script.ScriptEngine = null,
-  title:             javax.script.ScriptEngine = null,
-  fullArticleBottom: javax.script.ScriptEngine = null,
-  body:              javax.script.ScriptEngine = null
-)
+
+trait Hooks {
+  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String
+  def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String
+  def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String
+}
+
+object NoHooks extends Hooks {
+  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String = ""
+  def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String = ""
+  def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String = null
+}
+
 
 object Blog {
   def populate(cfg: Map[String, String], args: Array[String], translation: Map[String, String]) = {
@@ -614,7 +605,7 @@ object MakeFiles {
     if ((slug == null || slug == "") && blog.demandExplicitSlugs && !title.startsWith("???"))
       sys.error(s"article ${title} is missing explicit slug")
 
-    if (slug != null && slug.nonEmpty && !slug.startsWith("script:") && !slugRegex.pattern.matcher(slug).matches())
+    if (slug != null && slug.nonEmpty && !slugRegex.pattern.matcher(slug).matches())
       sys.error(s"slug '$slug' is not valid, only letters, numbers and ./+- allowed")
 
     if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size + aliass.size + implies.size) < metaLines.size)
