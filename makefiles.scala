@@ -165,7 +165,7 @@ case class Article(
   meta: Meta = Meta(),
   rel: Seq[String] = Seq(),
   pub: Seq[String] = Seq(),
-  alias: Seq[String] = Seq(),
+  aliases: Seq[String] = Seq(),
   implies: Seq[Tag] = Seq(), // only for tags
   link: String = null,
   notes: String = null,
@@ -187,7 +187,6 @@ case class Article(
   def isTag      = meta.contains("tag") || isSupertag
   def asTag      = if (isTag) Tag(title, isSupertag) else null
   def extraImages = images.filter(!_.inText)
-  def aliases: Seq[String] = meta.values.toVector
   def slugsOfLinkedArticles(implicit blog: Blog): Seq[Slug] = text.links.filter(isAbsolute).filter(blog.isLocalLink).map(blog.extractSlug)
 
   // image marker is shown only for images that are not from external sources
@@ -270,7 +269,7 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   lazy val extraTags: IndexedSeq[Article] = Base.extraTags(all, tagMap)
 
   private lazy val bySlug: Map[String, Article] = (all ++ extraTags).map(a => (a.slug, a)).toMap
-  private lazy val byAlias: Map[String, Article] = all.flatMap(a => a.alias.map { m => (m, a) }).toMap
+  private lazy val byAlias: Map[String, Article] = all.flatMap(a => a.aliases.map { m => (m, a) }).toMap
 
   lazy val articles = all.filter(a => !a.isTag)
   lazy val feed     = all.filter(a => !a.isTag && a.inFeed)
@@ -611,7 +610,7 @@ object MakeFiles {
     val metas   = metaLines.collect(prefixedList("meta:").andThen(xs => Meta(xs)))
     val rels    = metaLines.collect(prefixedList("rel:"))
     val pubs    = metaLines.collect(prefixedList("pub:"))
-    val aliases = metaLines.collect(prefixedList("alias:"))
+    val aliass  = metaLines.collect(prefixedList("alias:"))
     val implies = metaLines.collect(prefixedLine("implies:") andThen parseTags)
 
     val meta = metas.foldLeft(Meta())(_ merge _)
@@ -629,7 +628,7 @@ object MakeFiles {
     if (slug != null && slug.nonEmpty && !slug.startsWith("script:") && !slugRegex.pattern.matcher(slug).matches())
       sys.error(s"slug '$slug' is not valid, only letters, numbers and ./+- allowed")
 
-    if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size + aliases.size + implies.size) < metaLines.size)
+    if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size + aliass.size + implies.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
 
     links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
@@ -643,7 +642,7 @@ object MakeFiles {
       meta    = meta,
       rel     = rels.flatten,
       pub     = pubs.flatten,
-      alias   = aliases.flatten,
+      aliases = aliass.flatten,
       implies = implies.flatMap(_.visible),
       link    = links.headOption.getOrElse(null),
       notes   = notess.headOption.getOrElse(null),
