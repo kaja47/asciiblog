@@ -31,7 +31,7 @@ trait ImageLayout {
 
 
 
-class FlowLayoutMill(base: Base, blog: Blog, markup: Markup) {
+class FlowLayoutMill(base: Base, blog: Blog, markup: Markup, val resolver: String => String) {
   def make(baseUrl: String): FlowLayout = FlowLayout(baseUrl, base, blog, markup, this)
 
   private def inlineStyles = s"""
@@ -95,7 +95,7 @@ object FlowLayout {
 }
 
 
-case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, layoutMill: FlowLayoutMill) extends Layout {
+case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, mill: FlowLayoutMill) extends Layout {
   import FlowLayout._
 
   def rel(url: String): String =
@@ -139,15 +139,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
       s"""<a href="${blog.relUrlFromSlug(a.slug)}"><img class=th src="${blog.thumbnailUrl(i)}"/></a>"""
     }.mkString(" ")
 
-
-  def resolveGlobalLink(link: String) = link match {
-    case l if isAbsolute(l) => l
-    case l if base.isValidId(l) => blog.absUrlFromSlug(base.canonicSlug(l))
-    case l if l.contains('.') => l // rss.xml, index.html
-    case "index" => blog.baseUrl+"/."
-    case l => blog.absUrlFromSlug(l)
-  }
-
   def rssLink(rss: String) =
     s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>"""
 
@@ -172,8 +163,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String = {
     def defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
     val protoHeader = if (blog.header.nonEmpty) blog.header else defaultHeader
-    val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1)))))
-    val footer = ahrefRegex.replaceAllIn(blog.footer, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1)))))
+    val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(mill.resolver(m.group(1)))))
+    val footer = ahrefRegex.replaceAllIn(blog.footer, m => Regex.quoteReplacement(rel(mill.resolver(m.group(1)))))
     val c1 = __ahrefRegex.replaceAllIn(content, { l =>
       if (l.group(2) == blog.invalidLinkMarker) Regex.quoteReplacement(l.group(4))
       else Regex.quoteReplacement(l.group(1)+rel(l.group(2))+l.group(3)+l.group(4)+l.group(5))
@@ -189,7 +180,7 @@ s"""<!DOCTYPE html>
 <title>${ifs(title, title+" | ")+blog.title}</title>
 ${rssLink("rss.xml")}
 ${ifs(headers)}
-${if (blog.cssFile.isEmpty) { s"""<style>${layoutMill.style(cats)}</style>""" }
+${if (blog.cssFile.isEmpty) { s"""<style>${mill.style(cats)}</style>""" }
   else { s"""<link rel="stylesheet" href="${rel("style.css")}" type="text/css"/>""" } }
 ${ifs(containImages, s"<script>$galleryScript</script>")}
 </head>$body
