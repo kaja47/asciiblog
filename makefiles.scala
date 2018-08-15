@@ -165,6 +165,7 @@ case class Article(
   meta: Meta = Meta(),
   rel: Seq[String] = Seq(),
   pub: Seq[String] = Seq(),
+  alias: Seq[String] = Seq(),
   implies: Seq[Tag] = Seq(), // only for tags
   link: String = null,
   notes: String = null,
@@ -269,12 +270,12 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
   lazy val extraTags: IndexedSeq[Article] = Base.extraTags(all, tagMap)
 
   private lazy val bySlug: Map[String, Article] = (all ++ extraTags).map(a => (a.slug, a)).toMap
-  private lazy val byMeta: Map[String, Article] = (all ++ extraTags).flatMap(a => a.meta.values.map { m => (m, a) }).toMap
+  private lazy val byAlias: Map[String, Article] = all.flatMap(a => a.alias.map { m => (m, a) }).toMap
 
   lazy val articles = all.filter(a => !a.isTag)
-  lazy val feed = all.filter(a => a.inFeed && !a.isTag)
+  lazy val feed     = all.filter(a => !a.isTag && a.inFeed)
 
-  lazy val allTags: Map[Tag, (Article, Seq[Article])] =
+  lazy val allTags: Map[Tag, (Article, Seq[Article])] = // [tag -> (article reprsenting this tag, articles tagged by this tag)]
     (all ++ extraTags).filter(_.isTag).map { t =>
       t.asTag -> (t.copy(images = t.images ++ taggedImages(t.asTag)), tagMap.getOrElse(t.asTag, Seq()))
     }.toMap
@@ -285,7 +286,7 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
 
   private lazy val slug2ord: Map[String, Int] = feed.map(_.slug).zipWithIndex.toMap
 
-  def find(id: String): Option[Article] = bySlug.get(id).orElse(byMeta.get(id))
+  def find(id: String): Option[Article] = bySlug.get(id).orElse(byAlias.get(id))
   def isValidId(id: String): Boolean = find(id).nonEmpty
   def canonicSlug(id: String) = find(id).get.slug
 
@@ -610,6 +611,7 @@ object MakeFiles {
     val metas   = metaLines.collect(prefixedList("meta:").andThen(xs => Meta(xs)))
     val rels    = metaLines.collect(prefixedList("rel:"))
     val pubs    = metaLines.collect(prefixedList("pub:"))
+    val aliases = metaLines.collect(prefixedList("alias:"))
     val implies = metaLines.collect(prefixedLine("implies:") andThen parseTags)
 
     val meta = metas.foldLeft(Meta())(_ merge _)
@@ -627,7 +629,7 @@ object MakeFiles {
     if (slug != null && slug.nonEmpty && !slug.startsWith("script:") && !slugRegex.pattern.matcher(slug).matches())
       sys.error(s"slug '$slug' is not valid, only letters, numbers and ./+- allowed")
 
-    if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size + implies.size) < metaLines.size)
+    if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size + aliases.size + implies.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
 
     links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
@@ -641,6 +643,7 @@ object MakeFiles {
       meta    = meta,
       rel     = rels.flatten,
       pub     = pubs.flatten,
+      alias   = aliases.flatten,
       implies = implies.flatMap(_.visible),
       link    = links.headOption.getOrElse(null),
       notes   = notess.headOption.getOrElse(null),
