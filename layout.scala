@@ -140,7 +140,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
     }.mkString(" ")
 
 
-  def resolveGlobalLink(link: String, base: Base) = link match {
+  def resolveGlobalLink(link: String) = link match {
     case l if isAbsolute(l) => l
     case l if base.isValidId(l) => blog.absUrlFromSlug(base.canonicSlug(l))
     case l if l.contains('.') => l // rss.xml, index.html
@@ -172,8 +172,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, l
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String = {
     def defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
     val protoHeader = if (blog.header.nonEmpty) blog.header else defaultHeader
-    val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
-    val footer = ahrefRegex.replaceAllIn(blog.footer, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1), base))))
+    val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1)))))
+    val footer = ahrefRegex.replaceAllIn(blog.footer, m => Regex.quoteReplacement(rel(resolveGlobalLink(m.group(1)))))
     val c1 = __ahrefRegex.replaceAllIn(content, { l =>
       if (l.group(2) == blog.invalidLinkMarker) Regex.quoteReplacement(l.group(4))
       else Regex.quoteReplacement(l.group(1)+rel(l.group(2))+l.group(3)+l.group(4)+l.group(5))

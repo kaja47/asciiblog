@@ -499,7 +499,6 @@ object MakeFiles {
 
     def thumbnailUrl(img: Image) = s"t/${img.thumb}-${blog.thumbWidth}x${blog.thumbHeight}"+imgSuffix(img)
     def bigThumbnailUrl(img: Image, half: Boolean) = s"t/${img.thumb}-${blog.bigThumbWidth / (if (half) 2 else 1)}"+imgSuffix(img)
-
   }
 
 
@@ -965,26 +964,6 @@ object MakeFiles {
 
     (blog, Base(articles, tagMap))
   }
-
-
-
-
-  def checkUrls(blog: Blog, base: Base) = ???
-//    for {
-//      a <- base.all ; l <- a.links
-//      url = resolveLink(l, base, a) if !blog.isLocalLink(url)
-//    } {
-//      try {
-//        val conn = new URL(url).openConnection().asInstanceOf[HttpURLConnection]
-//        conn.setRequestMethod("GET")
-//        conn.connect()
-//        val code = conn.getResponseCode
-//        if (code >= 400) { println(code+" "+url) }
-//      } catch {
-//        case e: UnknownHostException => println("unknown host "+url)
-//      }
-//    }
-
 
 
 
