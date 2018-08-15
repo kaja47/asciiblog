@@ -777,23 +777,6 @@ object MakeFiles {
   def makeBase(implicit blog: Blog, markup: Markup): (Blog, Base) = {
     var articles: Vector[Article] = timer("readfiles")(readGallery(blog) ++ readPosts(blog))
 
-    val specialSlugs = Set("script:indexPrepend", "script:fullArticleBottom", "script:title")
-    val (scriptArticles, contentArticles) = articles.partition(a => specialSlugs.contains(a.slug))
-    articles = contentArticles
-
-    def parseJavascript(code: String) = {
-      val engine = new javax.script.ScriptEngineManager().getEngineByName("nashorn")
-      engine.eval(code)
-      engine
-    }
-
-    val scripts = scriptArticles.foldLeft(Scripts()) { (scripts, a) => a.slug match {
-      case "script:indexPrepend"      => scripts.copy(indexPrepend      = parseJavascript(a.rawText.trim))
-      case "script:fullArticleBottom" => scripts.copy(fullArticleBottom = parseJavascript(a.rawText.trim))
-      case "script:title"             => scripts.copy(title             = parseJavascript(a.rawText.trim))
-      case "script:body"              => scripts.copy(body              = parseJavascript(a.rawText.trim))
-    }}
-
     timer("checks") {
     if (blog.articlesMustNotBeMixed) {
       val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
@@ -985,7 +968,7 @@ object MakeFiles {
       }
     }}
 
-    (blog.copy(scripts = scripts), Base(articles, tagMap))
+    (blog, Base(articles, tagMap))
   }
 
 
