@@ -1,6 +1,6 @@
 package asciiblog
 
-import MakeFiles.{ hash, tagSlug, invert, undefId, UrlOps, isAbsolute }
+import MakeFiles.{ hash, tagSlug, invert, UrlOps, isAbsolute }
 import java.io.{ File, FileWriter, FileOutputStream }
 import java.net.{ URL, URI, HttpURLConnection, UnknownHostException }
 import java.security.MessageDigest
@@ -235,7 +235,7 @@ case class Image(
   def asSmallThumbnail = copy(mods = "", align = "")
 }
 
-case class Slug(/*blog: Blog, */id: String)
+case class Slug(id: String)
 case class Tags(visible: Seq[Tag] = Seq(), hidden: Seq[Tag] = Seq()) {
   def merge(t: Tags) = Tags(visible ++ t.visible, hidden ++ t.hidden)
 }
@@ -305,7 +305,7 @@ case class Base(all: Vector[Article], _tagMap: Map[Tag, Seq[Article]] = Map()) {
 }
 
 class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
-  private val articlesReferencedByRel = base.all.flatMap { a => a.rel.flatMap { rel => base.find(rel).orElse { undefId(rel, a); None } } }
+  private val articlesReferencedByRel: Seq[Article] = base.all.flatMap(_.rel).map(id => base.find(id).get)
   private val arts: Array[Article] = (tagMap.values.flatten ++ articlesReferencedByRel).toArray.distinct
   private val artMap: Map[Article, Int] = arts.zipWithIndex.toMap
   private val slugMap: Map[Slug, Int] = artMap.map { case (k, v) => (k.asSlug, v) }
@@ -352,7 +352,6 @@ class Similarities(base: Base, tagMap: Map[Tag, Seq[Article]]) {
         java.lang.Integer.compare(a.idx, b.idx)
       }
     }
-
 
     val sortedMap = mutable.TreeSet[Key]()
     var min = Key(0, 0, 0)
@@ -523,12 +522,6 @@ object MakeFiles {
 
   }
 
-
-
-  def undefId(id: String, a: Article) = {
-    println(s"id [$id] is not defined in article '${a.title}'")
-    "undefined id "+id
-  }
 
 
   val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
@@ -928,8 +921,6 @@ object MakeFiles {
 
 
     val base = Base(articles, tagMap)
-    val allTagMap: Map[Tag, Seq[Article]] = timer("invert tags 2") { invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) }) }
-    val sim = new Similarities(base, allTagMap)
 
     val backlinks: Map[Slug, Seq[Article]] = timer("backlinks") {
       invert(articles.map { a => (a, a.slugsOfLinkedArticles) })
@@ -941,15 +932,17 @@ object MakeFiles {
         .map { case (k, vs) => (k, vs.sortBy(_.date).head) }
     }
 
+    articles foreach { a =>
+      a.pub foreach { id => if (!base.isValidId(id)) sys.error(s"id [$id] is not defined (used as pub in article '${a.title})'") }
+      a.rel foreach { id => if (!base.isValidId(id)) sys.error(s"id [$id] is not defined (used as rel in article '${a.title})'") }
+    }
+
+    val allTagMap: Map[Tag, Seq[Article]] = timer("invert tags 2") { invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) }) }
+    val sim = new Similarities(base, allTagMap)
 
     articles = timer("populate") { (articles ++ base.extraTags).par.map { a =>
       val bs = backlinks.getOrElse(a.asSlug, Seq())
       val pubBy = pubsBy.getOrElse(a.asSlug, null)
-
-      a.pub foreach { id =>
-        if (!base.isValidId(id)) undefId(id, a)
-      }
-
       val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
 
       a.copy(
