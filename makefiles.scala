@@ -5,7 +5,7 @@ import java.io.{ File, FileWriter, FileOutputStream }
 import java.net.{ URL, URI, HttpURLConnection, UnknownHostException }
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
-import java.util.{ Date, GregorianCalendar, Calendar, Locale, zip }
+import java.util.{ Date, GregorianCalendar, Calendar, Locale }
 import javax.imageio.{ ImageIO, IIOException }
 import scala.collection.mutable
 import scala.util.matching.Regex
@@ -175,7 +175,7 @@ case class Article(
   images: Seq[Image] = Seq(),
   backlinks: Seq[Article] = Seq(),
   similar: Seq[Article] = Seq(),
-  pubAricles: Seq[Article] = Seq(),
+  pubArticles: Seq[Article] = Seq(),
   pubBy: Article = null,
   inFeed: Boolean = true
 ) {
@@ -832,7 +832,7 @@ object MakeFiles {
           rawText = if (a.rawText.length < b.rawText.length) a.rawText+"\n\n"+b.rawText else b.rawText+"\n\n"+a.rawText,
           images  = a.images ++ b.images,
           inFeed  = a.inFeed && b.inFeed
-        ) // backlinks, similar, pubAricles, pubBy not yet populated
+        ) // backlinks, similar, pubArticles, pubBy not yet populated
 
         articleMap(a.slug) = merged
       }
@@ -934,7 +934,7 @@ object MakeFiles {
         dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
         backlinks = bs.sortBy(byDate), //sim.sortBySimilarity(bs, a),
         similar = if (!a.isTag) sim.similarByTags(a, count = blog.limitSimilar, without = bs) else sim.similarTags(a.asTag, count = blog.limitSimilar),
-        pubAricles = a.pub flatMap base.find,
+        pubArticles = a.pub flatMap base.find,
         pubBy = pubBy
       )
     } }
