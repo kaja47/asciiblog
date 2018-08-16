@@ -70,6 +70,6 @@ for {
   }
 }
 
-Files.copy(sf.toPath, tf.toPath, REPLACE_EXISTING)
+move(sf, tf, 5)
 
 }
