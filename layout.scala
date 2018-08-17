@@ -177,6 +177,7 @@ s"""<!DOCTYPE html>
 <html${ifs(blog.hasOgTags, " prefix=\"og: http://ogp.me/ns#\"")}>
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${ifs(title, title+" | ")+blog.title}</title>
 ${rssLink("rss.xml")}
 ${ifs(headers)}
