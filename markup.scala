@@ -68,19 +68,19 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     (if (txt.contains(linkCheck))  linkRegex.findAllMatchIn(txt).map(_.group(2))  else Iterator())
 
   private def checkAliases(aliases: Seq[(String, String)]) = {
-    val as = mutable.Set[String]()
+    val as = mutable.Map[String, String]()
     for ((l, url) <- aliases) {
       if (as.contains(l))      sys.error(s"duplicate link refs [$l]")
       if (url.startsWith("?")) sys.error(s"undefined link ref $l -> $url (link prefixed by ??? is placeholder for missing url)")
-      as += l
+      as.update(l, url)
     }
+    as
   }
 
   protected def resolvedLinks = _resolvedLinks
   private lazy val _resolvedLinks = {
     val aliases = segments.collect { case Linkref(lm) => lm }.flatten
-    checkAliases(aliases)
-    val aliasMap = aliases.toMap
+    val aliasMap = checkAliases(aliases)
     processTexts(segments, extractLinks).map { l =>
       val (base, hash) = util.splitByHash(l)
       (l, resolver(aliasMap.getOrElse(base, base)+hash))
