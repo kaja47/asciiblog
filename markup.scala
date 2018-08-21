@@ -162,6 +162,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
       case Paragraph(txt)       => "<p>"+mkParagraph(txt, aliases)+"</p>"
       case Blockquote(sx)       => "<blockquote>"+mkText(sx, l, aliases)+"</blockquote>"
       case Inline(txt)          => mkParagraph(txt, aliases)
+      case ByLine(txt)          => "<div style='text-align:right'>"+mkParagraph(txt, aliases)+"</div>"
       case SegmentSeq(sx)       => mkText(sx, l, aliases)
       case BulletList(items)    =>
         "<ul>"+items.map { it => "<li>"+mkText(Seq(it), l, aliases)+"</li>" }.mkString("\n")+"</ul>"
@@ -190,6 +191,7 @@ sealed trait Textual extends Segment { def txt: String }
 final case class Heading(txt: String) extends Segment with Textual
 final case class Paragraph(txt: String) extends Segment with Textual
 final case class Inline(txt: String) extends Segment with Textual
+final case class ByLine(txt: String) extends Segment with Textual
 final case class Hr() extends Segment
 final case class Linkref(linkMap: Seq[(String, String)]) extends Segment
 final case class Images(images: Seq[Image]) extends Segment
@@ -264,6 +266,9 @@ object AsciiMarkup extends Markup {
             matchAllLines(ls) {
               case l if l.startsWith("|") => l
             }.map(mkTable)
+
+          }.orElse {
+            if (ls.length == 1 && ls(0).startsWith("---")) Some(ByLine(txt)) else None
 
           }.orElse {
             if (ls(0).startsWith("-") && !(ls.length == 1 && ls(0) == "--")) Some(mkBulletList(ls)) else None
