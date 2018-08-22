@@ -329,10 +329,10 @@ class Similarities(articles: Seq[Article]) {
 
     var i = 0; while (i < arts.length) {
       if (freq(i) >= 1 && freq(i) >= min.commonTags) {
-        val key = Key(freq(i), dateDiff(a, arts(i)), i) // most common tags, published closest together
+        val key = Key(freq(i), dateDiff(a, arts(i)), i) // articles with most tags in common, published closest together
         if (!o.gt(key, min)) {
           sortedMap.add(key)
-          if (size <= count) {
+          if (size < count) {
             size += 1
           } else {
             val last = sortedMap.last
