@@ -794,7 +794,6 @@ object MakeFiles {
           (a.meta != Meta() && b.meta != Meta()) //||
         ) sys.error("two conflicting articles with the same slug '"+a.slug+"'")
 
-
         val merged = b.copy(
           dates   = a.dates ++ b.dates,
           tags    = a.tags merge b.tags,

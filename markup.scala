@@ -36,7 +36,6 @@ object AsciiText {
 
 case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl: String) extends Text {
   import AsciiText._
-  import AsciiMarkup.{ commentRegex, commentCheck }
 
   def render(l: ImageLayout): String = mkText(segments, l, resolvedLinks)
   def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), resolvedLinks)
@@ -233,7 +232,6 @@ object AsciiMarkup extends Markup {
   private val blockRegex    = """(?xs) /---(\w+)[^\n]*\n (.*?) \\--- """.r
   val commentRegex          = """(?xs) \<!--.*?--\>""".r
 
-  private val blockCheck    = """/---"""
   val commentCheck          = """<!--"""
 
   private def segmentText(_txt: String, resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = {
