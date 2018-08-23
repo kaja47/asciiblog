@@ -69,7 +69,7 @@ case class Blog (
 
   val args: Array[String],
   val translation: Map[String, String],
-  val hooks: Hooks = NoHooks,
+  val hooks: Hooks = null,
 
   val invalidLinkMarker: String = "@@INVALIDLINK@@"
 ) extends UrlOps {
@@ -85,7 +85,7 @@ trait Hooks {
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String
 }
 
-object NoHooks extends Hooks {
+class NoHooks extends Hooks {
   def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String = ""
   def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String = ""
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String = null
@@ -132,7 +132,9 @@ object Blog {
       twitterCreator         = cfg.getOrElse("twitter.creator", ""),
 
       args = args,
-      translation = translation
+      translation = translation,
+
+      hooks                  = Class.forName(cfg.getOrElse("hooks", "asciiblog.NoHooks")).newInstance().asInstanceOf[Hooks]
     )
   }
 
