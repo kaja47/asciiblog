@@ -75,7 +75,6 @@ case class Blog (
 ) extends UrlOps {
   def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
   def printTimes: Boolean  = false
-  def printErrors: Boolean = !(args.length > 1 && args(1) == "tags")
 }
 
 
@@ -785,8 +784,8 @@ object MakeFiles {
 
     for (a <- articles) {
       if (!articleMap.contains(a.slug)) {
-        articleMap += ((a.slug, a))
-        slugOrder  += a.slug
+        articleMap.update(a.slug, a)
+        slugOrder += a.slug
 
       } else {
         val b = articleMap(a.slug)
@@ -849,7 +848,7 @@ object MakeFiles {
     // collection of articles. This is needed to resolve circular dependency:
     // global names -> parse text -> materializeNonexplicitTags -> global names
     lazy val globalNames: Map[String, String] = timer("global names") {
-      articles.flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
+      articles.iterator.flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
     }
 
     val fileSuffixes = ".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$".r.pattern
