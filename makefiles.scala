@@ -853,16 +853,20 @@ object MakeFiles {
       articles.flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
     }
 
+    val fileSuffixes = ".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$".r.pattern
+
     // globalMapping maps from slugs to absolute urls
     def resolveLink(link: String, globalMapping: Map[String, String], a: Article = null): String = {
       val (b, h) = util.splitByHash(link)
       if (b == "index") {
         blog.baseUrl+"/."
-      } else if (blog.printErrors && b.nonEmpty && !isAbsolute(b) && !b.startsWith("#") && !b.startsWith("..") && !b.contains(".") && !b.matches(".*\\.(php|jpg|png|gif|rss|zip|data|txt|scala|c)$") && !globalMapping.contains(b)) {
-        println(s"bad link [$link -> $b] (in ${if (a == null) null else a.slug})")
+      } else if (b.isEmpty || b.startsWith("..") || b.contains(".") || fileSuffixes.matcher(b).matches() || isAbsolute(b)) {
+        link
+      } else if (!globalMapping.contains(b)) {
+        println(s"bad link [$link] (in ${if (a == null) null else a.slug})")
         blog.invalidLinkMarker
       } else {
-        globalMapping.getOrElse(b, b)+h
+        globalMapping(b)+h
       }
     }
 
