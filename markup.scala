@@ -156,7 +156,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
       case Block("code", txt)   => s"<pre>${util.escape(txt)}</pre>"
       case Block("pre",  txt)   => s"<pre>${util.escape(txt)}</pre>"
       case Block("comment",_)   => ""
-      case Block(tpe, _)        => sys.error(s"unknown block type $tpe")
+      case Block(tpe, _)        => sys.error(s"unknown block type '$tpe'")
       case Images(images)       => images.map(img => l.imgTag(img, this)).mkString(" ")
       case Paragraph(txt)       => "<p>"+mkParagraph(txt, aliases)+"</p>"
       case Blockquote(sx)       => "<blockquote>"+mkText(sx, l, aliases)+"</blockquote>"
