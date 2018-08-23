@@ -385,18 +385,21 @@ class Similarities(articles: Seq[Article]) {
       size
     }
 
-    val idxs = tm.getOrElse(t, Array())
+    if (!tm.contains(t)) return Seq()
+
+    val idxs = tm(t)
     val topn = new TopN[Tag](count, 0.001 /* zero is never added */)(Ordering.by { t => t.title })
 
     for ((t2, idxs2) <- tm if t2 != t) {
       val maxSim = 1.0 * Math.min(idxs.length, idxs2.length) / Math.max(idxs.length, idxs2.length)
       if (maxSim >= topn.min) {
         val in = intersectionSize(idxs, idxs2)
-        topn += (in.toDouble / (idxs.size + idxs2.size - in), t2)
+        val un = idxs.size + idxs2.size - in
+        topn += (in.toDouble / un, t2)
       }
     }
 
-    topn.toSeq.map(_._2).map(tags)
+    topn.toSeq.map { case (_, t) => tags(t) }
   }
 }
 
@@ -487,8 +490,9 @@ object MakeFiles {
     }
 
     def isLocalLink(url: String) = url.startsWith(blog.baseUrl+"/")
-    def dropLocalPrefix(url: String) = url.drop(blog.baseUrl.length+1)
-    def extractSlug(url: String) = if (isLocalLink(url)) Slug(dropLocalPrefix(url).dropRight(blog.fileSuffix.length)) else sys.error("not local url")
+    def extractSlug(url: String) =
+      if (isLocalLink(url)) Slug(url.drop(blog.baseUrl.length+1).dropRight(blog.fileSuffix.length))
+      else sys.error("not local url: "+url)
 
     def addParamMediumFeed(url: String) =
       if (isAbsolute(url) && isLocalLink(url)) addParam(url, "utm_medium=feed") else url
@@ -568,7 +572,7 @@ object MakeFiles {
   private val slugRegex = """[\w./+-]+""".r
 
   def parseArticle(lines: Seq[String])(implicit blog: Blog): Article = {
-    val ls = lines.map(l => if (l.length > 0 && l(l.length-1).isWhitespace) trailingWS.replaceAllIn(l, "") else l)
+    val ls = lines.map(l => if (l.length > 0 && Character.isWhitespace(l.charAt(l.length-1))) trailingWS.replaceAllIn(l, "") else l)
 
     val titleRegex(xxx, dateTitle, slug) = ls(0)
     val (dateInTitle, title) = parseDatePrefix(dateTitle)
@@ -912,7 +916,7 @@ object MakeFiles {
 
     val pubsBy: Map[Slug, Article] = timer("pubsBy") {
       invert(articles.map { a => (a, a.pub.map(Slug)) })
-        .map { case (k, vs) => (k, vs.sortBy(_.date).head) }
+        .map { case (k, vs) => (k, vs.minBy(_.date)) }
     }
 
     val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
