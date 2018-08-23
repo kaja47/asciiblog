@@ -83,14 +83,50 @@ object FlowLayout {
   def updateLinks(content: String, f: String => String) =
     ahrefRegex.replaceAllIn(content, m => Regex.quoteReplacement(f(m.group(1))))
 
-  private val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
-  private val idRegex    = """(?x) id=   (?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
-  private val tagRegex   = """\<([a-zA-Z]\w*?)\W""".r
+  //private val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
+  //private val idRegex    = """(?x) id=   (?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
+  //private val tagRegex   = """\<([a-zA-Z]\w*?)\W""".r
   def classesAndTags(html: String): Set[String] = {
-    val classes = classRegex.findAllMatchIn(html).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
-    val ids     = idRegex   .findAllMatchIn(html).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
-    val tags    = tagRegex.findAllMatchIn(html).map(_.group(1))
-    (tags ++ classes.map("."+_) ++ ids.map("#"+_)).toSet
+    //val classes = classRegex.findAllMatchIn(html).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
+    //val ids     = idRegex   .findAllMatchIn(html).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
+    //val tags: Iterator[String]    = tagRegex.findAllMatchIn(html).map(_.group(1))
+    //(tags ++ classes.map("."+_) ++ ids.map("#"+_)).toSet
+
+    val idents = collection.mutable.Set[String]()
+
+    var pos = html.indexOf('<', 0)
+    while (pos != -1) {
+      var i = pos+1
+      while (i < html.length && Character.isLetterOrDigit(html.charAt(i))) { i += 1 }
+      if (i > pos+1) { idents += html.substring(pos+1, i) }
+      pos = html.indexOf('<', i)
+    }
+
+    def p(prelude: String, prefix: String) = {
+      var pos = html.indexOf(prelude, 0)
+      while (pos != -1) {
+        pos = pos+prelude.length
+        var i = pos
+
+        val q = html.charAt(i)
+        if (q == '"' || q == '\'') {
+          i = html.indexOf(q, i+1)
+          for (c <- html.substring(pos+1, i).split(" ")) {
+            idents += prefix+c
+          }
+
+        } else {
+          while (i < html.length && Character.isLetterOrDigit(html.charAt(i))) { i += 1 }
+          idents += prefix+html.substring(pos, i)
+        }
+
+        pos = html.indexOf(prelude, i)
+      }
+    }
+
+    p("class=", ".")
+    p("id=",    "#")
+    idents.toSet
   }
 }
 
