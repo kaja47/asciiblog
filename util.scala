@@ -2,6 +2,7 @@ package asciiblog
 
 import scala.util.matching.Regex
 import java.io.File
+import scala.collection.mutable
 
 object util {
   private val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
@@ -48,6 +49,25 @@ object util {
       i += 1
     }
     sb.toString
+  }
+
+  def splitByRepeating[T](xs: Seq[T], t: T): Seq[Seq[T]] = {
+    var i = 0
+
+    Iterator.continually {
+      while (i < xs.length && xs(i) == t) { i += 1 }
+
+      if (i >= xs.length) null else {
+        val res = mutable.ArrayBuffer[T]()
+
+        while (i < xs.length && xs(i) != t) {
+          res += xs(i)
+          i += 1
+        }
+
+        res
+      }
+    }.takeWhile(_ != null).toVector
   }
 }
 
