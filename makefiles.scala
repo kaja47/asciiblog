@@ -180,7 +180,7 @@ case class Article(
   def isTag      = meta.contains("tag") || isSupertag
   def asTag      = if (isTag) Tag(title, isSupertag) else null
   def extraImages = images.filter(!_.inText)
-  def slugsOfLinkedArticles(implicit blog: Blog): Seq[Slug] = text.links.filter(isAbsolute).filter(blog.isLocalLink).map(blog.extractSlug)
+  def slugsOfLinkedArticles(implicit blog: Blog): Seq[Slug] = text.links.filter(blog.isLocalLink).map(blog.extractSlug)
 
   // image marker is shown only for images that are not from external sources
   def hasImageMarker = images.exists(i => i.source == null || i.source == "")
@@ -450,7 +450,7 @@ object MakeFiles {
   }
 
 
-  def isAbsolute(url: String) = new URI(url).isAbsolute
+  def isAbsolute(url: String) = url.startsWith("http") && new URI(url).isAbsolute
   def addParam(url: String, param: String) =
     if (url.contains("?")) url+"&"+param
     else                   url+"?"+param
