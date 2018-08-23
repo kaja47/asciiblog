@@ -763,19 +763,18 @@ object MakeFiles {
       if (rest.nonEmpty) sys.error("hidden and visible articles are mixed up")
     }
 
-    val hiddenSlugs: Set[Slug] = if (blog.dumpAll) Set() else {
-      articles.filter(_.title.startsWith("?")).map(_.asSlug).toSet // this is done ahead of time beucase of article merging
-    }
+    // this is done ahead of time beucase of article merging
+    val hiddenSlugs: Set[String] = articles.iterator.collect { case a if  a.title.startsWith("?") => a.slug }.toSet
 
-    for (a <- articles) {
-      if (hiddenSlugs.contains(a.asSlug) && a.dates.nonEmpty && articles.count(_.slug == a.slug) > 1)
+    for (a <- articles if !a.title.startsWith("?")) {
+      if (a.dates.nonEmpty && hiddenSlugs.contains(a.slug)) // dated article has hidden counterpart
         sys.error(s"hidden and dated article are sharing the same slug '${a.slug}', this is most likely an error")
     }
 
     val now = new Date
     articles = articles.filter { a =>
       val isInPast = a.date == null || a.date.before(now)
-      !hiddenSlugs.contains(a.asSlug) && isInPast
+      blog.dumpAll || (!hiddenSlugs.contains(a.slug) && isInPast)
     }
     }
 
