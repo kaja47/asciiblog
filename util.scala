@@ -69,6 +69,34 @@ object util {
       }
     }.takeWhile(_ != null).toVector
   }
+
+  def splitByInterval[T](xs: Seq[T], begin: T, end: T): Iterator[Seq[T]] =
+    splitByInterval(xs, (_: T) == begin, (_: T) == end)
+
+  def splitByInterval[T](xs: Seq[T], begin: T => Boolean, end: T => Boolean): Iterator[Seq[T]] = {
+    var i = 0
+    var interval = false
+
+    Iterator.continually {
+      if (i >= xs.length) {
+        null
+
+      } else if (!interval) {
+        val res = mutable.ArrayBuffer[T]()
+        while (i < xs.length && !begin(xs(i))) { res += xs(i); i += 1 }
+        interval = true
+        res
+
+      } else {
+        val res = mutable.ArrayBuffer[T]()
+        while (i < xs.length && !end(xs(i))) { res += xs(i); i += 1 }
+        if (i < xs.length && end(xs(i))) { res += xs(i); i += 1 }
+        interval = false
+        res
+      }
+
+    }.takeWhile(_ != null).filter(_.nonEmpty)
+  }
 }
 
 object timer {
