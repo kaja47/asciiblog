@@ -100,8 +100,8 @@ object CssMinimizer {
 
   def minimize(css: Seq[xCSS], classesTagsIds: Set[String]): Seq[xCSS] =
     css.flatMap {
-      case xRule(selector, splitSelectors, styles) =>
-        val activeSelectors = selector zip splitSelectors filter { case (s, ss) => ss == wildcard || ss.forall(classesTagsIds.contains) } map (_._1)
+      case xRule(selectors, splitSelectors, styles) =>
+        val activeSelectors = selectors zip splitSelectors collect { case (s, ss) if ss == wildcard || ss.forall(classesTagsIds.contains) => s }
         if (activeSelectors.isEmpty) None else Some(xRule(activeSelectors, null, styles))
       case xMedia(media, rules) => 
         val cs = minimize(rules, classesTagsIds)
@@ -113,4 +113,20 @@ object CssMinimizer {
       case xRule(selector, _, styles) => selector.mkString(",")+"{"+styles+"}"
       case xMedia(media, rules) => "@media "+media+"{"+render(rules)+"}"
     }.mkString
+
+
+  def render2(css: Seq[xCSS]): String =
+    renderSB(css, new StringBuilder(64)).result
+
+  def renderSB(css: Seq[xCSS], sb: StringBuilder): StringBuilder = {
+    css foreach {
+      case xRule(selector, _, styles) =>
+        selector.addString(sb, ",").append("{").append(styles).append("}")
+      case xMedia(media, rules) =>
+        sb.append("@media ").append(media).append("{")
+        renderSB(rules, sb)
+        sb.append("}")
+    }
+    sb
+  }
 }
