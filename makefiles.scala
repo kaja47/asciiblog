@@ -820,15 +820,15 @@ object MakeFiles {
     articles = slugOrder.map(articleMap).toVector
     }
 
-    // ordered by date
+    if (blog.articlesMustBeSorted) { // ordered by date
     timer("order by date") {
-    if (blog.articlesMustBeSorted) {
       val dated = articles.filter(_.date != null)
       val ordered = dated == dated.sortBy(~_.date.getTime)
       if (!ordered) sys.error("articles are not ordered by date")
     }
     }
 
+    timer("tagImplications") {
     val tagImplications: Map[Tag, Seq[Tag]] =
       (for (a <- articles if a.isTag && a.implies.nonEmpty) yield (a.asTag, a.implies)).toMap
 
@@ -839,6 +839,7 @@ object MakeFiles {
         val implied = a.tags.visible.flatMap { t => tagImplications.getOrElse(t, Seq()) }
         a.copy(tags = a.tags.copy(visible = (a.tags.visible ++ implied).distinct))
       }
+    }
     }
 
     // TODO autotag images
@@ -878,7 +879,7 @@ object MakeFiles {
     }
     }
 
-    def materializeNonexplicitTags(all: Vector[Article]): Vector[Article] = {
+    def materializeNonexplicitTags(all: Vector[Article]): Vector[Article] = timer("materializeNonexplicitTags") {
       val explicitTags: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
       val mentionedTags: Set[Tag] = all.flatMap { a => a.tags.visible ++ a.tags.hidden ++ a.images.flatMap(i => i.tags.visible ++ i.tags.hidden) }.toSet
       (mentionedTags -- explicitTags).map { t =>
@@ -888,9 +889,7 @@ object MakeFiles {
 
     articles = articles ++ materializeNonexplicitTags(articles)
 
-    val canonicalSlugs: Map[String, String] = // [alias -> canonical slug]
-      invert1(articles.collect { case a if a.aliases.nonEmpty => (a.slug, a.aliases) })
-
+    timer("checks") {
     val allIds = new mutable.HashSet[String]()
     for (a <- articles.iterator.map(_.slug) ++ articles.iterator.flatMap(_.aliases)) {
       if (allIds.contains(a)) sys.error(s"duplicate slug/alias ${a}")
@@ -901,12 +900,18 @@ object MakeFiles {
       a.pub foreach { id => if (!allIds(id)) sys.error(s"id [$id] is not defined (used as pub in article '${a.title})'") }
       a.rel foreach { id => if (!allIds(id)) sys.error(s"id [$id] is not defined (used as rel in article '${a.title})'") }
     }
+    }
+
+    timer("canonize pubs and rels") {
+    val canonicalSlugs: Map[String, String] = // [alias -> canonical slug]
+      invert1(articles.collect { case a if a.aliases.nonEmpty => (a.slug, a.aliases) })
 
     articles = articles.map { a =>
       a.copy(
         pub = a.pub.map(id => canonicalSlugs.getOrElse(id, id)),
         rel = a.rel.map(id => canonicalSlugs.getOrElse(id, id))
       )
+    }
     }
 
     val backlinks: Map[Slug, Seq[Article]] = timer("backlinks") {
