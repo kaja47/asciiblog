@@ -159,6 +159,7 @@ case class Article(
   pub: Seq[String] = Seq(),
   aliases: Seq[String] = Seq(),
   implies: Seq[Tag] = Seq(), // only for tags
+  imgtags: Seq[Tag] = Seq(),
   link: String = null,
   notes: String = null,
   license: String = null,
@@ -185,22 +186,28 @@ case class Article(
   def hasImageMarker = images.exists(i => i.source == null || i.source == "")
   def hasTag(t: Tag) = tags.visible.contains(t)
 
-  def imagesWithoutArticleTags = { // TODO This method is bit hacky. Where it should be called from?
-    val ts = if (isTag) Set(asTag) else tags.visible.toSet
-    def strip(i: Image) = i.copy(tags = i.tags.copy(visible = i.tags.visible.filter(t => !ts.contains(t))))
-    def stripSegments(ss: Seq[Segment]): Seq[Segment] = ss.map {
-      case Images(is) => Images(is.map(strip))
-      case Blockquote(ss) => Blockquote(stripSegments(ss))
+  def mapImages(f: Image => Image) = {
+    def mapSegments(ss: Seq[Segment]): Seq[Segment] = ss.map { // TODO segments are impl. detail of AsciiText
+      case Images(is)     => Images(is.map(f))
+      case Blockquote(ss) => Blockquote(mapSegments(ss))
       case s => s
     }
 
     copy(
-      images = images.map(strip),
-      text = text match { // TODO this sould not be there
-        case t: AsciiText => t.overwriteSegments(stripSegments(t.segments))
+      images = images.map(f),
+      text = text match {
+        case t: AsciiText => t.overwriteSegments(mapSegments(t.segments)) // TODO this sould not be here
         case t => t
       }
     )
+  }
+
+  def addImageTags(tags: Seq[Tag]) =
+    mapImages { i => i.copy(tags = i.tags.copy(visible = (i.tags.visible ++ tags).distinct)) }
+
+  def imagesWithoutArticleTags = {
+    val ts = if (isTag) Set(asTag) else tags.visible.toSet
+    mapImages { i => i.copy(tags = i.tags.copy(visible = i.tags.visible.filter(t => !ts.contains(t)))) }
   }
 
   def mkRawText = rawText.mkString("\n")
@@ -592,6 +599,7 @@ object MakeFiles {
     val pubs    = metaLines.collect(prefixedList("pub:"))
     val aliass  = metaLines.collect(prefixedList("alias:"))
     val implies = metaLines.collect(prefixedLine("implies:") andThen parseTags)
+    val imgtags = metaLines.collect(prefixedLine("imageTags:") andThen parseTags)
 
     val meta = metas.foldLeft(Meta())(_ merge _)
 
@@ -608,7 +616,7 @@ object MakeFiles {
     if (slug != null && slug.nonEmpty && !slugRegex.pattern.matcher(slug).matches())
       sys.error(s"slug '$slug' is not valid, only letters, numbers and ./+- allowed")
 
-    if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size + aliass.size + implies.size) < metaLines.size)
+    if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size + aliass.size + implies.size + imgtags.size) < metaLines.size)
       sys.error("some metainformation was not processed: "+metaLines)
 
     links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
@@ -624,6 +632,7 @@ object MakeFiles {
       pub     = pubs.flatten,
       aliases = aliass.flatten,
       implies = implies.flatMap(_.visible),
+      imgtags = imgtags.flatten(_.visible),
       link    = links.headOption.getOrElse(null),
       notes   = notess.headOption.getOrElse(null),
       license = license.headOption.getOrElse(null),
@@ -845,8 +854,6 @@ object MakeFiles {
     }
     }
 
-    // TODO autotag images
-
     // Maps all article slugs (main ones and aliases) to their absolute urls.
     // Bit of a hack, this lazy function closes over mutable variable articles.
     // So when it's finally called it sould use the most recent and up to date
@@ -888,13 +895,17 @@ object MakeFiles {
 
     def materializeNonexplicitTags(all: Vector[Article]): Vector[Article] = timer("materializeNonexplicitTags") {
       val explicitTags: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
-      val mentionedTags: Set[Tag] = all.flatMap { a => a.tags.visible ++ a.tags.hidden ++ a.images.flatMap(i => i.tags.visible ++ i.tags.hidden) }.toSet
+      val mentionedTags: Set[Tag] = all.flatMap { a => a.tags.visible ++ a.tags.hidden ++ a.implies ++ a.imgtags ++ a.images.flatMap(i => i.tags.visible ++ i.tags.hidden) }.toSet
       (mentionedTags -- explicitTags).map { t =>
         Article(t.title, tagSlug(t.title), meta = Meta(Seq(if (t.supertag) "supertag" else "tag")), text = AsciiText.empty)
       }.toVector
     }
 
     articles = articles ++ materializeNonexplicitTags(articles)
+
+    articles = articles.map { a =>
+      if (a.imgtags.isEmpty) a else a.addImageTags(a.imgtags)
+    }
 
     timer("checks") {
     val allIds = new mutable.HashSet[String]()
