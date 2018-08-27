@@ -34,7 +34,7 @@ object AsciiText {
   def empty = AsciiText(Seq(), null, "")
 }
 
-case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl: String) extends Text {
+case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl: String) extends Text { self =>
   import AsciiText._
 
   def render(l: ImageLayout): String = mkText(segments, l, resolvedLinks)
@@ -46,7 +46,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
   // displayed twice
   def overwriteSegments(newSegments: Seq[Segment]) =
     new AsciiText(newSegments, null, noteUrl) {
-      override protected val resolvedLinks = _resolvedLinks
+      override protected def resolvedLinks = self.resolvedLinks
     }
 
   val images: Seq[Image] = segments.collect { case Images(imgs) => imgs }.flatten
