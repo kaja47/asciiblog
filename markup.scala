@@ -8,7 +8,7 @@ import scala.collection.mutable
 
 trait Markup {
   type ResolveLinkFunc = String => String
-  def process(text: String, resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): Text
+  def process(text: Seq[String], resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): Text
 }
 
 trait Text {
@@ -205,7 +205,7 @@ case class Cell(txt: String, span: Int = 1)
 
 
 object AsciiMarkup extends Markup {
-  def process(text: String, resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = segmentText(text, resolver, noteUrl, imageRoot)
+  def process(text: Seq[String], resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = segmentText(text, resolver, noteUrl, imageRoot)
 
   val codeRegex     = """(?xs) `    (.+?) `    """.r
   val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
@@ -227,56 +227,57 @@ object AsciiMarkup extends Markup {
   val noteCheck     = """[["""
 
   private val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
-  private val headingRegex  = """(?xm) ^ ([^\n]+) \n ---+""".r
   private val hrRegex       = """(?xm) ---+|\*\*\*+ """.r
   private val blockRegex    = """(?xs) /---(\w+)[^\n]*\n (.*?) \\--- """.r
   val commentRegex          = """(?xs) \<!--.*?--\>""".r
 
   val commentCheck          = """<!--"""
 
-  private def segmentText(_txt: String, resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = {
-    def matchAllLines[T](ls: Seq[String])(f: PartialFunction[String, T]): Option[Seq[T]] = {
+  private def segmentText(lines: Seq[String], resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = {
+    def matchAllLines[T](ls: Seq[String], prefix: String)(f: PartialFunction[String, T]): Option[Seq[T]] = {
+      if (!ls.forall(_.startsWith(prefix))) return None
       val ms = ls.map(f.lift)
       if (ms.forall(_.isDefined)) Some(ms.map(_.get)) else None
     }
 
-    def splitBlocks(txt: String): Seq[Segment] =
-      txt.split("\n\n+") map {
-        case headingRegex(txt) => Heading(txt)
-        case hrRegex() => Hr()
-        case txt =>
-          val ls = txt.lines.toVector
+    def splitBlocks(lines: Seq[String]): Seq[Segment] =
+      util.splitByRepeating(lines, "") map { ls =>
+        None.orElse {
+          T.t(matchAllLines(ls, "[") {
+            case linkRefRegex(r, url) => (r, url)
+          }.map(Linkref))
 
-          None.orElse {
-            matchAllLines(ls) {
-              case linkRefRegex(r, url) => (r, url)
-            }.map(Linkref)
+        }.orElse {
+          if (ls.length == 1 && hrRegex.pattern.matcher(ls(0)).matches()) Some(Hr()) else None
 
-          }.orElse {
-            matchAllLines(ls)(mkImage(imageRoot)).map(Images)
+        }.orElse {
+          if (ls.length == 2 && hrRegex.pattern.matcher(ls(1)).matches()) Some(Heading(ls(0))) else None
 
-          }.orElse {
-            matchAllLines(ls) {
-              case l if l.startsWith("> ") || l == ">"  => l.drop(2)
-            }.map { ls => Blockquote(splitBlocks(ls.mkString("\n"))) }
+        }.orElse {
+          matchAllLines(ls, "[*")(mkImage(imageRoot)).map(Images)
 
-          }.orElse {
-            matchAllLines(ls) {
-              case l if l.startsWith("|") => l
-            }.map(mkTable)
+        }.orElse {
+          matchAllLines(ls, ">") {
+            case l if l.startsWith("> ") || l == ">"  => l.drop(2)
+          }.map { ls => Blockquote(splitBlocks(ls)) }
 
-          }.orElse {
-            if (ls.length == 1 && ls(0).startsWith("---")) Some(ByLine(txt)) else None
+        }.orElse {
+          matchAllLines(ls, "|") {
+            case l if l.startsWith("|") => l
+          }.map(mkTable)
 
-          }.orElse {
-            if (ls(0).startsWith("-") && !(ls.length == 1 && ls(0) == "--")) Some(mkBulletList(ls)) else None
+        }.orElse {
+          if (ls.length == 1 && ls(0).startsWith("---")) Some(ByLine(ls.mkString("\n"))) else None
 
-          }.orElse {
-            if (ls(0).matches("""^\d+\).*""")) Some(mkNumberedList(ls)) else None
+        }.orElse {
+          if (ls(0).startsWith("-") && !(ls.length == 1 && ls(0) == "--")) Some(mkBulletList(ls)) else None
 
-          }.getOrElse {
-            Paragraph(txt)
-          }
+        }.orElse {
+          if (ls(0).matches("""^\d+\).*""")) Some(mkNumberedList(ls)) else None
+
+        }.getOrElse {
+          Paragraph(ls.mkString("\n"))
+        }
       }
 
     def mergeParagraphsIntoLists(segments: Seq[Segment]): Seq[Segment] = // TODO more general mechanism for not only paragraphs
@@ -313,17 +314,31 @@ object AsciiMarkup extends Markup {
         }
       }
 
-    var txt = commentRegex.replaceAllIn(_txt, "")
 
-    val segments: Seq[Segment] = {
-      var prev = 0
-      (for (m <- blockRegex.findAllMatchIn(txt)) yield {
-        val block = Block(m.group(1), m.group(2))
-        val res = splitBlocks(txt.substring(prev, m.start)) :+ block
-        prev = m.end
-        res
-      }).toVector.flatten ++ (if (prev > txt.length) Seq() else splitBlocks(txt.substring(prev)))
+    val ls = mutable.ArrayBuffer[String]()
+    var emit = true
+
+    for (ll <- lines) {
+      val l = if (ll.contains("<!--")) commentRegex.replaceAllIn(ll, "") else ll
+      val close = l.indexOf("-->")
+      val open  = l.indexOf("<!--")
+      if (close != -1) { emit = true }
+      if (emit) {
+        if (close == -1 && open == -1) ls += l
+        else ls += l.substring(if (close == -1) 0 else close+3, if (open == -1) l.length else open)
+      }
+      if (open != -1) { emit = false }
     }
+
+    val segments: Seq[Segment] =
+      util.splitByInterval[String](ls, (_: String).startsWith("/---"), (_: String).startsWith("\\---"))
+        .flatMap { ls =>
+          if (ls.head.startsWith("/---")) {
+            Seq(Block(ls.head.drop(4).split(" ").head, ls.drop(1).dropRight(1).mkString("\n")+"\n"))
+          } else {
+            splitBlocks(ls)
+          }
+        }.toVector
 
     val finalSegments = joinNeighboringLists(mergeParagraphsIntoLists(segments))
     AsciiText(finalSegments, resolver, noteUrl)

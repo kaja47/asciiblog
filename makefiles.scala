@@ -162,7 +162,7 @@ case class Article(
   link: String = null,
   notes: String = null,
   license: String = null,
-  rawText: String = "",
+  rawText: Seq[String] = Seq(),
   text: Text = null,
   images: Seq[Image] = Seq(),
   backlinks: Seq[Article] = Seq(),
@@ -202,6 +202,8 @@ case class Article(
       }
     )
   }
+
+  def mkRawText = rawText.mkString("\n")
 }
 
 case class Meta(values: Seq[String] = Seq()) {
@@ -625,7 +627,7 @@ object MakeFiles {
       link    = links.headOption.getOrElse(null),
       notes   = notess.headOption.getOrElse(null),
       license = license.headOption.getOrElse(null),
-      rawText = body.mkString("\n"),
+      rawText = body,
       inFeed  = inFeed
     )
   }
@@ -806,7 +808,10 @@ object MakeFiles {
           pub     = a.pub ++ b.pub,
           aliases = a.aliases ++ b.aliases,
           license = if (a.license != null) a.license else b.license,
-          rawText = if (a.rawText.length < b.rawText.length) a.rawText+"\n\n"+b.rawText else b.rawText+"\n\n"+a.rawText,
+          rawText = {
+            val (short, long) = if (a.rawText.size < b.rawText.size) (a.rawText, b.rawText) else (b.rawText, a.rawText)
+            if (short.isEmpty) long else short ++ Seq("", "") ++ long
+          },
           images  = a.images ++ b.images,
           inFeed  = a.inFeed && b.inFeed
         ) // backlinks, similar, pubArticles, pubBy not yet populated
