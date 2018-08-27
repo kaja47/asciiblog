@@ -332,7 +332,10 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeTagIndex(base: Base) =
-    base.allTags.toSeq.sortBy { case (_, (t, as)) => (~as.size, t.slug) }.map { case (_, (t, as)) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
+    base.allTags.toSeq
+      .filter { case (_, (t, as)) => t.images.size > 0 || as.size > 0 }
+      .sortBy { case (_, (t, as)) => (~as.size, t.slug) }
+      .map { case (_, (t, as)) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
   def addArrows(content: String, next: Article, prev: Article, includeBottom: Boolean = false) = {
     "<span class=f>"+_makeNextPrevArrows(next, prev)+"</span>"+
