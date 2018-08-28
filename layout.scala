@@ -178,23 +178,23 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
   def rssLink(rss: String) =
     s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>"""
 
-  def ogTags(a: Article): String =
+  def ogTags(a: Article): String = {
     if (blog.hasOgTags) {
       val mainImg  = mainImageUrl(a)
       val otherImg = otherImageUrl(a)
-      val (tpe, img) = if (mainImg != null) ("summary_large_image", mainImg) else ("summary", otherImg)
+      val (tpe, img) =
+        if (mainImg != null) ("summary_large_image", mainImg)
+        else                 ("summary", otherImg)
 
-      <meta name="twitter:card" content={tpe}/> + "" +
-      <meta property="og:type" content="article"/> +
-      <meta property="og:url" content={baseUrl}/> +
-      <meta property="og:title" content={a.title}/> +
-      <meta property="og:description" content={truncate(plaintextDescription(a), 200)}/> +
-      ifs(img, <meta property="og:image" content={img}/>.toString) +
-      ifs(blog.twitterSite,    <meta name="twitter:site" content={blog.twitterSite}/>.toString) +
-      ifs(blog.twitterCreator, <meta name="twitter:creator" content={blog.twitterCreator}/>.toString)
-    } else ""
-
-  val __ahrefRegex = """(?xs) (<a [^>]* href=") ([^"]+) (" [^>]* >) (.*?) (</a>)""".r
+      """<meta name="twitter:card" content=""""+tpe+""""/>""" +
+      """<meta property="og:type" content="article"/>""" +
+      """<meta property="og:url" content=""""+escape(baseUrl)+""""/>""" +
+      """<meta property="og:title" content=""""+escape(a.title)+""""/>""" +
+      """<meta property="og:description" content=""""+escape(truncate(plaintextDescription(a), 200))+""""/>""" +
+      ifs(img,                 """<meta property="og:image" content=""""+escape(img)+""""/>""") +
+      ifs(blog.twitterSite,    """<meta name="twitter:site" content=""""+escape(blog.twitterSite)+""""/>""") +
+      ifs(blog.twitterCreator, """<meta name="twitter:creator" content=""""+escape(blog.twitterCreator)+""""/>""")
+    } else ""}
 
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String = {
     def defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
