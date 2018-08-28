@@ -61,12 +61,14 @@ p          { margin: 1.4em 0; }
 
   def style(cats: Set[String]) = cats match {
     case null => render(optStyle)
-    case cats => render(minimize(optStyle, cats))
+    case cats => render2(minimize(optStyle, cats))
   }
 }
 
 
 object FlowLayout {
+  val __ahrefRegex = """(?xs) (<a [^>]* href=") ([^"]+) (" [^>]* >) (.*?) (</a>)""".r
+
   private val stripTagRegex = """\<.*?\>""".r
   private val truncateRegex = """\s+(\w+)?$|\<\w+$""".r
 
@@ -92,6 +94,7 @@ object FlowLayout {
     //val tags: Iterator[String]    = tagRegex.findAllMatchIn(html).map(_.group(1))
     //(tags ++ classes.map("."+_) ++ ids.map("#"+_)).toSet
 
+    // following code is just a faster version of regexes above
     val idents = collection.mutable.Set[String]()
 
     var pos = html.indexOf('<', 0)
