@@ -673,23 +673,32 @@ object MakeFiles {
   def yearmonth(d: Date) = (year(d), month(d))
 
 
+  private val rssDateFormat = new ThreadLocal[SimpleDateFormat] {
+    override def initialValue = new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US)
+  }
 
   def rssdate(date: Date) = if (date == null) "" else
-    new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US).format(date)
+    rssDateFormat.get.format(date)
 
-  def makeRSS(articles: Seq[Article], mkBody: Article => String)(implicit blog: Blog): String =
-    "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" + (
-  <rss version="2.0">
-  <channel>
-  <title>{blog.title}</title>{
-    articles.map(a => <item>
-      <title>{a.title}</title>
-      <guid isPermaLink="true">{blog.addParamMediumFeed(blog.absUrlFromSlug(a.slug))}</guid>
-      <pubDate>{rssdate(a.date)}</pubDate>
-      {if (mkBody != null) <description>{mkBody(a)}</description> else xml.NodeSeq.Empty }
-    </item>)
-  }</channel>
-  </rss>).toString
+  def makeRSS(articles: Seq[Article], mkBody: Article => String)(implicit blog: Blog): String = {
+    XMLSW.Simple.document { w =>
+      w.element("rss", Seq("version" -> "2.0")) { w =>
+        w.element("channel") { w =>
+          w.element("title", blog.title)
+          for (a <- articles) {
+            w.element("item") { w =>
+              w.element("title", a.title)
+              w.element("guid", Seq(("isPermaLink", "true")), blog.addParamMediumFeed(blog.absUrlFromSlug(a.slug)))
+              w.element("pubDate", rssdate(a.date))
+              if (mkBody != null) {
+                w.element("description", mkBody(a))
+              }
+            }
+          }
+        }
+      }
+    }.toString
+  }
 
 
 

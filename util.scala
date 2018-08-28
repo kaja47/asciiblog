@@ -4,7 +4,140 @@ import scala.util.matching.Regex
 import java.io.File
 import scala.collection.mutable
 
+import java.io.StringWriter;
+import javax.xml.stream.XMLOutputFactory;
+import javax.xml.stream.XMLStreamWriter;
+
+object XMLSW {
+  import java.lang.StringBuilder
+  private lazy val f = XMLOutputFactory.newInstance
+
+  def document(encoding: String = "utf-8", version: String = "1.0")(body: XMLSW => Unit) = {
+    val out = new StringWriter()
+    val w = f.createXMLStreamWriter(out)
+    val ww = new XMLSW(w)
+    ww.document(encoding, version)(body)
+    w.flush()
+    w.close()
+    out.toString
+  }
+
+  object Simple {
+    def document(body: XMLSW.Simple => Unit, sb: StringBuilder): StringBuilder = {
+      new Simple(sb).document(body)
+      sb
+    }
+
+    def document(body: XMLSW.Simple => Unit): StringBuilder =
+      document(body, new StringBuilder)
+  }
+
+  class Simple(sb: StringBuilder) {
+    def document(body: XMLSW.Simple => Unit) = {
+      sb.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
+      body(this)
+    }
+
+    def element(localName: String, content: String): Unit =
+      element(localName, Seq.empty, content)
+
+    def element(localName: String)(body: XMLSW.Simple => Unit): Unit =
+      element(localName, Seq.empty)(body)
+
+    def element(localName: String, attributes: Seq[(String, String)])(body: XMLSW.Simple => Unit): Unit = {
+      startElem(localName, attributes)
+      body(this)
+      endElem(localName)
+    }
+
+    def element(localName: String, attributes: Seq[(String, String)], content: String): Unit = {
+      startElem(localName, attributes)
+      txt(content)
+      endElem(localName)
+    }
+
+    private def startElem(localName: String, attributes: Seq[(String, String)]) = {
+      sb.append("<").append(localName)
+      for ((k, v) <- attributes) {
+        sb.append(" ").append(k).append("=\"")
+        txt(v, true)
+        sb.append("\"")
+      }
+      sb.append(">")
+    }
+
+    private def endElem(localName: String) = {
+      sb.append("</").append(localName).append(">")
+    }
+
+    private def txt(txt: String, escapeDoubleQuotes: Boolean = false) = {
+      var start = 0
+      var i = 0; while (i < txt.length) {
+        (txt.charAt(i): @annotation.switch) match {
+          case '&' =>
+            sb.append(txt, start, i)
+            sb.append("&amp;")
+            start = i+1
+          case '>' =>
+            sb.append(txt, start, i)
+            sb.append("&gt;")
+            start = i+1
+          case '<' =>
+            sb.append(txt, start, i)
+            sb.append("&lt;")
+            start = i+1
+          case '"' => if (escapeDoubleQuotes) {
+            sb.append(txt, start, i)
+            sb.append("&qt;")
+            start = i+1
+          }
+          case _ =>
+        }
+
+        i += 1
+      }
+      sb.append(txt, start, txt.length)
+    }
+  }
+
+}
+
+
+class XMLSW(val w: XMLStreamWriter) {
+  def document(encoding: String, version: String)(body: XMLSW => Unit) = {
+    w.writeStartDocument(encoding, version)
+    body(this)
+    w.writeEndDocument()
+  }
+
+  def element(localName: String, content: String) = {
+    w.writeStartElement(localName)
+    w.writeCharacters(content)
+    w.writeEndElement()
+  }
+
+  def element(localName: String, attributes: Seq[(String, String)], content: String) = {
+    w.writeStartElement(localName)
+    for ((k, v) <- attributes) {
+      attribute(k, v)
+    }
+    w.writeCharacters(content)
+    w.writeEndElement()
+  }
+
+  def element(localName: String)(body: XMLSW => Unit) = {
+    w.writeStartElement(localName)
+    body(this)
+    w.writeEndElement()
+  }
+
+  def attribute(localName: String, value: String) =
+    w.writeAttribute(localName, value)
+}
+
+
 object util {
+
   private val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
 
   def globFiles(pattern: String): Array[File] = ((pattern match {
