@@ -474,26 +474,57 @@ object MakeFiles {
     def relUrlFromSlug(slug: String) = slug + blog.fileSuffix
     def absUrl(a: Article) = absUrlFromSlug(a.slug)
     def relUrl(a: Article) = relUrlFromSlug(a.slug)
-    def relativize(url: String, baseUrl: String) = {
-      val u = new URI(url)
-      val b = new URI(baseUrl)
-      require(b.isAbsolute)
 
-      if (u.getHost != null && u.getHost != b.getHost) {
+    // url might be pretty much anything
+    // baseUrl must be some url from this blog
+    def relativize(url: String, baseUrl: String): String = {
+
+      // fast path for absolute foreign urls
+      if ((url.startsWith("https://") || url.startsWith("http://")) && !url.startsWith(blog.baseUrl)) {
+        return url
+      }
+
+      // fast path
+      if (url.startsWith(blog.baseUrl) && baseUrl.startsWith(blog.baseUrl)) {
+        val len = Math.min(url.length, baseUrl.length)
+        var prefixLength = 0
+        var i = blog.baseUrl.length; while (i < len && (url.charAt(i) == baseUrl.charAt(i))) {
+          if (url.charAt(i) == '/') prefixLength = i
+          i += 1
+        }
+
+        if (prefixLength > 0) {
+          val sb = new StringBuilder()
+          i = prefixLength+1; while (i < baseUrl.length) {
+            if (baseUrl.charAt(i) == '/') sb.append("../")
+            i += 1
+          }
+          val res = sb.append(url.substring(prefixLength+1)).result
+          return if (res.endsWith("/.")) res.dropRight(2) else res
+        }
+      }
+
+      // General case that can handle everything. Code above can be deleted and
+      // everything will work just fine (albeit slowly).
+      val link = new URI(url)
+      val base = new URI(baseUrl)
+      require(baseUrl.startsWith(blog.baseUrl) && base.isAbsolute)
+
+      if (link.getHost != null && link.getHost != base.getHost) {
         url
-      } else if (u.getPath == null) { // mailto: links
+      } else if (link.getPath == null) { // mailto: links
         url
       } else {
-        val us = u.getPath.split("/").filter(_.nonEmpty)
-        val bs = b.getPath.split("/").filter(_.nonEmpty)
+        val us = link.getPath.split("/").filter(_.nonEmpty)
+        val bs = base.getPath.split("/").filter(_.nonEmpty)
         val prefixLen = (0 until us.length).prefixLength { i => us(i) == bs(i) }
         val backLevels = bs.length - prefixLen - 1
         val parts = Seq.fill(backLevels)("..") ++ us.drop(prefixLen)
         val partsWithoutLastDot = if (parts.length > 1 && parts.last == ".") parts.dropRight(1) else parts
 
         partsWithoutLastDot.mkString("/") +
-          (if (u.getRawQuery != null) "?"+u.getRawQuery else "")+
-          (if (u.getRawFragment != null) "#"+u.getRawFragment else "")
+          (if (link.getRawQuery != null) "?"+link.getRawQuery else "")+
+          (if (link.getRawFragment != null) "#"+link.getRawFragment else "")
       }
     }
 
