@@ -344,21 +344,18 @@ object AsciiMarkup extends Markup {
     AsciiText(finalSegments, resolver, noteUrl)
   }
 
-  private val imgRegexFragment = """
-  \s*  \[\*  \s+
-  ([^*\n]+?) (?= \s+ \d++x\d++ | \s+ \.\[ | \s+ \.\( | \s+ (?:\*|\>|\<)\] )
+  private val imgRegex = """(?xm)
+  \[\* \s+
+  (\S++)
   (?: \s+ \d++x\d++ )?
-  (?:  \s+  \.  (?:  \[ ([^\]\n]++) \]  (?: \( ([^\n]+? ) \) )?  |  \( ([^\n]+? )  \)  )  )?
-  \s+
-  (\*|\>|\<)\]
-  (?:  :  \[ ([^\]\n]++) \]  )?
-  (?:  \s+  (?: \*\*\* \s+ ([^\n]++))  )?
-  \s*
-  """
-  private val imgRegex      = s"""(?xm) $imgRegexFragment""".r
+  (?: \s+ \.  (?: \[ ([^\]]++) \]  (?: \( (.+?) \) )?  |  \( (.+? )  \)  )  )?
+  \s+ (\*|\>|\<) \]
+  (?:  :  \[ ([^\]]++) \]  )?
+  (?:  \s+  (?: \*\*\* \s+ (.++))  )?
+  """.r
   private val imgLicenseRegex = """(?x) (.*?) \s* (?: \( (?:(CC\ [\w-]+)\s+)? \s* ([^\ ]*)? \) )? \s*$""".r
 
-  private def mkImage(imageRoot: String): PartialFunction[String, Image] = {
+  def mkImage(imageRoot: String): PartialFunction[String, Image] = {
     case imgRegex(url, mod, alt1, alt2, align, link, rawTitle) =>
       val u = if (link != null) link else url // ???
       val (t, license, source) = rawTitle match {
