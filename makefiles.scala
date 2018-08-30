@@ -80,12 +80,14 @@ case class Blog (
 
 trait Hooks {
   def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String
+  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String
   def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String
 }
 
 class NoHooks extends Hooks {
   def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String = ""
+  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String = ""
   def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String = ""
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String = null
 }
