@@ -31,6 +31,10 @@ object AsciiText {
   val ahrefCheck = "href=\""
   val imgsrcCheck = "src=\""
 
+  def linkSlurp(txt: String) =
+    Slurp(txt).reserveGroups(2).iterator(_.until('"'), _.doubleQuotedString().asGroup(0, 1, -1).char(':').ignore().delimited('[', ']').asGroup(1, 1, -1))
+      .map(_.group(1).asString())
+
   def empty = AsciiText(Seq(), null, "")
 }
 
@@ -51,7 +55,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
 
   val images: Seq[Image] = segments.collect { case Images(imgs) => imgs }.flatten
 
-  private def processTexts[T](segments: Seq[Segment], f: String => Iterator[T]): Seq[T] = segments.flatMap {
+  private def processTexts[T](segments: Seq[Segment], f: String => Iterator[T]): Iterator[T] = segments.iterator.flatMap {
     case t: Textual     => f(t.txt)
     case Images(images) => images.iterator.flatMap(i => f(i.title))
     case Blockquote(sx) => processTexts(sx, f)
@@ -62,11 +66,16 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     case _ => Iterator()
   }
 
-  private def extractLinks(txt: String): Iterator[String] =
+  private def extractLinks(txt: String): Iterator[String] = // 100 ms
     (if (txt.contains(ahrefCheck)) ahrefRegex.findAllMatchIn(txt).map(_.group(1)) else Iterator()) ++
-    (if (txt.contains(linkCheck))  linkRegex.findAllMatchIn(txt).map(_.group(2))  else Iterator())
+    (if (txt.contains(linkCheck))  linkSlurp(txt)                                 else Iterator())
 
-  private def checkAliases(aliases: Seq[(String, String)]) = {
+  //require(
+  //  processTexts(segments, txt => linkRegex.findAllMatchIn(txt).map(_.group(2))).toVector ==
+  //  processTexts(segments, linkSlurp).toVector
+  //)
+
+  private def checkAliases(aliases: Iterator[(String, String)]) = {
     val as = mutable.Map[String, String]()
     for ((l, url) <- aliases) {
       if (as.contains(l))      sys.error(s"duplicate link refs [$l]")
@@ -78,7 +87,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
 
   protected def resolvedLinks = _resolvedLinks
   private lazy val _resolvedLinks = {
-    val aliases = segments.collect { case Linkref(lm) => lm }.flatten
+    val aliases = segments.iterator.collect { case Linkref(lm) => lm }.flatten
     val aliasMap = checkAliases(aliases)
     processTexts(segments, extractLinks).map { l =>
       val (base, hash) = util.splitByHash(l)
