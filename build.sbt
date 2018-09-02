@@ -6,6 +6,8 @@ scalaVersion := "2.12.2"
 
 assemblyJarName in assembly := "../../asciiblog.jar"
 
+sources in Compile ++= (baseDirectory.value / "examples" * "*.scala").get
+
 libraryDependencies ++= Seq(
   "org.scala-lang.modules" %% "scala-xml" % "1.0.6",
   "com.maxmind.geoip" % "geoip-api" % "1.3.1",
