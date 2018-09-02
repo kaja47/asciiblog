@@ -234,8 +234,36 @@ case class Image(
   inText: Boolean = true, // is this image specified in article text or is it part of a gallery
   localSource: Article = null
 ) {
-  val thumb = hash(url)
   def asSmallThumbnail = copy(mods = "", align = "")
+
+  val thumb = {
+    val sb = new java.lang.StringBuilder
+    var lastSlash = url.lastIndexOf('/')
+    if (lastSlash == -1) lastSlash = url.length
+
+    var lastDot   = url.lastIndexOf('.')
+    if (lastDot < lastSlash) lastDot = url.length
+
+    var out = false
+    var i = 0; while (i < lastSlash) {
+      val ch = url.charAt(i)
+      if (ch == '/' || ch == '.' || ch == '-') {
+        out = true
+      } else if (ch == '%' && i < lastSlash-2 && url.charAt(i+1) == '2' && url.charAt(i+2) == '0') {
+        i += 2
+        out = true
+      } else if (out) {
+        sb.append(ch)
+        out = false
+      }
+      i += 1
+    }
+    sb.append("-")
+    sb.append(url, lastSlash+1, lastDot)
+    sb.append("-")
+    sb.append(url.hashCode.toHexString.take(8))
+    sb.toString
+  }
 }
 
 case class Slug(id: String)
