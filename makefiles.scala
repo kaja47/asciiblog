@@ -1256,7 +1256,7 @@ object MakeFiles {
       fileIndex ++= saveFile(".comments/.htaccess", "Deny from all", oldFileIndex)
     }
 
-    fileIndex ++= saveFile("out.php", outScript, oldFileIndex)
+    //fileIndex ++= saveFile("out.php", outScript, oldFileIndex)
 
     if (blog.cssFile.nonEmpty) {
       fileIndex ++= saveFile("style.css", io.Source.fromFile(blog.cssFile).mkString, oldFileIndex)
