@@ -12,7 +12,7 @@ trait Markup {
 }
 
 trait Text {
-  def render(l: ImageLayout): String
+  def render(l: ImageLayout, relativize: String => String): String
   def firstParagraph: String
   def paragraph(text: String): String
   def images: Seq[Image]
@@ -37,9 +37,9 @@ object AsciiText {
 case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl: String) extends Text { self =>
   import AsciiText._
 
-  def render(l: ImageLayout): String = mkText(segments, l, resolvedLinks)
-  def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), resolvedLinks)
-  def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l), "").render(null)
+  def render(l: ImageLayout, relativize: String => String): String = mkText(segments, l, resolvedLinks, relativize)
+  def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), resolvedLinks, identity)
+  def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l), "").render(null, identity)
 
   // Overwrites segments, doesn't resolve links again. This saves some work but
   // mainly it's there se error messages during link resolution are not
@@ -105,7 +105,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     }.toMap // last key should be used
   }
 
-  private def mkParagraph(_txt: String, aliases: Map[String, String]): String = {
+  private def mkParagraph(_txt: String, aliases: Map[String, String], relativize: String => String): String = {
     var txt = _txt
     if (txt.contains(blackoutCheck)) {
       txt = blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(5).mkString("<wbr>"))
@@ -114,10 +114,17 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
       txt = altRegex     .replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
     }
     if (txt.contains(ahrefCheck)) {
-      txt = ahrefRegex   .replaceAllIn(txt, m => Regex.quoteReplacement(aliases(m.group(1))))
+      txt = ahrefRegex   .replaceAllIn(txt, m => Regex.quoteReplacement(relativize(aliases(m.group(1)))))
     }
     if (txt.contains(linkCheck)) {
-      txt = linkRegex    .replaceAllIn(txt, m => Regex.quoteReplacement(s"""<a href="${aliases(m.group(2))}">${m.group(1)}</a>"""))
+      txt = linkRegex    .replaceAllIn(txt, m => {
+        val link = aliases(m.group(2))
+        if (link == Blog.invalidLinkMarker) {
+          m.group(1)
+        } else {
+          Regex.quoteReplacement(s"""<a href="${relativize(link)}">${m.group(1)}</a>""")
+        }
+      })
     }
     if (txt.contains(commentCheck)) {
       txt = commentRegex .replaceAllIn(txt, "")
@@ -146,9 +153,9 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     txt
   }
 
-  private def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String]): String =
+  private def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String): String =
     segments.map {
-      case Heading(txt)         => "<h3>"+mkParagraph(txt, aliases)+"</h3>"
+      case Heading(txt)         => "<h3>"+mkParagraph(txt, aliases, relativize)+"</h3>"
       case Hr()                 => "<hr/>\n"
       case Linkref(_)           => ""
       case Block("html", txt)   => txt
@@ -158,25 +165,25 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
       case Block("comment",_)   => ""
       case Block(tpe, _)        => sys.error(s"unknown block type '$tpe'")
       case Images(images)       => images.map(img => l.imgTag(img, this)).mkString(" ")
-      case Paragraph(txt)       => "<p>"+mkParagraph(txt, aliases)+"</p>"
-      case Blockquote(sx)       => "<blockquote>"+mkText(sx, l, aliases)+"</blockquote>"
-      case Inline(txt)          => mkParagraph(txt, aliases)
-      case ByLine(txt)          => "<div style='text-align:right'>"+mkParagraph(txt, aliases)+"</div>"
-      case SegmentSeq(sx)       => mkText(sx, l, aliases)
+      case Paragraph(txt)       => "<p>"+mkParagraph(txt, aliases, relativize)+"</p>"
+      case Blockquote(sx)       => "<blockquote>"+mkText(sx, l, aliases, relativize)+"</blockquote>"
+      case Inline(txt)          => mkParagraph(txt, aliases, relativize)
+      case ByLine(txt)          => "<div style='text-align:right'>"+mkParagraph(txt, aliases, relativize)+"</div>"
+      case SegmentSeq(sx)       => mkText(sx, l, aliases, relativize)
       case BulletList(items)    =>
-        "<ul>"+items.map { it => "<li>"+mkText(Seq(it), l, aliases)+"</li>" }.mkString("\n")+"</ul>"
+        "<ul>"+items.map { it => "<li>"+mkText(Seq(it), l, aliases, relativize)+"</li>" }.mkString("\n")+"</ul>"
       case list @ NumberedList(items) =>
         "<ol>"+items.zipWithIndex.map {
           case ((num, it), i) =>
             val id    = if (validRefTargets(num) == list) s""" id="fn$num""""  else ""
             val value = if (num != i+1)                   s""" value="$num"""" else ""
-            s"""<li${id}${value}>${mkText(Seq(it), l, aliases)}</li>"""
+            s"""<li${id}${value}>${mkText(Seq(it), l, aliases, relativize)}</li>"""
         }.mkString("\n")+"</ol>"
       case Table(rows, columns) =>
         "<table>"+
         rows.map(cols =>
           "<tr>"+
-          cols.map(cell => "<td>"+mkParagraph(cell.txt, aliases)+"</td>").mkString+
+          cols.map(cell => "<td>"+mkParagraph(cell.txt, aliases, relativize)+"</td>").mkString+
           "</tr>"
         ).mkString+
         "</table>"

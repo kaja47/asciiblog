@@ -71,7 +71,6 @@ case class Blog (
   val translation: Map[String, String],
   val hooks: Hooks = null,
 
-  val invalidLinkMarker: String = "@@INVALIDLINK@@"
 ) extends UrlOps {
   def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
   def printTimes: Boolean  = false
@@ -138,6 +137,8 @@ object Blog {
       hooks                  = Class.forName(cfg.getOrElse("hooks", "asciiblog.NoHooks")).newInstance().asInstanceOf[Hooks]
     )
   }
+
+  val invalidLinkMarker: String = "@@INVALIDLINK@@"
 
   private def spaceSeparatedStrings(str: String): Seq[String] = str match {
     case "" => Seq()
@@ -944,7 +945,7 @@ object MakeFiles {
         link
       } else if (!globalMapping.contains(b)) {
         println(s"bad link [$link] (in ${if (a == null) null else a.slug})")
-        blog.invalidLinkMarker
+        Blog.invalidLinkMarker
       } else {
         globalMapping(b)+h
       }
@@ -980,7 +981,7 @@ object MakeFiles {
     timer("checks") {
     val allIds = new mutable.HashSet[String]()
     for (a <- articles.iterator.map(_.slug) ++ articles.iterator.flatMap(_.aliases)) {
-      if (allIds.contains(a)) sys.error(s"duplicate slug/alias ${a}")
+      if (allIds.contains(a)) { sys.error(s"duplicate slug/alias '${a}'") }
       allIds += a
     }
 

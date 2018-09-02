@@ -1,7 +1,7 @@
 package asciiblog
 
-import MakeFiles. { year, month, galleryScript, isAbsolute }
-import AsciiText. { ahrefRegex, ahrefCheck, imgsrcRegex, imgsrcCheck }
+import MakeFiles. { year, month, galleryScript }
+import AsciiText. { ahrefRegex }
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.net.URLEncoder
@@ -63,6 +63,10 @@ p          { margin: 1.4em 0; }
     case null => render(optStyle)
     case cats => render2(minimize(optStyle, cats))
   }
+
+  val defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
+  val header = new PrepatedText(if (blog.header.nonEmpty) blog.header else defaultHeader, resolver)
+  val footer = new PrepatedText(blog.footer, resolver)
 }
 
 
@@ -165,8 +169,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
       Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
     } else ""
 
-    val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="${blog.absUrlFromPath(srcPath)}"/>"""
-    val aTag   = s"""<a href="${if (linkTo == null) img.url else linkTo}">$imgTag</a>"""
+    val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="${rel(blog.absUrlFromPath(srcPath))}"/>"""
+    val aTag   = s"""<a href="${rel(if (linkTo == null) img.url else linkTo)}">$imgTag</a>"""
     s"""<span class=$cl>$aTag$desc</span>"""
   }
 
@@ -196,17 +200,11 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
       ifs(blog.twitterCreator, """<meta name="twitter:creator" content=""""+escape(blog.twitterCreator)+""""/>""")
     } else ""}
 
+
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String = {
-    def defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
-    val protoHeader = if (blog.header.nonEmpty) blog.header else defaultHeader
-    val header = ahrefRegex.replaceAllIn(protoHeader, m => Regex.quoteReplacement(rel(mill.resolver(m.group(1)))))
-    val footer = ahrefRegex.replaceAllIn(blog.footer, m => Regex.quoteReplacement(rel(mill.resolver(m.group(1)))))
-    val c1 = __ahrefRegex.replaceAllIn(content, { l =>
-      if (l.group(2) == blog.invalidLinkMarker) Regex.quoteReplacement(l.group(4))
-      else Regex.quoteReplacement(l.group(1)+rel(l.group(2))+l.group(3)+l.group(4)+l.group(5))
-    })
-    val c2 = if (!c1.contains(imgsrcCheck)) c1 else imgsrcRegex.replaceAllIn(c1,     l => Regex.quoteReplacement(rel(l.group(1))))
-    val body = "<body><div class=b>"+header+c2+footer+"</div></body>"
+    val header = mill.header.get(rel)
+    val footer = mill.footer.get(rel)
+    val body = "<body><div class=b>"+header+content+footer+"</div></body>"
     val cats: Set[String] = if (includeCompleteStyle) null else classesAndTags(body)
 
 s"""<!DOCTYPE html>
@@ -269,7 +267,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   // Bare article body, no title, no links to related articles, no tags. This method is used in RSS feeds.
   def makeArticleBody(a: Article, compact: Boolean): String = {
-    a.text.render(this)+
+    a.text.render(this, rel)+
     ifs(a.isTag, {
       val linked = a.slugsOfLinkedArticles(blog).toSet
       listOfLinks(base.allTags(a.asTag)._2.filter(a => !linked.contains(a.asSlug)), blog.tagFormat == "short")
@@ -279,7 +277,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeShortArticleBody(a: Article): String = {
-    val img = a.images.sortBy(_.mods != "main").headOption.map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
+    val img = a.images.find(_.mods == "main").map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
     val txt = truncate(plaintextDescription(a), 300)
 
     ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
@@ -315,7 +313,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
     ifs(!compact,
       "<div class=low>"+
-      ifs(blog.allowComments && !a.isTag, s"""<b><a href="comments.php?url=${blog.relUrlFromSlug(a.slug)}">${txl("comments.enter")}</a></b>""")+
+      ifs(blog.allowComments && !a.isTag, s"""<b><a href="${ rel(blog.absUrlFromPath("comments.php?url="+blog.relUrlFromSlug(a.slug))) }">${txl("comments.enter")}</a></b>""")+
       ifs(blog.shareLinks && !a.isTag, {
         val url = URLEncoder.encode(blog.absUrl(a), "UTF-8")
         s""" &nbsp;&nbsp; ${txl("share.share")} <a href="https://www.facebook.com/sharer/sharer.php?u=$url">${txl("share.facebook")}</a>, <a href="https://twitter.com/intent/tweet?url=$url">${txl("share.twitter")}</a>, <a href="https://plus.google.com/share?url=$url">${txl("share.googleplus")}</a>"""
@@ -351,7 +349,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   def makeTitle(a: Article, asLink: Boolean = true) =
     makeDateWithLinkToPubBy(a, asLink)+" <h2>"+articleLink(a, a.title, asLink)+"</h2>"
 
-  def articleUrl(a: Article) = if (a.link != null) a.link else blog.absUrl(a)
+  def articleUrl(a: Article) = if (a.link != null) a.link else rel(blog.absUrl(a))
 
   def articleLink(a: Article, title: String, asLink: Boolean = true, allowImageMarker: Boolean = false) =
     if (a.link != null || asLink)
@@ -362,7 +360,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   def makeLink(a: Article) = makeDate(a)+" "+articleLink(a, a.title, allowImageMarker = true)
 
   def makeTagLink(t: Article) = {
-    val html = s"""#<i><a href="${blog.absUrlFromSlug(t.slug)}">${t.title}</a></i>"""
+    val html = s"""#<i><a href="${rel(blog.absUrl(t))}">${t.title}</a></i>"""
     if (t.isSupertag) s"<b>$html</b>" else html
   }
 
@@ -376,14 +374,14 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def _makeNextPrevArrows(prev: Article, next: Article) =
-    (if (prev == null) "«««" else s"""<a href="${blog.absUrl(prev)}">«««</a>""")+" "+
-    (if (next == null) "»»»" else s"""<a href="${blog.absUrl(next)}">»»»</a>""")
+    (if (prev == null) "«««" else s"""<a href="${rel(blog.absUrl(prev))}">«««</a>""")+" "+
+    (if (next == null) "»»»" else s"""<a href="${rel(blog.absUrl(next))}">»»»</a>""")
 
   def makeTagLinks(tags: Seq[Article], a: Article = null) =
     tags.map { t =>
       makeTagLink(t) + ifs(t.isSupertag && a != null,
-        ifs(base.prev(a, t.asTag), s""" <a href="${blog.absUrl(base.prev(a, t.asTag))}">««</a>""")+
-        ifs(base.next(a, t.asTag), s""" <a href="${blog.absUrl(base.next(a, t.asTag))}">»»</a>""")
+        ifs(base.prev(a, t.asTag), s""" <a href="${rel(blog.absUrl(base.prev(a, t.asTag)))}">««</a>""")+
+        ifs(base.next(a, t.asTag), s""" <a href="${rel(blog.absUrl(base.next(a, t.asTag)))}">»»</a>""")
       )
     }.mkString(" ")
 
