@@ -398,3 +398,29 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
       new SimpleDateFormat("d. M. yyyy").format(d)
   }
 }
+
+
+class PrepatedText(html: String, resolver: String => String) {
+  private val arr = {
+    val res = new collection.mutable.ArrayBuffer[String]
+    val m = ahrefRegex.pattern.matcher(html)
+    var pos = 0
+    while (m.find()) {
+      res += html.substring(pos, m.start)
+      res += resolver(m.group)
+      pos = m.end
+    }
+    res += html.substring(pos)
+    res.result
+  }
+
+  def get(rel: String => String) = {
+    val sb = new StringBuilder()
+    var i = 0; while (i < arr.length-1) {
+      sb.append(arr(i))
+      sb.append(rel(arr(i+1)))
+      i += 2
+    }
+    sb.append(arr.last)
+  }
+}
