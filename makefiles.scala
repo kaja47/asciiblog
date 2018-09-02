@@ -579,10 +579,10 @@ object MakeFiles {
   private val dateRegex = """^(\d++)-(\d++)-(\d++)(?: (\d++):(\d++)(?::(\d++))?)?""".r
   val licenses = Set("CC by", "CC by-nc", "CC by-nd", "CC by-sa", "CC by-nc-nd", "CC by-nc-sa")
 
-  def parseDates(l: String): Option[Seq[Date]] = {
-    if (!l.charAt(0).isDigit) return None
+  def parseDates(l: String): Seq[Date] = {
+    if (!l.charAt(0).isDigit) return null
     val dates = l.split(",").map(l => parseDate(l.trim))
-    if (dates.nonEmpty && dates.forall(_ != null)) Some(dates) else None
+    if (dates.nonEmpty && dates.forall(_ != null)) dates else null
   }
 
   private def parseDate(l: String): Date = {
@@ -606,9 +606,8 @@ object MakeFiles {
     new GregorianCalendar(y, m, d, h, mi, s).getTime
   }
 
-  val parseLicense: PartialFunction[String, String] = {
-    case l if licenses.contains(l) => l
-  }
+  def parseLicense(l: String): String =
+    if (!licenses.contains(l)) null else l
 
   val tagBlockRegex = """(##|#)\s*(.+?)(?=( |^)(##|#)|$)""".r
   val tagSplitRegex = "\\s*,\\s*".r
@@ -624,16 +623,40 @@ object MakeFiles {
       })
       t.copy(visible = t.visible ++ vis, hidden = t.hidden ++ hid)
     }
-  def peelOffTags(s: String): (String, Tags) = (tagBlockRegex.replaceAllIn(s, "").trim, getTags(s))
-  val parseTags: PartialFunction[String, Tags] = {
-    case s if s.charAt(0) == '#' => getTags(s)
+  def getTags2(str: String) = {
+    val visible = mutable.ArrayBuffer[Tag]()
+    val hidden  = mutable.ArrayBuffer[Tag]()
+    val s = Slurp(str)
+    while (!s.isEnd) {
+      s.chars('#', 1, 2).mustMatch()
+      val supertag = s.matchLength > 1
+      s.ignore()
+
+      val sub = s.until('#').asView()
+      while (!sub.isEnd) {
+        sub.whitespaces().ignore()
+        val t = sub.until(',').asString().trim
+        sub.ignore(1)
+        if (isBracketed(t)) {
+          hidden += Tag(t.substring(1, t.length-1), supertag)
+        } else {
+          visible += Tag(t, supertag)
+        }
+      }
+    }
+
+    Tags(visible, hidden)
   }
 
-  private def prefixedLine(prefix: String): PartialFunction[String, String] = {
-    case l if l.startsWith(prefix) => l.drop(prefix.length).trim
+  def peelOffTags(s: String): (String, Tags) = (tagBlockRegex.replaceAllIn(s, "").trim, getTags(s))
+  def parseTags(l: String): Tags =
+    if (l.charAt(0) != '#') null else getTags2(l)
+
+  private def prefixedLine(prefix: String): (String => String) = { (l: String) =>
+    if (!l.startsWith(prefix)) null else l.drop(prefix.length).trim
   }
-  private def prefixedList(prefix: String): PartialFunction[String, Seq[String]] = {
-    case l if l.startsWith(prefix) => l.drop(prefix.length).split(",").map(_.trim)
+  private def prefixedList(prefix: String): (String => Seq[String]) = { (l: String) =>
+    if (!l.startsWith(prefix)) null else l.drop(prefix.length).split(",").map(_.trim)
   }
 
   def hash(txt: String): String = BigInt(1, _md5(txt.getBytes("utf-8"))).toString(16).reverse.padTo(32, '0').reverse
@@ -641,30 +664,40 @@ object MakeFiles {
 
   private val slugRegex = """[\w./+-]+""".r
   private val trailingWS = "\\s+$".r
+  private def lastCharIsWhitespace(str: String) =
+    str.length > 0 && Character.isWhitespace(str.charAt(str.length-1))
 
   def parseArticle(lines: Seq[String])(implicit blog: Blog): Article = {
-    val ls = lines.map(l => if (l.length > 0 && Character.isWhitespace(l.charAt(l.length-1))) trailingWS.replaceAllIn(l, "") else l)
+    // 25 ms
+    val ls = if (lines.exists(lastCharIsWhitespace)) lines.map(l => trailingWS.replaceAllIn(l, "")) else lines
 
+    // 35 ms
     val titleRegex(xxx, dateTitle, slug) = ls(0)
     val (dateInTitle, title) = parseDatePrefix(dateTitle)
 
+    // 40 ms
     val (metaLines, b) = ls.drop(2).span(l => l.nonEmpty)
     val body = b.slice(b.indexWhere(_.nonEmpty), b.lastIndexWhere(_.nonEmpty)+1)
 
-    val dates   = metaLines.flatMap(parseDates)
-    val tags    = metaLines.collect(parseTags)
-    val license = metaLines.collect(parseLicense)
-    val links   = metaLines.collect(prefixedLine("link:"))
-    val notess  = metaLines.collect(prefixedLine("notes:"))
-    val authors = metaLines.collect(prefixedLine("by:"))
-    val metas   = metaLines.collect(prefixedList("meta:").andThen(xs => Meta(xs)))
-    val rels    = metaLines.collect(prefixedList("rel:"))
-    val pubs    = metaLines.collect(prefixedList("pub:"))
-    val aliass  = metaLines.collect(prefixedList("alias:"))
-    val implies = metaLines.collect(prefixedLine("implies:") andThen parseTags)
-    val imgtags = metaLines.collect(prefixedLine("imageTags:") andThen parseTags)
+    val _metaLines = metaLines.toArray
 
-    val meta = metas.foldLeft(Meta())(_ merge _)
+    // 190 ms
+    val dates   = chompOne(_metaLines, parseDates, Seq.empty) /* 70 */
+    val tags    = chompMany(_metaLines, parseTags).fold(Tags()){ _ merge _ } /* 41 */
+    val license = chompOne(_metaLines, parseLicense)
+    val links   = chompOne(_metaLines, prefixedLine("link:"))
+    val notess  = chompOne(_metaLines, prefixedLine("notes:"))
+    val authors = chompOne(_metaLines, prefixedLine("by:"), blog.defaultUser)
+    val meta    = Meta(chompOne(_metaLines, prefixedList("meta:"), Seq.empty)) /* 27 */
+    val rels    = chompOne(_metaLines, prefixedList("rel:"), Seq.empty)
+    val pubs    = chompOne(_metaLines, prefixedList("pub:"), Seq.empty)
+    val aliass  = chompOne(_metaLines, prefixedList("alias:"), Seq.empty)
+    val implies = Option(chompOne(_metaLines, prefixedLine("implies:"))).map(x => parseTags(x).visible).getOrElse(Seq.empty)
+    val imgtags = Option(chompOne(_metaLines, prefixedLine("imageTags:"))).map(x => parseTags(x).visible).getOrElse(Seq.empty)
+
+    // /--- 23ms
+    if (unchompedLines(_metaLines) > 0)
+      sys.error("some metainformation was not processed: "+_metaLines.toSeq)
 
     val isTag = meta.contains("supertag") || meta.contains("tag") || (slug != null && isTagSlug(slug))
     val inFeed = blog.dumpAll || (xxx == null && !isTag)
@@ -679,30 +712,59 @@ object MakeFiles {
     if (slug != null && slug.nonEmpty && !slugRegex.pattern.matcher(slug).matches())
       sys.error(s"slug '$slug' is not valid, only letters, numbers and ./+- allowed")
 
-    if ((dates.size + tags.size + license.size + links.size + notess.size + authors.size + metas.size + rels.size + pubs.size + aliass.size + implies.size + imgtags.size) < metaLines.size)
-      sys.error("some metainformation was not processed: "+metaLines)
-
-    links.foreach(l => require(isAbsolute(l), s"urls in link: field must be absolute ($realSlug)"))
+    if (links != null)
+      require(isAbsolute(links), s"urls in link: field must be absolute ($realSlug)")
+    // \---
 
     new Article(
       title   = if (title.trim.nonEmpty) title.trim else dateTitle.trim,
       slug    = realSlug,
-      author  = authors.headOption.getOrElse(blog.defaultUser),
-      dates   = if (dateInTitle != null) dateInTitle +: dates.flatten else dates.flatten,
-      tags    = tags.fold(Tags()) { (a, b) => a.merge(b) },
+      author  = authors,
+      dates   = if (dateInTitle != null) dateInTitle +: dates else dates,
+      tags    = tags,
       meta    = meta,
-      rel     = rels.flatten,
-      pub     = pubs.flatten,
-      aliases = aliass.flatten,
-      implies = implies.flatMap(_.visible),
-      imgtags = imgtags.flatten(_.visible),
-      link    = links.headOption.getOrElse(null),
-      notes   = notess.headOption.getOrElse(null),
-      license = license.headOption.getOrElse(null),
+      rel     = rels,
+      pub     = pubs,
+      aliases = aliass,
+      implies = implies,
+      imgtags = imgtags,
+      link    = links,
+      notes   = notess,
+      license = license,
       rawText = body,
       inFeed  = inFeed
     )
   }
+
+  def chompOne[T](ms: Array[String], f: String => T, default: T = null.asInstanceOf[T]): T = {
+    var i = 0; while (i < ms.length) {
+      if (ms(i) != null) {
+        val res = f(ms(i))
+        if (res != null) {
+          ms(i) = null
+          return res
+        }
+      }
+      i += 1
+    }
+    default
+  }
+  def chompMany[T](ms: Array[String], f: String => T): Seq[T] = {
+    val b = Seq.newBuilder[T]
+    var i = 0; while (i < ms.length) {
+      if (ms(i) != null) {
+        val res = f(ms(i))
+        if (res != null) {
+          ms(i) = null
+          b += res
+        }
+      }
+      i += 1
+    }
+    b.result
+  }
+  def unchompedLines(ms: Array[String]) = ms.count(_ != null)
+
 
   private val _multipleDashes = "--+".r
   private val _trailingDashes = "-+$|^-+".r
