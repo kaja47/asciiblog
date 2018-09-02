@@ -431,7 +431,7 @@ object MakeFiles {
   private def file(f: String) = new File(thisDir, f)
 
   private def crudelyMinify(js: String) = js.replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/|//.*\n", "")
-  def keyValues(f: File) = io.Source.fromFile(f).getLines.collect(keyVal).toMap
+  def keyValues(f: File) = io.Source.fromFile(f, "utf-8").getLines.collect(keyVal).toMap
 
   lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js")).mkString)
   lazy val commentsScript = io.Source.fromFile(file("comments.php")).mkString
@@ -792,8 +792,8 @@ object MakeFiles {
   def readPosts(implicit blog: Blog): Vector[Article] = {
     val lineRegex = """^===+$""".r.pattern
     blog.files.flatMap(globFiles).flatMap { f =>
-      var ls = io.Source.fromFile(f).getLines.toVector
       val starts = (0 until ls.length).collect { case i if lineRegex.matcher(ls(i)).matches() => i-1 }
+      var ls = io.Source.fromFile(f, 1024*128)("utf-8").getLines.toArray
       (0 until starts.length).map { i =>
         parseArticle(ls.slice(starts(i), starts.lift(i+1).getOrElse(ls.length)))
       }
