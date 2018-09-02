@@ -472,7 +472,7 @@ object MakeFiles {
   lazy val commentsScript = io.Source.fromFile(file("comments.php")).mkString
   lazy val outScript      = io.Source.fromFile(file("out.php")).mkString
 
-  private def readConfig(cfgFile: File): Map[String, String] = {
+  def readConfig(cfgFile: File): Map[String, String] = {
     var inlineText = false
     val _cfg = mutable.Map[String, String]()
     val iter = keyValuesIterator(cfgFile)

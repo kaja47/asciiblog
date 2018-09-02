@@ -6,9 +6,11 @@ import java.nio.file.{ Files, NoSuchFileException }
 
 object Upload extends App {
 
-val cfg = MakeFiles.keyValuesMap(new File(args(0)))
+val cfgFile = new File(args(0))
+val cfg = MakeFiles.readConfig(cfgFile)
+val blog = Blog.populate(cfg, args, Map(), cfgFile)
 
-val source = new File(cfg("outDir"))
+val source = blog.outDir
 val target = new File(cfg("remoteDir"))
 
 
