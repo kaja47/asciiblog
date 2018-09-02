@@ -508,6 +508,7 @@ object MakeFiles {
     // url might be pretty much anything
     // baseUrl must be some url from this blog
     def relativize(url: String, baseUrl: String): String = {
+      if (baseUrl == null || url.startsWith("#")) return url
 
       // fast path for absolute foreign urls
       if ((url.startsWith("https://") || url.startsWith("http://")) && !url.startsWith(blog.baseUrl)) {
@@ -572,8 +573,8 @@ object MakeFiles {
 
 
 
-  val titleRegex    = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
-  private val dateRegex     = """^(\d++)-(\d++)-(\d++)(?: (\d++):(\d++)(?::(\d++))?)?""".r
+  val titleRegex        = """^(XXX+\s*)?(.+?)(?:\[([^ ]+)\])?$""".r
+  private val dateRegex = """^(\d++)-(\d++)-(\d++)(?: (\d++):(\d++)(?::(\d++))?)?""".r
   val licenses = Set("CC by", "CC by-nc", "CC by-nd", "CC by-sa", "CC by-nc-nd", "CC by-nc-sa")
 
   def parseDates(l: String): Option[Seq[Date]] = {
@@ -610,7 +611,7 @@ object MakeFiles {
   val tagBlockRegex = """(##|#)\s*(.+?)(?=( |^)(##|#)|$)""".r
   val tagSplitRegex = "\\s*,\\s*".r
   def isBracketed(x: String) = x.charAt(0) == '(' && x.charAt(x.length-1) == ')'
-  def getTags(s: String) =
+  def getTags(s: String): Tags =
     tagBlockRegex.findAllMatchIn(s).foldLeft(Tags()) { (t, m) =>
       val tags = tagSplitRegex.split(m.group(2))
       val (vis, hid) = (m.group(1) match {
@@ -633,12 +634,11 @@ object MakeFiles {
     case l if l.startsWith(prefix) => l.drop(prefix.length).split(",").map(_.trim)
   }
 
-  def hash(txt: String): String = hash(txt.getBytes("utf-8"))
-  def hash(txt: Array[Byte]): String = BigInt(1, _md5(txt)).toString(16).reverse.padTo(32, '0').reverse
+  def hash(txt: String): String = BigInt(1, _md5(txt.getBytes("utf-8"))).toString(16).reverse.padTo(32, '0').reverse
   def _md5(bytes: Array[Byte]) = MessageDigest.getInstance("MD5").digest(bytes)
 
-  private val trailingWS = "\\s*$".r
   private val slugRegex = """[\w./+-]+""".r
+  private val trailingWS = "\\s+$".r
 
   def parseArticle(lines: Seq[String])(implicit blog: Blog): Article = {
     val ls = lines.map(l => if (l.length > 0 && Character.isWhitespace(l.charAt(l.length-1))) trailingWS.replaceAllIn(l, "") else l)
@@ -819,9 +819,9 @@ object MakeFiles {
 
   def readPosts(implicit blog: Blog): Vector[Article] = {
     val lineRegex = """^===+$""".r.pattern
-    blog.files.flatMap(globFiles).flatMap { f =>
-      val starts = (0 until ls.length).collect { case i if lineRegex.matcher(ls(i)).matches() => i-1 }
+    blog.files.iterator.flatMap(globFiles).flatMap { f =>
       var ls = io.Source.fromFile(f, 1024*128)("utf-8").getLines.toArray
+      val starts = (0 until ls.length).collect { case i if ls(i).startsWith("===") && lineRegex.matcher(ls(i)).matches() => i-1 }
       (0 until starts.length).map { i =>
         parseArticle(ls.slice(starts(i), starts.lift(i+1).getOrElse(ls.length)))
       }

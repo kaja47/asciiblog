@@ -137,10 +137,7 @@ object FlowLayout {
 case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, mill: FlowLayoutMill) extends Layout {
   import FlowLayout._
 
-  def rel(url: String): String =
-    if (baseUrl == null || url.startsWith("#")) url
-    else blog.relativize(url, baseUrl)
-
+  def rel(url: String): String = blog.relativize(url, baseUrl)
   def txl(s: String) = blog.translation(s)
   def ifs(c: Boolean, body: => String) = if (c) body else ""
   def ifs(x: String, body: => String) = if (x != null && x.nonEmpty) body else ""
