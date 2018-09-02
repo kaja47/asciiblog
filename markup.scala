@@ -243,49 +243,51 @@ object AsciiMarkup extends Markup {
   private def segmentText(lines: Seq[String], resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = {
     def matchAllLines[T](ls: Seq[String], prefix: String)(f: PartialFunction[String, T]): Option[Seq[T]] = {
       if (!ls.forall(_.startsWith(prefix))) return None
-      val ms = ls.map(f.lift)
-      if (ms.forall(_.isDefined)) Some(ms.map(_.get)) else None
+      val ms = ls.collect(f)
+      if (ms.size == ls.size) Some(ms) else None
     }
 
     def splitBlocks(lines: Seq[String]): Seq[Segment] =
-      util.splitByRepeating(lines, "") map { ls =>
-        None.orElse {
-          T.t(matchAllLines(ls, "[") {
-            case linkRefRegex(r, url) => (r, url)
-          }.map(Linkref))
+      util.splitByRepeating(lines, "") map (ls => (identifySegment(ls)))
 
-        }.orElse {
-          if (ls.length == 1 && hrRegex.pattern.matcher(ls(0)).matches()) Some(Hr()) else None
+    def identifySegment(ls: Seq[String]): Segment = {
+      if (ls.length == 1 && hrRegex.pattern.matcher(ls(0)).matches())
+        return Hr()
 
-        }.orElse {
-          if (ls.length == 2 && hrRegex.pattern.matcher(ls(1)).matches()) Some(Heading(ls(0))) else None
+      if (ls.length == 2 && hrRegex.pattern.matcher(ls(1)).matches())
+        return Heading(ls(0))
 
-        }.orElse {
-          matchAllLines(ls, "[*")(mkImage(imageRoot)).map(Images)
+      if (ls.length == 1 && ls(0).startsWith("---"))
+        return ByLine(ls.mkString("\n"))
 
-        }.orElse {
-          matchAllLines(ls, ">") {
-            case l if l.startsWith("> ") || l == ">"  => l.drop(2)
-          }.map { ls => Blockquote(splitBlocks(ls)) }
+      if (ls(0).startsWith("-") && !(ls.length == 1 && ls(0) == "--"))
+        return mkBulletList(ls)
 
-        }.orElse {
-          matchAllLines(ls, "|") {
-            case l if l.startsWith("|") => l
-          }.map(mkTable)
+      if (ls(0).charAt(0).isDigit && ls(0).matches("""^\d+\).*"""))
+        return mkNumberedList(ls)
 
-        }.orElse {
-          if (ls.length == 1 && ls(0).startsWith("---")) Some(ByLine(ls.mkString("\n"))) else None
+      None.orElse {
+        matchAllLines(ls, "[*")(mkImage(imageRoot)).map(Images)
 
-        }.orElse {
-          if (ls(0).startsWith("-") && !(ls.length == 1 && ls(0) == "--")) Some(mkBulletList(ls)) else None
+      }.orElse {
+        matchAllLines(ls, "[") {
+          case linkRefRegex(r, url) => (r, url)
+        }.map(Linkref)
 
-        }.orElse {
-          if (ls(0).matches("""^\d+\).*""")) Some(mkNumberedList(ls)) else None
+      }.orElse {
+        matchAllLines(ls, ">") {
+          case l if l.startsWith("> ") || l == ">"  => l.drop(2)
+        }.map { ls => Blockquote(splitBlocks(ls)) }
 
-        }.getOrElse {
-          Paragraph(ls.mkString("\n"))
-        }
+      }.orElse {
+        matchAllLines(ls, "|") {
+          case l => l
+        }.map(mkTable)
+
+      }.getOrElse {
+        Paragraph(ls.mkString("\n"))
       }
+    }
 
     def mergeParagraphsIntoLists(segments: Seq[Segment]): Seq[Segment] = // TODO more general mechanism for not only paragraphs
       segments.foldLeft(Vector[Segment]()) { (res, s) =>
