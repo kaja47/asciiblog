@@ -12,6 +12,8 @@ import scala.util.matching.Regex
 import java.util.regex.Matcher
 import util._
 
+object T { val t = new Timer; def apply[T](f: => T) = t.apply(f) }
+
 object Make extends App {
 
   val timer = new Timer()
@@ -70,7 +72,6 @@ case class Blog (
   val args: Array[String],
   val translation: Map[String, String],
   val hooks: Hooks = null,
-
 ) extends UrlOps {
   def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
   def printTimes: Boolean  = false
@@ -1261,6 +1262,9 @@ object MakeFiles {
       } catch { case e: IIOException => println(e) }
     }
     }
+
+
+  println(T.t)
 
   } catch {
     case e: Exception =>
