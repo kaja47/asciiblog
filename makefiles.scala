@@ -175,8 +175,8 @@ case class Article(
   inFeed: Boolean = true
 ) {
   val date = if (dates.isEmpty) null else dates.head
-  def prettyDate = if (date == null) "" else new SimpleDateFormat("MM-dd-yyyy").format(date)
-  override def toString = (if (isTag) "Article[Tag]" else "Article")+s"(<$prettyDate>$title)"
+  def prettyDate = if (date == null) "" else "<"+new SimpleDateFormat("MM-dd-yyyy").format(date)+">"
+  override def toString = (if (isTag) "Article[Tag]" else "Article")+s"($prettyDate$title)"
   def asSlug: Slug = Slug(slug)
   def isSupertag = meta.contains("supertag")
   def isTag      = meta.contains("tag") || isSupertag
