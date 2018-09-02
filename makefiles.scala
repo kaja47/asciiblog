@@ -452,6 +452,8 @@ object MakeFiles {
   def keyVal: PartialFunction[String, (String, String)] = {
     case s if s.split(" ", 2).length == 2 =>
       val Array(k, v) = s.split(" ", 2); (k, v)
+    case s if !s.contains(" ") && s.endsWith("!") =>
+      (s, "")
   }
 
   private val thisDir: File = {
@@ -463,16 +465,35 @@ object MakeFiles {
   private def file(f: String) = new File(thisDir, f)
 
   private def crudelyMinify(js: String) = js.replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/|//.*\n", "")
-  def keyValues(f: File) = io.Source.fromFile(f, "utf-8").getLines.collect(keyVal).toMap
+  def keyValuesIterator(f: File) = io.Source.fromFile(f, "utf-8").getLines.collect(keyVal)
+  def keyValuesMap(f: File) = keyValuesIterator(f).toMap
 
   lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js")).mkString)
   lazy val commentsScript = io.Source.fromFile(file("comments.php")).mkString
   lazy val outScript      = io.Source.fromFile(file("out.php")).mkString
 
+  private def readConfig(cfgFile: File): Map[String, String] = {
+    var inlineText = false
+    val _cfg = mutable.Map[String, String]()
+    val iter = keyValuesIterator(cfgFile)
+    while (iter.hasNext) {
+      val (k, v) = iter.next()
+      if (k.endsWith("|")) {
+        val kk = k.init
+        _cfg(kk) = (if (_cfg.contains(kk)) _cfg(kk)+"\n"+v else v)
+      } else {
+        _cfg(k) = v
+      }
+      if (k == "inline!") return _cfg.toMap
+    }
+    _cfg.toMap
+  }
+
   def init(args: Array[String]) = {
-    val cfg = keyValues(new File(args(0)))
-    val txl = keyValues(file("lang."+cfg.getOrElse("language", "en")))
-    val blog = Blog.populate(cfg, args, txl)
+    val cfgFile = new File(args(0))
+    val cfg = readConfig(cfgFile)
+    val txl = keyValuesMap(file("lang."+cfg.getOrElse("language", "en")))
+    val blog = Blog.populate(cfg, args, txl, cfgFile)
     val markup = AsciiMarkup
     val (newBlog, base, resolver) = makeBase(blog, markup)
     (cfg, newBlog, markup, base, resolver)

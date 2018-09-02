@@ -6,7 +6,7 @@ import java.nio.file.{ Files, NoSuchFileException }
 
 object Upload extends App {
 
-val cfg = MakeFiles.keyValues(new File(args(0)))
+val cfg = MakeFiles.keyValuesMap(new File(args(0)))
 
 val source = new File(cfg("outDir"))
 val target = new File(cfg("remoteDir"))
