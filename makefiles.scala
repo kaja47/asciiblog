@@ -35,8 +35,8 @@ object Make extends App {
 case class Blog (
   val title: String,
   val baseUrl: String,
-  val files: Seq[String],
-  val outDir: String,
+  val files: Seq[File],
+  val outDir: File,
   val articlesOnIndex: Int,
   val groupArchiveBy: String,
   val archiveFormat: String,
@@ -94,12 +94,14 @@ class NoHooks extends Hooks {
 
 
 object Blog {
-  def populate(cfg: Map[String, String], args: Array[String], translation: Map[String, String]) = {
+  def populate(cfg: Map[String, String], args: Array[String], translation: Map[String, String], cfgFile: File) = {
+    val cfgDirectory = cfgFile.getParentFile
+    val inline = if (cfg.contains("inline!")) Seq(cfgFile) else Seq()
     new Blog(
       title                  = cfg("title"),
       baseUrl                = cfg("baseUrl"),
-      files                  = spaceSeparatedStrings(cfg.getOrElse("files", "").trim),
-      outDir                 = cfg.getOrElse("outDir", null),
+      files                  = inline ++ spaceSeparatedStrings(cfg.getOrElse("files", "").trim).flatMap(f => globFiles(f, cfgDirectory)), // relative paths are relative to config file
+      outDir                 = cfg.get("outDir").map(f => newFile(f, cfgDirectory)).getOrElse(null),
       articlesOnIndex        = cfg.getOrElse("fullArticlesOnIndex", "5").toInt,
       groupArchiveBy         = cfg.getOrElse("groupArchiveBy", "year"), // "year", "month" or some number
       archiveFormat          = cfg.getOrElse("archiveFormat", "link").ensuring(f => f == "link" || f == "short"),
@@ -883,7 +885,7 @@ object MakeFiles {
 
   def readPosts(implicit blog: Blog): Vector[Article] = {
     val lineRegex = """^===+$""".r.pattern
-    blog.files.iterator.flatMap(globFiles).flatMap { f =>
+    blog.files.iterator.flatMap { f =>
       var ls = io.Source.fromFile(f, 1024*128)("utf-8").getLines.toArray
       val starts = (0 until ls.length).collect { case i if ls(i).startsWith("===") && lineRegex.matcher(ls(i)).matches() => i-1 }
       (0 until starts.length).map { i =>

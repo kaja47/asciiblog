@@ -139,10 +139,14 @@ class XMLSW(val w: XMLStreamWriter) {
 object util {
 
   private val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
+  def newFile(name: String, base: File) = {
+    val f = new File(name)
+    if (f.isAbsolute) f else new File(base, name)
+  }
 
-  def globFiles(pattern: String): Array[File] = ((pattern match {
+  def globFiles(pattern: String, baseDir: File): Array[File] = (pattern match {
     case p if p.endsWith("*") =>
-      val f = new File(p.init)
+      val f = newFile(p.init, baseDir)
       if (f.isDirectory) {
         val fs = f.listFiles
         if (fs == null) Array() else fs
@@ -152,16 +156,16 @@ object util {
         if (fs == null) Array() else fs.filter { _.getName.startsWith(prefix) }
       }
     case patternBracketRegex(p, variants) =>
-      val f = new File(p)
+      val f = newFile(p, baseDir)
       if (f.isDirectory) {
         variants.split(",").map { v => new File(f, v) }
       } else {
         variants.split(",").map { v => new File(f.getParentFile, f.getName+v) }
       }
     case _ =>
-      val f = new File(pattern)
+      val f = newFile(pattern, baseDir)
       if (f.isDirectory) f.listFiles else Array(f)
-    }): Array[File]).filter(f => !f.getName.startsWith("."))
+    }).toArray[File].filterNot(_.getName.startsWith("."))
 
   def splitByHash(l: String): (String, String) = {
     val pos = l.indexOf('#')
