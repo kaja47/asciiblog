@@ -692,7 +692,8 @@ object MakeFiles {
 
   def parseArticle(lines: Seq[String])(implicit blog: Blog): Article = {
     // 25 ms
-    val ls = if (lines.exists(lastCharIsWhitespace)) lines.map(l => trailingWS.replaceAllIn(l, "")) else lines
+    var ls = if (lines.exists(lastCharIsWhitespace)) lines.map(l => trailingWS.replaceAllIn(l, "")) else lines
+    ls = ls.map{ l => if (l.startsWith("\\=")) l.tail else l }
 
     // 35 ms
     val titleRegex(xxx, dateTitle, slug) = ls(0)
