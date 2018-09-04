@@ -9,6 +9,7 @@ tags štítky:
 continueReading celý článek →
 subsections podsekce
 supersections nadřazená sekce
+undated nedatováno
 comments.enter vstoupit do diskuze
 comments.commentsTo komentáře článku
 comments.text Text komentáře

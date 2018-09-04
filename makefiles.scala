@@ -1175,7 +1175,7 @@ object MakeFiles {
       as.groupBy { a => if (a.date == null) zero else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
 
     val (links, archivePages) = timer("group archive") {
-      def mkDate(y: Int, m: Int) = Seq(new GregorianCalendar(y, m-1, 1).getTime)
+      def mkDate(y: Int, m: Int) = if (y == 0) Seq() else Seq(new GregorianCalendar(y, m-1, 1).getTime)
       val title = blog.translation("archive")
       (blog.groupArchiveBy match {
         case "month" => chunk(rest)(yearmonth)((0,0)) { case (y, m) => Article(title+s" $m/$y", s"index-$y-$m", dates = mkDate(y, m)) }

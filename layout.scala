@@ -229,7 +229,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     (if (archiveLinks.nonEmpty) "<div style='clear:both'>"+lastYearTags+"</div><br/><br/>" else "")+
     fullArticles.drop(1).map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
-    (if (!groupArchiveByMonth) listOfLinks(archiveLinks, false) else groupArchive(archiveLinks))+"<br/>"
+    (if (!groupArchiveByMonth) "<div style='clear:both'>"+listOfLinks(archiveLinks, false)+"</div>" else groupArchive(archiveLinks))+"<br/>"
 
 
   def lastYearTags = { // TODO move to makefiles
@@ -249,9 +249,10 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
 
-  private def groupArchive(archiveLinks: Seq[Article]) =
+  private def groupArchive(archiveLinks: Seq[Article]) = {
+    val (undated, dated) = archiveLinks.partition(_.date == null)
     "<div style='clear:both'>"+
-    archiveLinks.groupBy(a => year(a.date)).toSeq.sortBy(_._1).reverse.map { case (y, as) =>
+    dated.groupBy(a => year(a.date)).toSeq.sortBy(_._1).reverse.map { case (y, as) =>
       val mas = if (y < year(new Date)) {
         (1 to 12).map { m => (m, as.find(a => month(a.date) == m)) }
       } else {
@@ -261,7 +262,10 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
         case (m, Some(a)) => articleLink(a, "&nbsp;"+m+"&nbsp;")
         case (m, None) => "&nbsp;"+m+"&nbsp;"
       }.mkString(" ")
-    }.mkString("<br/>")+"</div>"
+    }.mkString("<br/>")+
+    undated.map { a => "<br/>"+articleLink(a, txl("undated")) }.mkString+
+    "</div>"
+  }
 
   def makeFullArticle(a: Article): String = _makeFullArticle(a, false)
 
