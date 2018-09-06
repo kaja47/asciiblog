@@ -237,11 +237,13 @@ object util {
 }
 
 object timer {
-  def apply[T](label: String)(f: => T) = {
+  def apply[T](label: String, blog: Blog = null)(f: => T) = {
     val s = System.nanoTime
     val r = f
     val d = System.nanoTime - s
-    println(label+" "+(d/1e6)+"ms")
+    if (blog == null || blog.printTiming) {
+      println(label+" "+(d/1e6)+"ms")
+    }
     r
   }
 }
@@ -268,5 +270,6 @@ class Timer {
     _start = 0L
   }
 
-  override def toString = "Timer "+(t.sum/1e6)+"ms"
+  def ms = (t.sum/1e6)+"ms"
+  override def toString = "Timer "+ms
 }

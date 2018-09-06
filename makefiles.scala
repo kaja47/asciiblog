@@ -28,7 +28,7 @@ object Make extends App {
   MakeFiles.makeFiles(blog, base, markup, resolver)
 
   timer.end()
-  println("total: "+timer)
+  println("total: "+timer.ms)
 }
 
 
@@ -72,9 +72,11 @@ case class Blog (
   val args: Array[String],
   val translation: Map[String, String],
   val hooks: Hooks = null,
+
+  val printTiming: Boolean  = false,
+  val printErrors: Boolean = false // TODO
 ) extends UrlOps {
   def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
-  def printTimes: Boolean  = false
 }
 
 
@@ -137,7 +139,10 @@ object Blog {
       args = args,
       translation = translation,
 
-      hooks                  = Class.forName(cfg.getOrElse("hooks", "asciiblog.NoHooks")).newInstance().asInstanceOf[Hooks]
+      hooks                  = Class.forName(cfg.getOrElse("hooks", "asciiblog.NoHooks")).newInstance().asInstanceOf[Hooks],
+
+      printTiming            = cfg.getOrElse("printTiming", "false").toBoolean,
+      printErrors            = cfg.getOrElse("printErrors", "true").toBoolean
     )
   }
 
@@ -922,9 +927,9 @@ object MakeFiles {
 
 
   def makeBase(implicit blog: Blog, markup: Markup): (Blog, Base, String => String) = {
-    var articles: Vector[Article] = timer("readfiles")(readGallery(blog) ++ readPosts(blog))
+    var articles: Vector[Article] = timer("readfiles", blog)(readGallery(blog) ++ readPosts(blog))
 
-    timer("checks") {
+    timer("checks", blog) {
     if (blog.articlesMustNotBeMixed) {
       val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
       val (visible, rest) = rest1.span { a => !a.title.startsWith("?") }
@@ -946,7 +951,7 @@ object MakeFiles {
     }
     }
 
-    timer("merge") {
+    timer("merge", blog) {
     // slug dupes and article merging
     val articleMap = mutable.Map[String, Article]()
     val slugOrder  = mutable.ArrayBuffer[String]()
@@ -991,14 +996,14 @@ object MakeFiles {
     }
 
     if (blog.articlesMustBeSorted) { // ordered by date
-    timer("order by date") {
+    timer("order by date", blog) {
       val dated = articles.filter(_.date != null)
       val ordered = dated == dated.sortBy(~_.date.getTime)
       if (!ordered) sys.error("articles are not ordered by date")
     }
     }
 
-    timer("tagImplications") {
+    timer("tagImplications", blog) {
     val tagImplications: Map[Tag, Seq[Tag]] =
       (for (a <- articles if a.isTag && a.implies.nonEmpty) yield (a.asTag, a.implies)).toMap
 
@@ -1017,7 +1022,7 @@ object MakeFiles {
     // So when it's finally called it sould use the most recent and up to date
     // collection of articles. This is needed to resolve circular dependency:
     // global names -> parse text -> materializeNonexplicitTags -> global names
-    lazy val globalNames: Map[String, String] = timer("global names") {
+    lazy val globalNames: Map[String, String] = timer("global names", blog) {
       articles.iterator.flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
     }
 
@@ -1040,7 +1045,7 @@ object MakeFiles {
 
     val resolver = (link: String) => resolveLink(link, globalNames, null)
 
-    timer("parse text") {
+    timer("parse text", blog) {
     articles = articles.map { a =>
       val noteUrl = if (a.notes == null) "" else blog.absUrlFromSlug(a.notes)
       val txt = markup.process(a.rawText, link => resolveLink(link, globalNames, a), noteUrl, blog.imageRoot)
@@ -1051,7 +1056,7 @@ object MakeFiles {
     }
     }
 
-    def materializeNonexplicitTags(all: Vector[Article]): Vector[Article] = timer("materializeNonexplicitTags") {
+    def materializeNonexplicitTags(all: Vector[Article]): Vector[Article] = timer("materializeNonexplicitTags", blog) {
       val explicitTags: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
       val mentionedTags: Set[Tag] = all.flatMap { a => a.tags.visible ++ a.tags.hidden ++ a.implies ++ a.imgtags ++ a.images.flatMap(i => i.tags.visible ++ i.tags.hidden) }.toSet
       (mentionedTags -- explicitTags).map { t =>
@@ -1065,7 +1070,7 @@ object MakeFiles {
       if (a.imgtags.isEmpty) a else a.addImageTags(a.imgtags)
     }
 
-    timer("checks") {
+    timer("checks", blog) {
     val allIds = new mutable.HashSet[String]()
     for (a <- articles.iterator.map(_.slug) ++ articles.iterator.flatMap(_.aliases)) {
       if (allIds.contains(a)) { sys.error(s"duplicate slug/alias '${a}'") }
@@ -1078,7 +1083,7 @@ object MakeFiles {
     }
     }
 
-    timer("canonize pubs and rels") {
+    timer("canonize pubs and rels", blog) {
     val canonicalSlugs: Map[String, String] = // [alias -> canonical slug]
       invert1(articles.collect { case a if a.aliases.nonEmpty => (a.slug, a.aliases) })
 
@@ -1090,19 +1095,19 @@ object MakeFiles {
     }
     }
 
-    val backlinks: Map[Slug, Seq[Article]] = timer("backlinks") {
+    val backlinks: Map[Slug, Seq[Article]] = timer("backlinks", blog) {
       invert(articles.map { a => (a, a.slugsOfLinkedArticles) })
         .map { case (k, as) => (k, as.distinct) }
     }
 
-    val pubsBy: Map[Slug, Article] = timer("pubsBy") {
+    val pubsBy: Map[Slug, Article] = timer("pubsBy", blog) {
       invert(articles.map { a => (a, a.pub.map(Slug)) })
         .map { case (k, vs) => (k, vs.minBy(_.date)) }
     }
 
     val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
 
-    articles = timer("populate") {
+    articles = timer("populate", blog) {
       val sim = new Similarities(articles)
       val base = Base(articles, null)
 
@@ -1127,7 +1132,7 @@ object MakeFiles {
       tagMap = tagMap.map { case (t, as) => (t, as.sortBy(byDate)) }
     }
 
-    tagMap = timer("final tagmap") {
+    tagMap = timer("final tagmap", blog) {
       val tagArticle = articles.iterator.collect { case a if a.isTag => (a.asTag, a) }.toMap
 
       tagMap.map { case (t, as) =>
@@ -1175,7 +1180,7 @@ object MakeFiles {
     def chunk[T: Ordering](as: Vector[Article])(g: Date => T)(zero: T)(f: T => Article): Vector[(Article, Vector[Article])] =
       as.groupBy { a => if (a.date == null) zero else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
 
-    val (links, archivePages) = timer("group archive") {
+    val (links, archivePages) = timer("group archive", blog) {
       def mkDate(y: Int, m: Int) = if (y == 0) Seq() else Seq(new GregorianCalendar(y, m-1, 1).getTime)
       val title = blog.translation("archive")
       (blog.groupArchiveBy match {
@@ -1195,8 +1200,8 @@ object MakeFiles {
 
     val layout = new FlowLayoutMill(base, blog, markup, resolver)
 
-    timer("generate and save files") {
-    timer("generate and save files - archive") {
+    timer("generate and save files", blog) {
+    timer("generate and save files - archive", blog) {
     val archiveLinks = archivePages.zipWithIndex.map { case ((a, as), idx) =>
       val l = layout.make(blog.absUrl(a))
       val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
@@ -1212,7 +1217,7 @@ object MakeFiles {
     fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
     }
 
-    timer("generate and save files - image pages") {
+    timer("generate and save files - image pages", blog) {
     val groupedImages = base.images.reverse.grouped(100).toVector.zipWithIndex.reverse
     val imgsPages = groupedImages.map { case (images, idx) =>
       val isFirst = idx == (groupedImages.size-1)
@@ -1228,7 +1233,7 @@ object MakeFiles {
     }
     }
 
-    timer("generate and save files - articles") {
+    timer("generate and save files - articles", blog) {
     base.articles.par foreach { a =>
       var l = layout.make(blog.absUrl(a))
       val body = l.makeFullArticle(a.imagesWithoutArticleTags)
@@ -1289,7 +1294,7 @@ object MakeFiles {
     }
 
 
-    timer("resize images") {
+    timer("resize images", blog) {
     def smallThumbJob(img: Image) = (new File(blog.outDir, blog.thumbnailUrl(img)),           blog.thumbWidth,      blog.thumbHeight, 0.05f)
     def mainThumbJob(img: Image)  = (new File(blog.outDir, blog.bigThumbnailUrl(img, false)), blog.bigThumbWidth,   -1,               0.1f)
     def halfThumbJob(img: Image)  = (new File(blog.outDir, blog.bigThumbnailUrl(img, true)),  blog.bigThumbWidth/2, -1,               0.1f)
@@ -1350,7 +1355,7 @@ object MakeFiles {
     }
 
 
-  println(T.t)
+  //println(T.t)
 
   } catch {
     case e: Exception =>
