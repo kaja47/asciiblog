@@ -1,7 +1,7 @@
 package asciiblog
 
 import MakeFiles.{ hash, tagSlug, invert, UrlOps, isAbsolute }
-import java.io.{ File, FileWriter, FileOutputStream }
+import java.io.{ File, BufferedWriter, OutputStreamWriter, FileOutputStream }
 import java.net.{ URL, URI, HttpURLConnection, UnknownHostException }
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
@@ -860,7 +860,7 @@ object MakeFiles {
     val h = hash(content)
 
     if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
-      val fw = new FileWriter(ff)
+      val fw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(ff), "utf-8"))
       fw.write(content)
       fw.close()
     }
