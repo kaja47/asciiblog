@@ -36,6 +36,7 @@ case class Blog (
   val title: String,
   val baseUrl: String,
   val files: Seq[File],
+  val encoding: String,
   val outDir: File,
   val articlesOnIndex: Int,
   val groupArchiveBy: String,
@@ -103,6 +104,7 @@ object Blog {
       title                  = cfg("title"),
       baseUrl                = cfg("baseUrl"),
       files                  = inline ++ spaceSeparatedStrings(cfg.getOrElse("files", "").trim).flatMap(f => globFiles(f, cfgDirectory)), // relative paths are relative to config file
+      encoding               = cfg.getOrElse("encoding", "utf-8"),
       outDir                 = cfg.get("outDir").map(f => newFile(f, cfgDirectory)).getOrElse(null),
       articlesOnIndex        = cfg.getOrElse("fullArticlesOnIndex", "5").toInt,
       groupArchiveBy         = cfg.getOrElse("groupArchiveBy", "year"), // "year", "month" or some number
@@ -470,7 +472,7 @@ object MakeFiles {
   private def file(f: String) = new File(thisDir, f)
 
   private def crudelyMinify(js: String) = js.replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/|//.*\n", "")
-  def keyValuesIterator(f: File) = io.Source.fromFile(f).getLines.collect(keyVal)
+  def keyValuesIterator(f: File) = io.Source.fromFile(f, "utf8").getLines.collect(keyVal)
   def keyValuesMap(f: File) = keyValuesIterator(f).toMap
 
   lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js")).mkString)
@@ -913,7 +915,7 @@ object MakeFiles {
   def readPosts(implicit blog: Blog): Vector[Article] = {
     val lineRegex = """^===+$""".r.pattern
     blog.files.iterator.flatMap { f =>
-      var ls = io.Source.fromFile(f, 1024*128).getLines.toArray
+      var ls = io.Source.fromFile(f, 1024*128)(blog.encoding).getLines.toArray
       val starts = (0 until ls.length).collect { case i if ls(i).startsWith("===") && lineRegex.matcher(ls(i)).matches() => i-1 }
       (0 until starts.length).map { i =>
         parseArticle(ls.slice(starts(i), starts.lift(i+1).getOrElse(ls.length)))
