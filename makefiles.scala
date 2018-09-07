@@ -456,7 +456,7 @@ class Similarities(articles: Seq[Article]) {
 
 object MakeFiles {
 
-  def keyVal: PartialFunction[String, (String, String)] = {
+  private val keyVal: PartialFunction[String, (String, String)] = {
     case s if s.split(" ", 2).length == 2 =>
       val Array(k, v) = s.split(" ", 2); (k, v)
     case s if !s.contains(" ") && s.endsWith("!") =>
@@ -472,17 +472,31 @@ object MakeFiles {
   private def file(f: String) = new File(thisDir, f)
 
   private def crudelyMinify(js: String) = js.replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/|//.*\n", "")
-  def keyValuesIterator(f: File) = io.Source.fromFile(f, "utf8").getLines.collect(keyVal)
-  def keyValuesMap(f: File) = keyValuesIterator(f).toMap
+  def keyValuesIterator(f: File, enc: String) = io.Source.fromFile(f, enc).getLines.collect(keyVal)
+  def keyValuesMap(f: File) = keyValuesIterator(f, "utf-8").toMap // TODO
 
   lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js")).mkString)
   lazy val commentsScript = io.Source.fromFile(file("comments.php")).mkString
   lazy val outScript      = io.Source.fromFile(file("out.php")).mkString
 
   def readConfig(cfgFile: File): Map[String, String] = {
-    var inlineText = false
+    // read only the first line and interpret it as utf-8 string
+    val is = new java.io.FileInputStream(cfgFile)
+    val bytes = mutable.ArrayBuffer[Byte]()
+    var b = is.read()
+    while (b != -1 && b != '\r' && b != '\n') {
+      bytes += b.toByte
+      b = is.read()
+    }
+    val firstLine = new String(bytes.toArray, "utf-8")
+    is.close()
+
+    // config file may start by "encoding" directive determining encoding for the file itself
+    // (This is ok because file either starts with encoding directive or is encoded as utf-8)
+    val cfgEncoding = keyVal.lift(firstLine).collect { case ("encoding", v) => v }.getOrElse("utf-8")
+
     val _cfg = mutable.Map[String, String]()
-    val iter = keyValuesIterator(cfgFile)
+    val iter = keyValuesIterator(cfgFile, cfgEncoding)
     while (iter.hasNext) {
       val (k, v) = iter.next()
       if (k.endsWith("|")) {
