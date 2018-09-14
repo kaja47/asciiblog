@@ -2,14 +2,14 @@ package asciiblog
 
 import MakeFiles.{ hash, tagSlug, invert, UrlOps, isAbsolute }
 import java.io.{ File, BufferedWriter, OutputStreamWriter, FileOutputStream }
-import java.net.{ URL, URI, HttpURLConnection, UnknownHostException }
+import java.net.{ URL, URI }
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.{ Date, GregorianCalendar, Calendar, Locale }
+import java.util.regex.Matcher
 import javax.imageio.{ ImageIO, IIOException }
 import scala.collection.mutable
 import scala.util.matching.Regex
-import java.util.regex.Matcher
 import util._
 
 object T { val t = new Timer; def apply[T](f: => T) = t.apply(f) }
