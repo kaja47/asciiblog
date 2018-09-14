@@ -858,7 +858,8 @@ object MakeFiles {
           for (a <- articles) {
             w.element("item") { w =>
               w.element("title", a.title)
-              w.element("guid", Seq(("isPermaLink", "true")), blog.addParamMediumFeed(blog.absUrlFromSlug(a.slug)))
+              val url = if (a.link == null || a.link.isEmpty) blog.addParamMediumFeed(blog.absUrlFromSlug(a.slug)) else a.link // TODO?
+              w.element("guid", Seq(("isPermaLink", "true")), url)
               w.element("pubDate", rssdate(a.date))
               if (mkBody != null) {
                 w.element("description", mkBody(a))
@@ -1251,9 +1252,11 @@ object MakeFiles {
 
     timer("generate and save files - articles", blog) {
     base.articles.par foreach { a =>
-      var l = layout.make(blog.absUrl(a))
-      val body = l.makeFullArticle(a.imagesWithoutArticleTags)
-      fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
+      if (a.link == null || a.link.isEmpty) { // TODO?
+        var l = layout.make(blog.absUrl(a))
+        val body = l.makeFullArticle(a.imagesWithoutArticleTags)
+        fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
+      }
     }
     }
 
