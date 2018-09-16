@@ -43,15 +43,15 @@ case class Blog (
   val archiveFormat: String,
   val tagFormat: String,
   val cssStyle: String,
-  val cssFile: String,
+  val cssFile: File,
   val header: String,
   val footer: String,
   val thumbWidth: Int,
   val thumbHeight: Int,
   val bigThumbWidth: Int,
-  val limitRss: Int,
+  val rssLimit: Int,
   val articlesInRss: Boolean,
-  val limitSimilar: Int,
+  val similarLimit: Int,
   val sortByDate: Boolean,
   val imageRoot: String,
   val articlesMustBeSorted: Boolean,
@@ -64,6 +64,7 @@ case class Blog (
   val allowComments: Boolean,
   val shareLinks: Boolean,
   val demandExplicitSlugs: Boolean,
+  val excludeFutureArticles: Boolean,
 
   val defaultUser: String,
   val openGraph: Boolean,
@@ -107,19 +108,19 @@ object Blog {
       encoding               = cfg.getOrElse("encoding", "utf-8"),
       outDir                 = cfg.get("outDir").map(f => newFile(f, cfgDirectory)).getOrElse(null),
       articlesOnIndex        = cfg.getOrElse("fullArticlesOnIndex", "5").toInt,
-      groupArchiveBy         = cfg.getOrElse("groupArchiveBy", "year"), // "year", "month" or some number
-      archiveFormat          = cfg.getOrElse("archiveFormat", "link").ensuring(f => f == "link" || f == "short"),
-      tagFormat              = cfg.getOrElse("tagFormat", "link").ensuring(f => f == "link" || f == "short"),
+      groupArchiveBy         = cfg.getOrElse("groupArchiveBy", "year").ensuring(f => Set("year", "month").contains(f) || f.matches("\\d+")),
+      archiveFormat          = cfg.getOrElse("archiveFormat", "link").ensuring(f => Set("link", "short").contains(f)),
+      tagFormat              = cfg.getOrElse("tagFormat", "link").ensuring(f => Set("link", "short").contains(f)),
       cssStyle               = cfg.getOrElse("style", ""),
-      cssFile                = cfg.getOrElse("cssFile", ""),
+      cssFile                = cfg.get("cssFile").map(f => newFile(f, cfgDirectory)).getOrElse(null),
       header                 = cfg.getOrElse("header", ""),
       footer                 = cfg.getOrElse("footer", ""),
       thumbWidth             = cfg.getOrElse("thumbnailWidth", "150").toInt,
       thumbHeight            = cfg.getOrElse("thumbnailHeight", "100").toInt,
       bigThumbWidth          = cfg.getOrElse("bigThumbnailWidth", "800").toInt,
-      limitRss               = cfg.getOrElse("limitRss", Int.MaxValue.toString).toInt,
+      rssLimit               = cfg.getOrElse("rssLimit", Int.MaxValue.toString).toInt,
       articlesInRss          = cfg.getOrElse("fullArticlesInRss", "false").toBoolean,
-      limitSimilar           = cfg.getOrElse("limitSimilarLinks", "5").toInt,
+      similarLimit           = cfg.getOrElse("similarLinksLimit", "5").toInt,
       sortByDate             = cfg.getOrElse("sortByDate", "false").toBoolean,
       imageRoot              = cfg.getOrElse("imageRoot", ""),
       articlesMustBeSorted   = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean,
@@ -132,6 +133,7 @@ object Blog {
       allowComments          = cfg.getOrElse("allowComments", "false").toBoolean,
       shareLinks             = cfg.getOrElse("shareLinks", "false").toBoolean,
       demandExplicitSlugs    = cfg.getOrElse("demandExplicitSlugs", "false").toBoolean,
+      excludeFutureArticles  = cfg.getOrElse("excludeFutureArticles", "false").toBoolean,
 
       defaultUser            = cfg.getOrElse("defaultUser", null),
       openGraph              = cfg.getOrElse("openGraph", "false").toBoolean,
@@ -964,7 +966,7 @@ object MakeFiles {
     val now = new Date
     articles = articles.filter { a =>
       val isInPast = a.date == null || a.date.before(now)
-      blog.dumpAll || (!hiddenSlugs.contains(a.slug) && isInPast)
+      blog.dumpAll || !blog.excludeFutureArticles || (!hiddenSlugs.contains(a.slug) && isInPast)
     }
     }
 
@@ -1135,7 +1137,7 @@ object MakeFiles {
         a.copy(
           dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
           backlinks = bs.sortBy(byDate), //sim.sortBySimilarity(bs, a),
-          similar = if (!a.isTag) sim.similarByTags(a, count = blog.limitSimilar, without = bs) else sim.similarTags(a.asTag, count = blog.limitSimilar),
+          similar = if (!a.isTag) sim.similarByTags(a, count = blog.similarLimit, without = bs) else sim.similarTags(a.asTag, count = blog.similarLimit),
           pubArticles = a.pub.map(base.bySlug),
           pubBy = pubBy
         )
@@ -1265,7 +1267,7 @@ object MakeFiles {
       val body = l.makeFullArticle(a.imagesWithoutArticleTags)
       val hasImages = a.images.nonEmpty || as.exists(_.images.nonEmpty)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")), oldFileIndex)
-      fileIndex ++= saveXml(a.slug, makeRSS(as.take(blog.limitRss), null), oldFileIndex)
+      fileIndex ++= saveXml(a.slug, makeRSS(as.take(blog.rssLimit), null), oldFileIndex)
     }
 
     {
@@ -1278,7 +1280,7 @@ object MakeFiles {
       val body = layout.make(null).makeArticleBody(a, true)
       FlowLayout.updateLinks(body, url => blog.addParamMediumFeed(url))
     }
-    fileIndex ++= saveXml("rss", makeRSS(base.feed.take(blog.limitRss), if (blog.articlesInRss) mkBody else null), oldFileIndex)
+    fileIndex ++= saveXml("rss", makeRSS(base.feed.take(blog.rssLimit), if (blog.articlesInRss) mkBody else null), oldFileIndex)
 
     if (blog.allowComments) {
       val l = layout.make(blog.absUrlFromPath("comments.php"))
@@ -1304,7 +1306,7 @@ object MakeFiles {
 
     //fileIndex ++= saveFile("out.php", outScript, oldFileIndex)
 
-    if (blog.cssFile.nonEmpty) {
+    if (blog.cssFile != null) {
       fileIndex ++= saveFile("style.css", io.Source.fromFile(blog.cssFile).mkString, oldFileIndex)
     }
 

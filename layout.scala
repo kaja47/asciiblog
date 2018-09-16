@@ -215,7 +215,7 @@ s"""<!DOCTYPE html>
 <title>${ifs(title, title+" | ")+blog.title}</title>
 ${rssLink("rss.xml")}
 ${ifs(headers)}
-${if (blog.cssFile.isEmpty) { s"""<style>${mill.style(cats)}</style>""" }
+${if (blog.cssFile == null) { s"""<style>${mill.style(cats)}</style>""" }
   else { s"""<link rel="stylesheet" href="${rel("style.css")}" type="text/css"/>""" } }
 ${ifs(containImages, s"<script>$galleryScript</script>")}
 </head>$body
