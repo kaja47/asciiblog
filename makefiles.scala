@@ -853,7 +853,7 @@ object MakeFiles {
     rssDateFormat.get.format(date)
 
   def makeRSS(articles: Seq[Article], mkBody: Article => String)(implicit blog: Blog): String = {
-    XMLSW.Simple.document { w =>
+    XMLSW.document { w =>
       w.element("rss", Seq("version" -> "2.0")) { w =>
         w.element("channel") { w =>
           w.element("title", blog.title)
