@@ -4,7 +4,7 @@ import java.io.File
 import java.nio.file.StandardCopyOption._
 import java.nio.file.{ Files, NoSuchFileException }
 
-object Upload extends App {
+object Upload extends App { timer("upload") {
 
 val cfgFile = new File(args(0))
 val cfg = MakeFiles.readConfig(cfgFile)
@@ -74,4 +74,4 @@ for {
 
 move(sf, tf, 5)
 
-}
+} }
