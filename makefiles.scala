@@ -609,8 +609,11 @@ object MakeFiles {
 
     def isLocalLink(url: String) = url.startsWith(blog.baseUrl+"/")
     def extractSlug(url: String) =
-      if (isLocalLink(url)) Slug(url.drop(blog.baseUrl.length+1).dropRight(blog.fileSuffix.length))
-      else sys.error("not local url: "+url)
+      if (isLocalLink(url)) {
+        val withoutBase = url.drop(blog.baseUrl.length+1)
+        val withoutHash = util.splitByHash(withoutBase)._1
+        Slug(withoutHash.dropRight(blog.fileSuffix.length))
+      } else sys.error("not local url: "+url)
 
     def addParamMediumFeed(url: String) =
       if (isAbsolute(url) && isLocalLink(url)) addParam(url, "utm_medium=feed") else url
