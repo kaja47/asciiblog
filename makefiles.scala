@@ -15,7 +15,6 @@ import util._
 object T { val t = new Timer; def apply[T](f: => T) = t.apply(f) }
 
 object Make extends App {
-
   val timer = new Timer()
   timer.start()
 
@@ -24,7 +23,7 @@ object Make extends App {
     sys.exit()
   }
 
-  val (_, blog, markup, base, resolver) = MakeFiles.init(args)
+  val (blog, markup, base, resolver) = MakeFiles.init(args)
   MakeFiles.makeFiles(blog, base, markup, resolver)
 
   timer.end()
@@ -76,7 +75,9 @@ case class Blog (
   val hooks: Hooks = null,
 
   val printTiming: Boolean  = false,
-  val printErrors: Boolean = false // TODO
+  val printErrors: Boolean = true,
+
+  val cfg: Map[String, String] = Map()
 ) extends UrlOps {
   def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
 }
@@ -146,7 +147,9 @@ object Blog {
       hooks                  = Class.forName(cfg.getOrElse("hooks", "asciiblog.NoHooks")).newInstance().asInstanceOf[Hooks],
 
       printTiming            = cfg.getOrElse("printTiming", "false").toBoolean,
-      printErrors            = cfg.getOrElse("printErrors", "true").toBoolean
+      printErrors            = cfg.getOrElse("printErrors", "true").toBoolean,
+
+      cfg = cfg
     )
   }
 
@@ -512,14 +515,14 @@ object MakeFiles {
     _cfg.toMap
   }
 
-  def init(args: Array[String]) = {
+  def init(args: Array[String], f: Blog => Blog = identity) = {
     val cfgFile = new File(args(0))
     val cfg = readConfig(cfgFile)
     val txl = keyValuesMap(file("lang."+cfg.getOrElse("language", "en")))
-    val blog = Blog.populate(cfg, args, txl, cfgFile)
+    val blog = f(Blog.populate(cfg, args, txl, cfgFile))
     val markup = AsciiMarkup
     val (newBlog, base, resolver) = makeBase(blog, markup)
-    (cfg, newBlog, markup, base, resolver)
+    (newBlog, markup, base, resolver)
   }
 
 
