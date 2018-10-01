@@ -53,7 +53,7 @@ hr         { border: 0px dotted gray; border-top-width: 1px; margin: 0.8em 4em; 
 p          { margin: 1.4em 0; }
 .sh        { float: left; clear: both; margin: 0.8em 0; }
 .shimg     { float: left; margin: 0 0.5em 0 0; }
-.low       { font-size: 0.9em; border-top: 1px dashed gray; margin-top: 2em; padding-top: 1em; color: #222; }
+.low       { font-size: 0.9em; border-top: 1px dashed gray; margin-top: 4em; padding-top: 1em; color: #222; }
 """.trim
 
   import CssMinimizer._
@@ -324,12 +324,13 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
       })+
       ifs((blog.allowComments || blog.shareLinks) && !a.isTag, "<hr/>")+
       ifs(a.tags.visible.nonEmpty, "<p>"+txl("tags")+" "+makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"</p>")+
-      ifs(a.license, a.license+"<br/>")+
+      //ifs(a.license, a.license+"<br/>")+
       //"<p>"+makeNextPrevLinks(a)+"</p>"+
       ifs(a.pubArticles.nonEmpty,"<p>"+txl("published")  +"<br/>"+a.pubArticles.map(makeLink).mkString("<br/>")+"</p>")+
       ifs(a.pubBy != null,       "<p>"+txl("publishedBy")+" "    +articleLink(a.pubBy, makeDate(a), allowImageMarker = true)+"</p>")+
-      ifs(a.similar.nonEmpty,    "<p>"+txl("similar")    +"<br/>"+a.similar.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString("<br/>")  +"</p>")+
-      ifs(a.backlinks.nonEmpty,  "<p>"+txl("backlinks")  +"<br/>"+a.backlinks.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString("<br/>")+"</p>")+
+      ifs(a.similar.nonEmpty,    "<p>"+(if (a.isTag) txl("similarTags") else txl("similar"))+
+                                                                  " "+a.similar.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString(", ")  +"</p>")+
+      ifs(a.backlinks.nonEmpty,  "<p>"+txl("backlinks")  +" "+a.backlinks.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString(", ")+"</p>")+
       "</div>"
     )
   }

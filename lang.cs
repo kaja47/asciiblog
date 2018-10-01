@@ -2,6 +2,7 @@ published publikované články:
 publishedBy publikováno
 source zdroj
 similar příbuzné články:
+similarTags příbuzné štítky:
 backlinks sem odkazují:
 archive archiv
 tagged texty označené
