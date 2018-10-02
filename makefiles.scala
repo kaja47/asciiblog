@@ -1084,7 +1084,7 @@ object MakeFiles {
     def materializeNonexplicitTags(all: Vector[Article]): Vector[Article] = timer("materializeNonexplicitTags", blog) {
       val explicitTags: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
       val mentionedTags: Set[Tag] = all.flatMap { a => a.tags.visible ++ a.tags.hidden ++ a.implies ++ a.imgtags ++ a.images.flatMap(i => i.tags.visible ++ i.tags.hidden) }.toSet
-      (mentionedTags -- explicitTags).map { t =>
+      (mentionedTags -- explicitTags).iterator.map { t =>
         Article(t.title, tagSlug(t.title), meta = Meta(Seq(if (t.supertag) "supertag" else "tag")), text = AsciiText.empty)
       }.toVector
     }
@@ -1120,9 +1120,21 @@ object MakeFiles {
     }
     }
 
+    def distinctBy[T, U](xs: Seq[T])(f: T => U): Seq[T] = // TODO replace by builtin method in scala 2.13
+      if (xs.length <= 1) xs else {
+        val set = mutable.Set[U]()
+        val b = xs.genericBuilder[T]
+        for (x <- xs) {
+          if (set.add(f(x))) {
+            b += x
+          }
+        }
+        b.result()
+      }
+
     val backlinks: Map[Slug, Seq[Article]] = timer("backlinks", blog) {
       invert(articles.map { a => (a, a.slugsOfLinkedArticles) })
-        .map { case (k, as) => (k, as.distinct) }
+        .map { case (k, as) => (k, distinctBy(as)(_.slug)) }
     }
 
     val pubsBy: Map[Slug, Article] = timer("pubsBy", blog) {
