@@ -1250,9 +1250,23 @@ object MakeFiles {
       a
     }
 
+    def lastYearTags = {
+      val cal = Calendar.getInstance()
+      cal.add(Calendar.YEAR, -1)
+      val yearAgo = cal.getTime()
+
+      base.all.filter(a => a.date != null && a.date.after(yearAgo))
+        .flatMap(_.tags.visible)
+        .groupBy(a => a).toSeq
+        .filter { case (t, ts) => ts.size >= 3 }
+        .sortBy { case (t, ts) => ~ts.size }
+        .take(25)
+        .map { case (t, _) => base.allTags(t)._1 }
+    }
+
     val path = blog.relUrlFromSlug("index")
     val l = layout.make(blog.absUrlFromPath(path))
-    val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month")
+    val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month", tagsToShow = lastYearTags)
     fileIndex ++= saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
     }
 

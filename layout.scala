@@ -15,7 +15,7 @@ trait LayoutMill {
 
 trait Layout extends ImageLayout {
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String
-  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String
+  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, tagsToShow: Seq[Article] = Seq()): String
   def makeFullArticle(a: Article): String
   def makeTagIndex(base: Base): String
   def addArrows(content: String, next: Article, prev: Article, includeBottom: Boolean = false): String
@@ -222,31 +222,14 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 </html>"""
   }
 
-  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false): String =
+  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, tagsToShow: Seq[Article] = Seq()): String =
     blog.hooks.indexPrepend(base, blog, this, fullArticles, archiveLinks.nonEmpty)+
     fullArticles.take(1).map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
     blog.hooks.afterFirstArticle(base, blog, this, fullArticles, archiveLinks.nonEmpty)+
-    (if (archiveLinks.nonEmpty) "<div style='clear:both'>"+lastYearTags+"</div><br/><br/>" else "")+
+    (if (tagsToShow.nonEmpty) "<div style='clear:both'>"+tagsToShow.map(makeTagLink).mkString(" ")+"</div><br/><br/>" else "")+
     fullArticles.drop(1).map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
     (if (!groupArchiveByMonth) "<div style='clear:both'>"+listOfLinks(archiveLinks, false)+"</div>" else groupArchive(archiveLinks))+"<br/>"
-
-
-  def lastYearTags = { // TODO move to makefiles
-    import java.util.Calendar
-    val cal = Calendar.getInstance()
-    cal.add(Calendar.YEAR, -1)
-    val yearAgo = cal.getTime()
-
-    base.all.filter(a => a.date != null && a.date.after(yearAgo))
-      .flatMap(_.tags.visible)
-      .groupBy(a => a).toSeq
-      .filter { case (t, ts) => ts.size >= 3 }
-      .sortBy { case (t, ts) => ~ts.size }
-      .take(25)
-      .map { case (t, _) => makeTagLink(base.allTags(t)._1) }
-      .mkString(" ")
-  }
 
 
   private def groupArchive(archiveLinks: Seq[Article]) = {
