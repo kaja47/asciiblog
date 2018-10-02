@@ -1061,7 +1061,9 @@ object MakeFiles {
       } else if (b.isEmpty || b.startsWith("..") || b.contains(".") || fileSuffixes.matcher(b).matches() || isAbsolute(b)) {
         link
       } else if (!globalMapping.contains(b)) {
-        println(s"bad link [$link] (in ${if (a == null) null else a.slug})")
+        if (blog.printErrors) {
+          println(s"bad link [$link] (in ${if (a == null) null else a.slug})")
+        }
         Blog.invalidLinkMarker
       } else {
         globalMapping(b)+h
