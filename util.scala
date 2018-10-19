@@ -14,6 +14,12 @@ object XMLSW {
 
   def document(body: XMLSW => Unit): StringBuilder =
     document(body, new StringBuilder)
+
+  def element(localName: String)(body: XMLSW => Unit): StringBuilder = {
+    val sb = new StringBuilder
+    new XMLSW(sb).element(localName)(body)
+    sb
+  }
 }
 
 class XMLSW(sb: java.lang.StringBuilder) {
@@ -39,6 +45,8 @@ class XMLSW(sb: java.lang.StringBuilder) {
     txt(content)
     endElem(localName)
   }
+
+  def text(t: String): Unit = txt(t)
 
   private def startElem(localName: String, attributes: Seq[(String, String)]) = {
     sb.append("<").append(localName)
