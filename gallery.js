@@ -2,15 +2,23 @@ let box = document.createElement('div');
 box.style = 'display:none;position:fixed;top:0px;left:0px;background-color:rgba(0,0,0,0.7);width:100%;height:100%';
 let img = document.createElement('img');
 img.style = 'display:block;margin:auto;max-width:100%;max-height:100%';
-let x = document.createElement('div');
-x.style = 'position:fixed;top:0px;right:0px;font-size:1.5em;padding:0.5em;background:rgba(255,255,255,0.7);cursor:pointer';
-x.textContent = "❌";
+let tp = document.createElement('div');
+tp.style = 'position:fixed;top:0px;right:0px;font-size:1.5em;padding:0.5em;background:rgba(255,255,255,0.7);cursor:pointer';
+
+let zoom = document.createElement('a');
+zoom.textContent = "🔍";
+zoom.addEventListener('click', function(e) { e.stopPropagation(); });
+tp.appendChild(zoom);
+
+tp.appendChild(document.createTextNode(" ❌"));
+
 let label = document.createElement('div');
 label.style='position:fixed;bottom:0px;left:0px;font-size:1em;padding:0.5em;background:rgba(255,255,255,0.7)';
+
 box.appendChild(img);
-box.appendChild(x);
+box.appendChild(tp);
 box.appendChild(label);
-box.addEventListener('click', function(e) { hide(); });
+box.addEventListener('click', function(e) { hide(); }, false);
 img.addEventListener('click', function(e) { move(1); e.stopPropagation(); });
 
 let imgs = [], active = null;
@@ -24,7 +32,7 @@ function show(i) {
 	} else {
 		box.style.display = "block";
 		img.src = "";
-		img.src = imgs[i].parentNode.href;
+		img.src = zoom.href = imgs[i].parentNode.href;
 		active = i;
 		let t = imgs[i].parentElement.parentElement;
 		label.style.display = (t.textContent ? 'block' : 'none');
