@@ -88,6 +88,9 @@ trait Hooks {
   def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String
   def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String
+  def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String
+  def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String
+  def updateBase(base: Base): Base
 }
 
 class NoHooks extends Hooks {
@@ -95,6 +98,9 @@ class NoHooks extends Hooks {
   def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String = ""
   def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String = ""
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String = null
+  def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String = null
+  def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String = null
+  def updateBase(base: Base): Base = base
 }
 
 
