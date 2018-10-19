@@ -53,7 +53,9 @@ hr         { border: 0px dotted gray; border-top-width: 1px; margin: 0.8em 4em; 
 p          { margin: 1.4em 0; }
 .sh        { float: left; clear: both; margin: 0.8em 0; }
 .shimg     { float: left; margin: 0 0.5em 0 0; }
-.low       { font-size: 0.9em; border-top: 1px dashed gray; margin-top: 4em; padding-top: 1em; color: #222; }
+footer     { font-size: 0.9em; border-top: 1px dashed gray; padding-top: 1em; color: #222; }
+article    { margin-bottom: 4em; }
+aside      { clear:both; margin-bottom: 2em; font-size: 0.9em; }
 """.trim
 
   import CssMinimizer._
@@ -224,10 +226,10 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, tagsToShow: Seq[Article] = Seq()): String =
     blog.hooks.indexPrepend(base, blog, this, fullArticles, archiveLinks.nonEmpty)+
-    fullArticles.take(1).map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
+    fullArticles.take(1).map(_makeFullArticle(_, true)).mkString("\n")+
     blog.hooks.afterFirstArticle(base, blog, this, fullArticles, archiveLinks.nonEmpty)+
-    (if (tagsToShow.nonEmpty) "<div style='clear:both'>"+tagsToShow.map(makeTagLink).mkString(" ")+"</div><br/><br/>" else "")+
-    fullArticles.drop(1).map(_makeFullArticle(_, true)).mkString("<br/><br/><br clear=all/>\n")+"<br/>"+
+    (if (tagsToShow.nonEmpty) "<aside>"+tagsToShow.map(makeTagLink).mkString(" ")+"</aside>" else "")+
+    fullArticles.drop(1).map(_makeFullArticle(_, true)).mkString("\n")+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
     (if (!groupArchiveByMonth) "<div style='clear:both'>"+listOfLinks(archiveLinks, false)+"</div>" else groupArchive(archiveLinks))+"<br/>"
 
@@ -283,6 +285,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
     val title = blog.hooks.title(base, blog, this, a, compact)
 
+    "<article>"+
     ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
     (if (title != null) title else if (!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
     ifs(a.isTag, {
@@ -298,8 +301,9 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     ifs(title == null, "<br/>\n")+
     makeArticleBody(a, compact)+
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
+    "</article>"+
     ifs(!compact,
-      "<div class=low>"+
+      "<footer>"+
       ifs(blog.allowComments && !a.isTag, s"""<b><a href="${ rel(blog.absUrlFromPath("comments.php?url="+blog.relUrlFromSlug(a.slug))) }">${txl("comments.enter")}</a></b>""")+
       ifs(blog.shareLinks && !a.isTag, {
         val url = URLEncoder.encode(blog.absUrl(a), "UTF-8")
@@ -314,7 +318,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
       ifs(a.similar.nonEmpty,    "<p>"+(if (a.isTag) txl("similarTags") else txl("similar"))+
                                                                   " "+a.similar.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString(", ")  +"</p>")+
       ifs(a.backlinks.nonEmpty,  "<p>"+txl("backlinks")  +" "+a.backlinks.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString(", ")+"</p>")+
-      "</div>"
+      "</footer>"
     )
   }
 
