@@ -141,8 +141,8 @@ object Blog {
       twitterSite            = cfg.getOrElse("twitter.site", ""),
       twitterCreator         = cfg.getOrElse("twitter.creator", ""),
 
-      args = args,
-      translation = translation,
+      args                   = args,
+      translation            = translation ++ cfg.collect { case (k, v) if k.startsWith("translation.") => k.split("\\.", 2)(1) -> v } ,
 
       hooks                  = Class.forName(cfg.getOrElse("hooks", "asciiblog.NoHooks")).newInstance().asInstanceOf[Hooks],
 
