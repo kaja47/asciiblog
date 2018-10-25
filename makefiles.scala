@@ -90,7 +90,11 @@ trait Hooks {
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String
   def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String
   def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String
-  def updateBase(base: Base): Base
+
+  /** This hook is called after all articles are parsed, but before any processing and checks on them. */
+  def prepareArticles(articles: Seq[Article]): Seq[Article]
+  /** This hook is called after articles are processed and the final Base is computed. */
+  def updateBase(base: Base, blog: Blog): Base
 }
 
 class NoHooks extends Hooks {
@@ -100,7 +104,8 @@ class NoHooks extends Hooks {
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String = null
   def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String = null
   def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String = null
-  def updateBase(base: Base): Base = base
+  def prepareArticles(articles: Seq[Article]): Seq[Article] = articles
+  def updateBase(base: Base, blog: Blog): Base = base
 }
 
 
@@ -960,6 +965,8 @@ object MakeFiles {
   def makeBase(implicit blog: Blog, markup: Markup): (Blog, Base, String => String) = {
     var articles: Vector[Article] = timer("readfiles", blog)(readGallery(blog) ++ readPosts(blog))
 
+    articles = blog.hooks.prepareArticles(articles).toVector
+
     timer("checks", blog) {
     if (blog.articlesMustNotBeMixed) {
       val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
@@ -1201,7 +1208,8 @@ object MakeFiles {
       }
     }
 
-    (blog, Base(articles, tagMap), resolver)
+    val base = blog.hooks.updateBase(Base(articles, tagMap), blog)
+    (blog, base, resolver)
   }
 
 
