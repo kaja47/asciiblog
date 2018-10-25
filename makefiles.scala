@@ -725,7 +725,7 @@ object MakeFiles {
   def hash(txt: String): String = BigInt(1, _md5(txt.getBytes("utf-8"))).toString(16).reverse.padTo(32, '0').reverse
   def _md5(bytes: Array[Byte]) = MessageDigest.getInstance("MD5").digest(bytes)
 
-  private val slugRegex = """[\w./+-]+""".r
+  private val slugRegex = """[\w./+%-]+""".r
   private val trailingWS = "\\s+$".r
   private def lastCharIsWhitespace(str: String) =
     str.length > 0 && Character.isWhitespace(str.charAt(str.length-1))
