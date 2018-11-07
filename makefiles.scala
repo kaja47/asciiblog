@@ -1313,8 +1313,9 @@ object MakeFiles {
     base.articles.par foreach { a =>
       if (a.link == null || a.link.isEmpty) { // TODO?
         var l = layout.make(blog.absUrl(a))
-        val body = l.makeFullArticle(a.imagesWithoutArticleTags)
-        fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = a.images.nonEmpty, headers = l.ogTags(a)), oldFileIndex)
+        val aa = a.imagesWithoutArticleTags
+        val body = l.makeFullArticle(aa)
+        fileIndex ++= saveFile(blog.relUrl(aa), l.makePage(body, aa.title, containImages = aa.images.exists(_.zoomable), headers = l.ogTags(aa)), oldFileIndex)
       }
     }
     }

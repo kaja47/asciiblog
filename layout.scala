@@ -14,7 +14,8 @@ trait LayoutMill {
 }
 
 trait Layout extends ImageLayout {
-  def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String
+  val baseUrl: String
+  def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false, article: Option[Article] = None): String
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, tagsToShow: Seq[Article] = Seq()): String
   def makeFullArticle(a: Article): String
   def makeTagIndex(base: Base): String
@@ -207,8 +208,9 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     } else ""}
 
 
-  def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false): String = {
-    val header = mill.header.get(rel)
+  def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false, article: Option[Article] = None): String = {
+    val h = blog.hooks.header(base, blog, this, article)
+    val header = if (h != null) h else mill.header.get(rel)
     val footer = mill.footer.get(rel)
     val body = "<body><div class=b>"+header+content+footer+"</div></body>"
     val cats: Set[String] = if (includeCompleteStyle) null else classesAndTags(body)
@@ -269,13 +271,6 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     ifs( compact, gallerySample(a))
   }
 
-  def makeShortArticleBody(a: Article): String = {
-    val img = a.images.find(_.mods == "main").map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
-    val txt = truncate(plaintextDescription(a), 300)
-
-    ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
-  }
-
   def listOfLinks(list: Seq[Article], shortArticles: Boolean) =
     if (shortArticles) list.map(makeShortArticle).mkString+"<br/>&nbsp;"
     else               list.map(makeLink).mkString("<br/>")+"<br/>"
@@ -285,6 +280,12 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   def makeShortArticle(a: Article): String = "<div class=sh>"+makeTitle(a)+"<br/>"+makeShortArticleBody(a)+"</div>"
 
+  def makeShortArticleBody(a: Article): String = {
+    val img = a.images.find(_.mods == "main").map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
+    val txt = truncate(plaintextDescription(a), 300)
+
+    ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
+  }
 
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
     val title = blog.hooks.title(base, blog, this, a, compact)
@@ -417,5 +418,6 @@ class PrepatedText(html: String, resolver: String => String) {
       i += 2
     }
     sb.append(arr.last)
+    sb.toString
   }
 }
