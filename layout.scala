@@ -349,7 +349,11 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     else
       s"""<i>$title</i>"""+ifs(allowImageMarker && a.hasImageMarker, blog.imageMarker)
 
-  def makeLink(a: Article) = makeDate(a)+" "+articleLink(a, a.title, allowImageMarker = true)
+  def makeLink(a: Article) = {
+    val title = blog.hooks.listTitle(base, blog, this, a)
+    if (title != null) title
+    else makeDate(a)+" "+articleLink(a, a.title, allowImageMarker = true)
+  }
 
   def makeTagLink(t: Article) = {
     val html = s"""#<i><a href="${rel(blog.absUrl(t))}">${t.title}</a></i>"""
