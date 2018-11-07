@@ -171,8 +171,12 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
       Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
     } else ""
 
-    val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="${rel(blog.absUrlFromPath(srcPath))}"/>"""
-    val aTag   = s"""<a href="${rel(if (linkTo == null) img.url else linkTo)}">$imgTag</a>"""
+    val src  = rel(blog.absUrlFromPath(srcPath))
+    val href = rel(if (linkTo == null) img.url else linkTo)
+
+    val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="$src"/>"""
+    val aTag   = if (!img.zoomable && linkTo == null) imgTag else s"""<a href="$href">$imgTag</a>"""
+
     s"""<span class=$cl>$aTag$desc</span>"""
   }
 

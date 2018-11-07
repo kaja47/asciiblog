@@ -205,8 +205,8 @@ case class Article(
   def prettyDate = if (date == null) "" else "<"+new SimpleDateFormat("MM-dd-yyyy").format(date)+">"
   override def toString = (if (isTag) "Article[Tag]" else "Article")+s"($prettyDate$title)"
   def asSlug: Slug = Slug(slug)
-  def isSupertag = meta.contains("supertag")
-  def isTag      = meta.contains("tag") || isSupertag
+  def isSupertag = meta.isSupertag
+  def isTag      = meta.isTag || meta.isSupertag
   def asTag      = if (isTag) Tag(title, isSupertag) else null
   def extraImages = images.filter(!_.inText)
   def slugsOfLinkedArticles(implicit blog: Blog): Seq[Slug] = text.links.filter(blog.isLocalLink).map(blog.extractSlug)
@@ -236,7 +236,11 @@ case class Article(
 
   def imagesWithoutArticleTags = {
     val ts = if (isTag) Set(asTag) else tags.visible.toSet
-    mapImages { i => i.copy(tags = i.tags.copy(visible = i.tags.visible.filter(t => !ts.contains(t)))) }
+    val nozoom = meta.nozoom
+    mapImages { i => i.copy(
+      tags = i.tags.copy(visible = i.tags.visible.filter(t => !ts.contains(t))),
+      zoomable = !nozoom
+    )}
   }
 
   def mkRawText = rawText.mkString("\n")
@@ -247,6 +251,10 @@ case class Meta(values: Seq[String] = Seq()) {
   def value(key: String): String = kvPairs.getOrElse(key, null)
   def contains(x: String) = values.contains(x)
   def merge(that: Meta): Meta = Meta(values ++ that.values)
+
+  def isSupertag = contains("supertag")
+  def isTag      = contains("tag")
+  def nozoom     = contains("nozoom") // TODO better name?
 }
 
 case class Image(
@@ -259,6 +267,7 @@ case class Image(
   source: String = null,
   tags: Tags = Tags(),
   inText: Boolean = true, // is this image specified in article text or is it part of a gallery
+  zoomable: Boolean = true,
   localSource: Article = null
 ) {
   def asSmallThumbnail = copy(mods = "", align = "")
