@@ -1,8 +1,9 @@
 package asciiblog
 
-import scala.util.matching.Regex
-import java.io.File
 import scala.collection.mutable
+import scala.util.matching.Regex
+import java.util.regex.{ Pattern, Matcher }
+import java.io.File
 
 object XMLSW {
   import java.lang.StringBuilder
@@ -28,6 +29,9 @@ class XMLSW(sb: java.lang.StringBuilder) {
     body(this)
   }
 
+  def shortElement(localName: String, attributes: Seq[(String, String)]): Unit =
+    shortElem(localName, attributes)
+
   def element(localName: String, content: String): Unit =
     element(localName, Seq.empty, content)
 
@@ -50,16 +54,25 @@ class XMLSW(sb: java.lang.StringBuilder) {
 
   private def startElem(localName: String, attributes: Seq[(String, String)]) = {
     sb.append("<").append(localName)
-    for ((k, v) <- attributes) {
-      sb.append(" ").append(k).append("=\"")
-      txt(v, true)
-      sb.append("\"")
-    }
+    attrs(attributes)
     sb.append(">")
   }
 
   private def endElem(localName: String) =
     sb.append("</").append(localName).append(">")
+
+  private def shortElem(localName: String, attributes: Seq[(String, String)]) = {
+    sb.append("<").append(localName)
+    attrs(attributes)
+    sb.append("/>")
+  }
+
+  private def attrs(attributes: Seq[(String, String)]) =
+    for ((k, v) <- attributes) {
+      sb.append(" ").append(k).append("=\"")
+      txt(v, true)
+      sb.append("\"")
+    }
 
   private def txt(txt: String, escapeDoubleQuotes: Boolean = false) = {
     var start = 0
