@@ -352,14 +352,20 @@ case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
 
 
 class Similarities(articles: Seq[Article]) {
-  private val tagMap: Map[Tag, Seq[Article]] = invert(articles.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) })
-  private val tags: Map[Tag, Article] = articles.iterator.collect { case a if a.isTag => (a.asTag, a) }.toMap
   private val arts: Array[Article] = articles.toArray
+  private val tags: Map[Tag, Article] = arts.iterator.collect { case a if a.isTag => (a.asTag, a) }.toMap
   private val slugMap: Map[Slug, Int] = arts.iterator.zipWithIndex.map { case (k, v) => (k.asSlug, v) }.toMap
-  private val tm: Map[Tag, Array[Int]] = tagMap.map { case (t, as) =>
-    val idxs = as.map(a => slugMap(a.asSlug)).toArray
-    java.util.Arrays.sort(idxs)
-    (t, idxs)
+  private val tm: Map[Tag, Array[Int]] = {
+    val tagMap = invert(arts.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) })
+    tagMap.map { case (t, as) =>
+      val idxs = as.map(a => slugMap(a.asSlug)).toArray
+      java.util.Arrays.sort(idxs)
+      (t, idxs)
+    }
+  }
+  private val tagsToRecommend = { // do not recommend tags that are used only as hidden tags
+    val visibleTags = arts.iterator.flatMap(a => a.tags.visible).toSet
+    tm.filter { case (t, _) => visibleTags.contains(t) }
   }
   private val reverseRels: Map[Slug, Seq[Slug]] =
     invert(articles.collect { case a if a.rel.nonEmpty => (a.asSlug, a.rel.map(Slug)) })
@@ -401,28 +407,21 @@ class Similarities(articles: Seq[Article]) {
       }
     }
 
-    val sortedMap = mutable.TreeSet[Key]()
-    var min = Key(0, 0, 0)
-    var size = 0
-
+    val heap = mutable.PriorityQueue[Key]()
     var i = 0; while (i < arts.length) {
-      if (freq(i) >= 1 && freq(i) >= min.commonTags) {
-        val key = Key(freq(i), dateDiff(a, arts(i)), i) // articles with most tags in common, published closest together
-        if (!o.gt(key, min)) {
-          sortedMap.add(key)
-          if (size < count) {
-            size += 1
-          } else {
-            val last = sortedMap.last
-            sortedMap.remove(last)
-            min = last
-          }
+      if (freq(i) >= 1) {
+        // articles with most tags in common, published closest together
+        val key = Key(freq(i), dateDiff(a, arts(i)), i)
+        if (heap.size < count) {
+          heap.enqueue(key)
+        } else if (!o.gt(key, heap.head)) {
+          heap.dequeue
+          heap.enqueue(key)
         }
       }
       i += 1
     }
-
-    sortedMap.iterator.map(key => arts(key.idx)).toVector
+    heap.dequeueAll.reverse.map(key => arts(key.idx))
   }
 
   def sortBySimilarity(bs: Seq[Article], a: Article): Seq[Article] = {
@@ -433,21 +432,6 @@ class Similarities(articles: Seq[Article]) {
   }
 
   def similarTags(t: Tag, count: Int): Seq[Article] = {
-
-    class TopN[T: Ordering](n: Int, var min: Double = Double.MinValue) {
-      private val set = mutable.TreeSet[(Double, T)]()
-      def toSeq = set.toVector
-
-      def += (x: (Double, T)): Unit = {
-        if (x._1 < min) return
-        set += x
-        if (set.size > n) {
-          val h = set.head
-          min = h._1
-          set.remove(h)
-        }
-      }
-    }
 
     def intersectionSize(a: Array[Int], b: Array[Int]): Int = {
       var size, ai, bi = 0
@@ -464,18 +448,27 @@ class Similarities(articles: Seq[Article]) {
     if (!tm.contains(t)) return Seq()
 
     val idxs = tm(t)
-    val topn = new TopN[Tag](count, 0.001 /* zero is never added */)(Ordering.by { t => t.title })
+    val heap = mutable.PriorityQueue[(Double, Tag)]()(Ordering.Tuple2(Ordering[Double].reverse, Ordering.by { t => t.title }))
 
-    for ((t2, idxs2) <- tm if t2 != t) {
-      val maxSim = 1.0 * Math.min(idxs.length, idxs2.length) / Math.max(idxs.length, idxs2.length)
-      if (maxSim >= topn.min) {
-        val in = intersectionSize(idxs, idxs2)
-        val un = idxs.size + idxs2.size - in
-        topn += (in.toDouble / un, t2)
+    for ((t2, idxs2) <- tagsToRecommend if t2 != t) {
+      //val maxSim = 1.0 * Math.min(idxs.length, idxs2.length) / Math.max(idxs.length, idxs2.length)
+
+      val in = intersectionSize(idxs, idxs2)
+      val un = idxs.size + idxs2.size - in
+      val sim = in.toDouble / un
+
+      if (sim > 0) {
+        val pair = (sim, t2)
+        if (heap.size < count) {
+          heap.enqueue(pair)
+        } else if (sim > heap.head._1) {
+          heap.dequeue
+          heap.enqueue(pair)
+        }
       }
     }
 
-    topn.toSeq.map { case (_, t) => tags(t) }
+    heap.dequeueAll.reverse.map { case (_, t) => tags(t) }
   }
 }
 
