@@ -317,7 +317,6 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
       ifs((blog.allowComments || blog.shareLinks) && !a.isTag, "<hr/>")+
       ifs(a.tags.visible.nonEmpty, "<p>"+txl("tags")+" "+makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"</p>")+
       //ifs(a.license, a.license+"<br/>")+
-      //"<p>"+makeNextPrevLinks(a)+"</p>"+
       ifs(a.pubArticles.nonEmpty,"<p>"+txl("published")  +"<br/>"+a.pubArticles.map(makeLink).mkString("<br/>")+"</p>")+
       ifs(a.pubBy != null,       "<p>"+txl("publishedBy")+" "    +articleLink(a.pubBy, makeDate(a), allowImageMarker = true)+"</p>")+
       ifs(a.similar.nonEmpty,    "<p>"+(if (a.isTag) txl("similarTags") else txl("similar"))+
@@ -364,10 +363,6 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     val html = s"""#<i><a href="${rel(blog.absUrl(t))}">${t.title}</a></i>"""
     if (t.isSupertag) s"<b>$html</b>" else html
   }
-
-  def makeNextPrevLinks(a: Article) =
-    ifs(base.prev(a), "««« "+makeLink(base.prev(a))+"<br/>") +
-    ifs(base.next(a), "»»» "+makeLink(base.next(a))+"<br/>")
 
   def makeNextPrevArrows(a: Article) = {
     val (prev, next) = (base.prev(a), base.next(a))
