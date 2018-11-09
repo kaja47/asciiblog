@@ -273,7 +273,10 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   def listOfLinks(list: Seq[Article], shortArticles: Boolean) =
     if (shortArticles) list.map(makeShortArticle).mkString+"<br/>&nbsp;"
-    else               list.map(makeLink).mkString("<br/>")+"<br/>"
+    else {
+      val l = blog.hooks.list(base, blog, this, list)
+      if (l != null) l else list.map(makeLink).mkString("<br/>")+"<br/>"
+    }
 
   def rowOfLinks(list: Seq[Article]) =
     list.map(a => articleLink(a, a.title)).mkString(", ")
