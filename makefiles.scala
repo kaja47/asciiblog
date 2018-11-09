@@ -498,7 +498,7 @@ object MakeFiles {
 
   private def file(f: String) = new File(thisDir, f)
 
-  private def crudelyMinify(js: String) = js.replaceAll("(?<!let|function|in)[\\s]+(?!in)|/\\*.*?\\*/|//.*\n", "")
+  private def crudelyMinify(js: String) = js.replaceAll("""(?<!let|function|in|return)\s+(?!in)|/\*.*?\*/|//.*\n""", "")
   def keyValuesIterator(f: File, enc: String) = io.Source.fromFile(f, enc).getLines.collect(keyVal)
   def keyValuesMap(f: File) = keyValuesIterator(f, "utf-8").toMap // TODO
 
