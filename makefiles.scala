@@ -866,14 +866,10 @@ object MakeFiles {
   def yearmonth(d: Date) = (year(d), month(d))
 
 
-  private val rssDateFormat = new ThreadLocal[SimpleDateFormat] {
-    override def initialValue = new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US)
-  }
-
-  def rssdate(date: Date) = if (date == null) "" else
-    rssDateFormat.get.format(date)
-
   def makeRSS(articles: Seq[Article], mkBody: Article => String)(implicit blog: Blog): String = {
+    val format = new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US)
+    def rssdate(date: Date) = if (date == null) "" else format.format(date)
+
     XMLSW.document { w =>
       w.element("rss", Seq("version" -> "2.0")) { w =>
         w.element("channel") { w =>
