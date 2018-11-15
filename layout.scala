@@ -315,7 +315,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
       ifs(blog.allowComments && !a.isTag, s"""<b><a href="${ rel(blog.absUrlFromPath("comments.php?url="+blog.relUrlFromSlug(a.slug))) }">${txl("comments.enter")}</a></b>""")+
       ifs(blog.shareLinks && !a.isTag, {
         val url = URLEncoder.encode(blog.absUrl(a), "UTF-8")
-        s""" &nbsp;&nbsp; ${txl("share.share")} <a href="https://www.facebook.com/sharer/sharer.php?u=$url">${txl("share.facebook")}</a>, <a href="https://twitter.com/intent/tweet?url=$url">${txl("share.twitter")}</a>, <a href="https://plus.google.com/share?url=$url">${txl("share.googleplus")}</a>"""
+        s""" &nbsp;&nbsp; ${txl("share.share")} <a href="https://www.facebook.com/sharer/sharer.php?u=$url">${txl("share.facebook")}</a>, <a href="https://twitter.com/intent/tweet?url=$url">${txl("share.twitter")}</a>"""
       })+
       ifs((blog.allowComments || blog.shareLinks) && !a.isTag, "<hr/>")+
       ifs(a.tags.visible.nonEmpty, "<p>"+txl("tags")+" "+makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"</p>")+
