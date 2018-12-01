@@ -84,8 +84,8 @@ case class Blog (
 
 
 trait Hooks {
-  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String
-  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String
+  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String
+  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String
   def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String
   def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String
@@ -99,8 +99,8 @@ trait Hooks {
 }
 
 class NoHooks extends Hooks {
-  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String = ""
-  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String = ""
+  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = ""
+  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = ""
   def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String = ""
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String = null
   def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String = null
@@ -1259,7 +1259,7 @@ object MakeFiles {
       val l = layout.make(blog.absUrl(a))
       val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
       val next = archivePages.lift(idx+1).map(_._1).getOrElse(null)
-      val body = l.addArrows(l.makeIndex(Seq(), as), prev, next, true)
+      val body = l.addArrows(l.makeIndexArchive(as), prev, next, true)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, containImages = as.exists(_.hasImageMarker)), oldFileIndex)
       a
     }

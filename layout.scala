@@ -231,13 +231,16 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   }
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, tagsToShow: Seq[Article] = Seq()): String =
-    blog.hooks.indexPrepend(base, blog, this, fullArticles, archiveLinks.nonEmpty)+
+    blog.hooks.indexPrepend(base, blog, this, fullArticles)+
     fullArticles.take(1).map(_makeFullArticle(_, true)).mkString("\n")+
-    blog.hooks.afterFirstArticle(base, blog, this, fullArticles, archiveLinks.nonEmpty)+
+    blog.hooks.afterFirstArticle(base, blog, this, fullArticles)+
     (if (tagsToShow.nonEmpty) "<aside>"+tagsToShow.map(makeTagLink).mkString(" ")+"</aside>" else "")+
     fullArticles.drop(1).map(_makeFullArticle(_, true)).mkString("\n")+
     listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
     (if (!groupArchiveByMonth) "<div style='clear:both'>"+listOfLinks(archiveLinks, false)+"</div>" else groupArchive(archiveLinks))+"<br/>"
+
+  def makeIndexArchive(articles: Seq[Article]): String =
+    listOfLinks(articles, blog.archiveFormat == "short")+"<br/>"
 
 
   private def groupArchive(archiveLinks: Seq[Article]) = {

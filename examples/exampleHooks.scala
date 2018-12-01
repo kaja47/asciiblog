@@ -10,9 +10,9 @@ class CustomHooks extends NoHooks {
     base.feed.slice(drop, 60+drop).filter(a => plus(a) > 0).sortBy{ a => (plus(a), a.date.getTime) }.reverse.take(14)
   }
 
-  override def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article], isMainIndex: Boolean): String = {
+  override def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = {
     val selection = plusArticles(7, base)
-    if (isMainIndex && selection.nonEmpty) {
+    if (selection.nonEmpty) {
       "<style>@media screen and (max-width: 800px){ .side {display:none} }</style>"+
       "<div class=side style='padding:2em; font-size:0.85em'>"+
       "<div><b>"+blog.translation.getOrElse("dontOverlook", "nepřehlédněte")+"</b></div>"+
