@@ -205,7 +205,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
       ifs(img,                 """<meta property="og:image" content=""""+escape(img)+""""/>""") +
       ifs(blog.twitterSite,    """<meta name="twitter:site" content=""""+escape(blog.twitterSite)+""""/>""") +
       ifs(blog.twitterCreator, """<meta name="twitter:creator" content=""""+escape(blog.twitterCreator)+""""/>""")
-    } else ""}
+    } else ""
+  }
 
 
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false, article: Option[Article] = None): String = {
@@ -321,7 +322,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
         s""" &nbsp;&nbsp; ${txl("share.share")} <a href="https://www.facebook.com/sharer/sharer.php?u=$url">${txl("share.facebook")}</a>, <a href="https://twitter.com/intent/tweet?url=$url">${txl("share.twitter")}</a>"""
       })+
       ifs((blog.allowComments || blog.shareLinks) && !a.isTag, "<hr/>")+
-      ifs(a.tags.visible.nonEmpty, "<p>"+txl("tags")+" "+makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle), a)+"</p>")+
+      ifs(a.tags.visible.nonEmpty, "<p>"+txl("tags")+" "+makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle))+"</p>")+
       //ifs(a.license, a.license+"<br/>")+
       ifs(a.pubArticles.nonEmpty,"<p>"+txl("published")  +"<br/>"+a.pubArticles.map(makeLink).mkString("<br/>")+"</p>")+
       ifs(a.pubBy != null,       "<p>"+txl("publishedBy")+" "    +articleLink(a.pubBy, makeDate(a), allowImageMarker = true)+"</p>")+
@@ -379,13 +380,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     (if (prev == null) "«««" else s"""<a href="${rel(blog.absUrl(prev))}">«««</a>""")+" "+
     (if (next == null) "»»»" else s"""<a href="${rel(blog.absUrl(next))}">»»»</a>""")
 
-  def makeTagLinks(tags: Seq[Article], a: Article = null) =
-    tags.map { t =>
-      makeTagLink(t) + ifs(t.isSupertag && a != null,
-        ifs(base.prev(a, t.asTag), s""" <a href="${rel(blog.absUrl(base.prev(a, t.asTag)))}">««</a>""")+
-        ifs(base.next(a, t.asTag), s""" <a href="${rel(blog.absUrl(base.next(a, t.asTag)))}">»»</a>""")
-      )
-    }.mkString(" ")
+  def makeTagLinks(tags: Seq[Article]) = tags.map(makeTagLink).mkString(" ")
 
   def makeDate(a: Article) = a.date match {
     case null => ""
