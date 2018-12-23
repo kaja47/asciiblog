@@ -121,6 +121,18 @@ class XMLSW(sb: java.lang.StringBuilder) {
 
 object util {
 
+  def intersectionSize(a: Array[Int], b: Array[Int]): Int = {
+    var size, ai, bi = 0
+    while (ai < a.length && bi < b.length) {
+      val av = a(ai)
+      val bv = b(bi)
+      size += (if (av == bv) 1 else 0)
+      ai   += (if (av <= bv) 1 else 0)
+      bi   += (if (av >= bv) 1 else 0)
+    }
+    size
+  }
+
   private val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
   def newFile(name: String, base: File) = {
     val f = new File(name)
