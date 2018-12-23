@@ -4,6 +4,7 @@ import MakeFiles. { licenses, peelOffTags, isAbsolute }
 import AsciiMarkup._
 import scala.util.matching.Regex
 import scala.collection.mutable
+import java.lang.StringBuilder
 
 
 trait Markup {
@@ -31,9 +32,13 @@ object AsciiText {
   val ahrefCheck = "href=\""
   val imgsrcCheck = "src=\""
 
-  def linkSlurp(txt: String) =
-    Slurp(txt).reserveGroups(2).iterator(_.until('"'), _.doubleQuotedString().asGroup(0, 1, -1).char(':').ignore().delimited('[', ']').asGroup(1, 1, -1))
-      .map(_.group(1).asString())
+  val linkUntil = Slurp { _.until('"') }
+  val linkSlurp = Slurp { _.groupStart(0).quoted('"').asGroup(1, 1, -1).char(':').ignore().delimited('[', ']').asGroup(2, 1, -1).groupEnd(0) }
+
+  def linkSlurpIterator(txt: String) =
+    Slurp(txt, groups = 3).iterator(linkUntil, linkSlurp).map(_.group(2).asString())
+  def linkSlurpReplace(txt: String)(f: Slurp.Replacement) =
+    Slurp(txt, groups = 3).replace(linkUntil, linkSlurp, f)
 
   def empty = AsciiText(Seq(), null, "")
 }
@@ -68,11 +73,11 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
 
   private def extractLinks(txt: String): Iterator[String] = // 100 ms
     (if (txt.contains(ahrefCheck)) ahrefRegex.findAllMatchIn(txt).map(_.group(1)) else Iterator()) ++
-    (if (txt.contains(linkCheck))  linkSlurp(txt)                                 else Iterator())
+    (if (txt.contains(linkCheck))  linkSlurpIterator(txt)                         else Iterator())
 
   //require(
   //  processTexts(segments, txt => linkRegex.findAllMatchIn(txt).map(_.group(2))).toVector ==
-  //  processTexts(segments, linkSlurp).toVector
+  //  processTexts(segments, linkSlurpIterator).toVector
   //)
 
   private def checkAliases(aliases: Iterator[(String, String)]) = {
@@ -126,14 +131,14 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
       txt = ahrefRegex   .replaceAllIn(txt, m => Regex.quoteReplacement(relativize(aliases(m.group(1)))))
     }
     if (txt.contains(linkCheck)) {
-      txt = linkRegex    .replaceAllIn(txt, m => {
-        val link = aliases(m.group(2))
+      txt = linkSlurpReplace(txt) { (s, sb) =>
+        val link = aliases(s.group(2).asString())
         if (link == Blog.invalidLinkMarker) {
-          m.group(1)
+          sb append s.group(1).asString()
         } else {
-          Regex.quoteReplacement(s"""<a href="${relativize(link)}">${m.group(1)}</a>""")
+          sb append "<a href=\"" append relativize(link) append "\">" append s.group(1).asString() append "</a>"
         }
-      })
+      }.toString
     }
     if (txt.contains(commentCheck)) {
       txt = commentRegex .replaceAllIn(txt, "")
