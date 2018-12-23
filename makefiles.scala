@@ -1336,6 +1336,7 @@ object MakeFiles {
     }
     }
 
+    timer("generate and save files - tags") {
     base.allTags foreach { case (t, (a, as)) =>
       var l = layout.make(blog.absUrl(a))
       val body = l.makeFullArticle(a.imagesWithoutArticleTags)
@@ -1348,6 +1349,7 @@ object MakeFiles {
       val path = blog.relUrlFromSlug("tags")
       val l = layout.make(blog.absUrlFromPath(path))
       fileIndex ++= saveFile(path, l.makePage(l.makeTagIndex(base)), oldFileIndex)
+    }
     }
 
     def mkBody(a: Article) = {
