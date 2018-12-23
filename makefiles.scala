@@ -284,31 +284,47 @@ case class Image(
   def asSmallThumbnail = copy(mods = "", align = "")
 
   val thumb = {
+    // ....../image-filaneme.jpg
+    //       ^ lastSlash    ^ lastDot
     val sb = new java.lang.StringBuilder
     var lastSlash = url.lastIndexOf('/')
+    val containsSlashes = lastSlash != -1
     if (lastSlash == -1) lastSlash = url.length
 
-    var lastDot   = url.lastIndexOf('.')
-    if (lastDot < lastSlash) lastDot = url.length
+    if (containsSlashes) {
 
-    var out = false
-    var i = 0; while (i < lastSlash) {
-      val ch = url.charAt(i)
-      if (ch == '/' || ch == '.' || ch == '-') {
-        out = true
-      } else if (ch == '%' && i < lastSlash-2 && url.charAt(i+1) == '2' && url.charAt(i+2) == '0') {
-        i += 2
-        out = true
-      } else if (out) {
-        sb.append(ch)
-        out = false
+      var lastDot = url.lastIndexOf('.')
+      if (lastDot < lastSlash) lastDot = url.length
+
+      // append first letters of url "tokens"
+      var out = false // if thrue, appends next character
+      var i = 0; while (i < lastSlash) {
+        val ch = url.charAt(i)
+        if (ch == '/' || ch == '.' || ch == '-') {
+          out = true
+        } else if (ch == '%' && i < lastSlash-2 && url.charAt(i+1) == '2' && url.charAt(i+2) == '0') {
+          i += 2
+          out = true
+        } else if (out) {
+          sb.append(ch)
+          out = false
+        }
+        i += 1
       }
-      i += 1
+      sb.append("-")
+      sb.append(url, lastSlash+1, lastDot) // append filename without suffix
+
+    } else { // there's no slash in the url, this should not happen TODO
+      var lastDot = url.lastIndexOf('.')
+      if (lastDot == -1) lastDot = url.length
+      sb.append(url, 0, lastDot)
     }
-    sb.append("-")
-    sb.append(url, lastSlash+1, lastDot)
-    sb.append("-")
-    sb.append(url.hashCode.toHexString.take(8))
+
+    if (sb.length > 0) {
+      sb.append("-")
+    }
+    sb.append(url.hashCode.toHexString)
+
     sb.toString
   }
 }
