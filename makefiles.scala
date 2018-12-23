@@ -29,6 +29,8 @@ object Make extends App {
 
   timer.end()
   println("total: "+timer.ms)
+
+  blog.hooks.afterGenerate(base, blog)
 }
 
 
@@ -97,6 +99,8 @@ trait Hooks {
   def prepareArticles(articles: Seq[Article]): Seq[Article]
   /** This hook is called after articles are processed and the final Base is computed. */
   def updateBase(base: Base, blog: Blog): Base
+  /** This hook is called after blog is ganerated and cannot affect result in any way. */
+  def afterGenerate(base: Base, blog: Blog): Unit
 }
 
 class NoHooks extends Hooks {
@@ -109,6 +113,7 @@ class NoHooks extends Hooks {
   def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String = null
   def prepareArticles(articles: Seq[Article]): Seq[Article] = articles
   def updateBase(base: Base, blog: Blog): Base = base
+  def afterGenerate(base: Base, blog: Blog): Unit = ()
 }
 
 
