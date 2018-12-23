@@ -5,6 +5,20 @@ import scala.util.matching.Regex
 import java.util.regex.{ Pattern, Matcher }
 import java.io.File
 
+class TopK[T: Ordering](count: Int) {
+  private[this] val ord = implicitly[Ordering[T]].reverse
+  private[this] val heap = mutable.PriorityQueue[T]()(ord)
+  def add(x: T) = {
+    if (heap.size < count) {
+      heap.enqueue(x)
+    } else if (!ord.gt(x, heap.head)) {
+      heap.dequeue
+      heap.enqueue(x)
+    }
+  }
+  def getAll = heap.dequeueAll.reverse
+}
+
 object XMLSW {
   import java.lang.StringBuilder
 

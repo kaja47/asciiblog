@@ -1,6 +1,7 @@
 package asciiblog
 
 import MakeFiles.{ hash, tagSlug, invert, UrlOps, isAbsolute }
+import java.{ lang => jl }
 import java.io.{ File, BufferedWriter, OutputStreamWriter, FileOutputStream }
 import java.net.{ URL, URI }
 import java.security.MessageDigest
@@ -115,7 +116,8 @@ object Blog {
   def populate(cfg: Map[String, String], args: Array[String], translation: Map[String, String], cfgFile: File) = {
     val cfgDirectory = cfgFile.getParentFile
     val inline = if (cfg.contains("inline!")) Seq(cfgFile) else Seq()
-    new Blog(
+
+    val b = new Blog(
       title                  = cfg("title"),
       baseUrl                = cfg("baseUrl"),
       files                  = inline ++ spaceSeparatedStrings(cfg.getOrElse("files", "").trim).flatMap(f => globFiles(f, cfgDirectory)), // relative paths are relative to config file
@@ -163,6 +165,13 @@ object Blog {
       printErrors            = cfg.getOrElse("printErrors", "true").toBoolean,
 
       cfg = cfg
+    )
+
+    val imgRoot1 = if (b.imageRoot.nonEmpty) b.imageRoot else b.baseUrl
+    val imgRoot2 = if (imgRoot1.endsWith("/")) imgRoot1 else imgRoot1+"/"
+
+    b.copy(
+      imageRoot = imgRoot2
     )
   }
 
@@ -397,31 +406,25 @@ class Similarities(articles: Seq[Article]) {
     for (i <- slugMap.get(a.asSlug)) freq(i) = 0
 
     case class Key(commonTags: Int, dateDiff: Long, idx: Int)
-    implicit val o = new Ordering[Key]{
+    implicit val keyOrdering = new Ordering[Key]{
       def compare(a: Key, b: Key): Int = {
-        val c1 = java.lang.Integer.compare(b.commonTags, a.commonTags)
+        val c1 = jl.Integer.compare(a.commonTags, b.commonTags)
         if (c1 != 0) return c1
-        val c2 = java.lang.Long.compare(a.dateDiff, b.dateDiff)
+        val c2 = jl.Long.compare(b.dateDiff, a.dateDiff)
         if (c2 != 0) return c2
-        java.lang.Integer.compare(a.idx, b.idx)
+        jl.Integer.compare(a.idx, b.idx)
       }
     }
 
-    val heap = mutable.PriorityQueue[Key]()
+    val topk = new TopK[Key](count)
     var i = 0; while (i < arts.length) {
       if (freq(i) >= 1) {
         // articles with most tags in common, published closest together
-        val key = Key(freq(i), dateDiff(a, arts(i)), i)
-        if (heap.size < count) {
-          heap.enqueue(key)
-        } else if (!o.gt(key, heap.head)) {
-          heap.dequeue
-          heap.enqueue(key)
-        }
+        topk.add(Key(freq(i), dateDiff(a, arts(i)), i))
       }
       i += 1
     }
-    heap.dequeueAll.reverse.map(key => arts(key.idx))
+    topk.getAll.map(key => arts(key.idx))
   }
 
   def sortBySimilarity(bs: Seq[Article], a: Article): Seq[Article] = {
@@ -448,7 +451,14 @@ class Similarities(articles: Seq[Article]) {
     if (!tm.contains(t)) return Seq()
 
     val idxs = tm(t)
-    val heap = mutable.PriorityQueue[(Double, Tag)]()(Ordering.Tuple2(Ordering[Double].reverse, Ordering.by { t => t.title }))
+
+    case class Key(sim: Double, tag: Tag)
+    implicit val keyOrdering: Ordering[Key] = (a: Key, b: Key) => {
+      val c1 = jl.Double.compare(a.sim, b.sim)
+      if (c1 != 0) c1 else a.tag.title.compareTo(b.tag.title)
+    }
+
+    val topk = new TopK[Key](count)
 
     for ((t2, idxs2) <- tagsToRecommend if t2 != t) {
       //val maxSim = 1.0 * Math.min(idxs.length, idxs2.length) / Math.max(idxs.length, idxs2.length)
@@ -458,17 +468,11 @@ class Similarities(articles: Seq[Article]) {
       val sim = in.toDouble / un
 
       if (sim > 0) {
-        val pair = (sim, t2)
-        if (heap.size < count) {
-          heap.enqueue(pair)
-        } else if (sim > heap.head._1) {
-          heap.dequeue
-          heap.enqueue(pair)
-        }
+        topk.add(Key(sim, t2))
       }
     }
 
-    heap.dequeueAll.reverse.map { case (_, t) => tags(t) }
+    topk.getAll.map { p => tags(p.tag) }
   }
 }
 
