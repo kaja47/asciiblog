@@ -1,28 +1,38 @@
 package asciiblog
 
+import java.lang.StringBuilder
+
 object Slurp {
-  def apply(s: String) = new Slurp(s, 0, s.length)
+  type Replacement = (Slurp, StringBuilder) => Unit
+
+  def apply(s: String, groups: Int = 0) = new Slurp(s, 0, s.length, groups)
+  def apply(f: Slurp => Unit) = f
 }
 
 trait Cursor {
   def moveNext(): Boolean
 }
 
-class Slurp(val s: String, from: Int, to: Int) { self =>
+class Slurp(val s: String, from: Int, to: Int, groups: Int = 0) { self =>
   require(from >= 0 && from <= s.length, s"from: $from >= 0 && from <= ${s.length}")
-  require(to >= 0 && to <= s.length,    s"to: $to >= 0 && to <= ${s.length}")
+  require(to >= 0 && to <= s.length,     s"to: $to >= 0 && to <= ${s.length}")
+  require(groups >= 0,                   s"groups must be non-negative, $groups given")
 
   private[asciiblog] var pos = from
   private[asciiblog] var mark = from // mark >= pos must hold at any time
   private[asciiblog] var _match = true
-  private[asciiblog] var groups: Array[Int] = null
+  private[asciiblog] var _groups: Array[Int] = null
+
+  if (groups > 0) {
+    reserveGroups(groups)
+  }
 
   override def toString = s"Slurp(pos=$pos, mark=$mark, s.length=${s.length})"
 
   private final val MAX = Int.MaxValue / 2
 
   def reserveGroups(n: Int): this.type = {
-    groups = new Array[Int](n*2)
+    _groups = new Array[Int](n*2)
     this
   }
 
@@ -30,7 +40,7 @@ class Slurp(val s: String, from: Int, to: Int) { self =>
   def touchesEnd = mark > to
   def matchLength = mark - pos
 
-  def matches      = _match
+  def matches = _match
   def reset() = {
     pos = from
     mark = from
@@ -170,34 +180,37 @@ class Slurp(val s: String, from: Int, to: Int) { self =>
   }
 
   def delimited(begin: Char, end: Char) = char(begin).to(end)
-
-  def doubleQuotedString() = {
-    char('"')
-    to('"')
-    
-    /*
+  def quoted(delim: Char): this.type = quoted(delim, delim)
+  def quoted(begin: Char, end: Char): this.type = {
+    char(begin)
     var i = mark
-		while (i < to && (s.charAt(i) != '"' || s.charAt(i-1) == '\\')) {
+    while (i < to && (s.charAt(i) != end || s.charAt(i-1) == '\\')) {
       i += 1
-		}
-    i += 1
-    mark = i
-    */
+    }
+    mark = i + 1
     this
   }
 
   // extractors
   
   def asGroup(gr: Int, startOff: Int = 0, endOff: Int = 0) = {
-    groups(gr*2)   = pos+startOff
-    groups(gr*2+1) = mark+endOff
+    _groups(gr*2)   = pos+startOff
+    _groups(gr*2+1) = mark+endOff
     pos = mark
+    this
+  }
+  def groupStart(gr: Int, off: Int = 0) = {
+    _groups(gr*2) = pos+off
+    this
+  }
+  def groupEnd(gr: Int, off: Int = 0) = {
+    _groups(gr*2+1) = mark+off
     this
   }
   def group(gr: Int) = {
     val x = copy
-    x.pos  = groups(gr*2)
-    x.mark = groups(gr*2+1)
+    x.pos  = _groups(gr*2)
+    x.mark = _groups(gr*2+1)
     x
   }
 
@@ -234,8 +247,9 @@ class Slurp(val s: String, from: Int, to: Int) { self =>
         val m = mark
         delimiter(self)
         ignore().tryAgain()
+        val p = pos
         atomically(move)
-        if (_match) return true
+        if (_match) return { pos = p; true }
         if (mark == m) { skip(1) }
         tryAgain()
       }
@@ -252,4 +266,22 @@ class Slurp(val s: String, from: Int, to: Int) { self =>
       def next() = if (hasNext) { defined = false; self } else Iterator.empty.next()
     }
   }
+
+  def replace(delimiter: Slurp => Unit, move: Slurp => Unit, f: Slurp.Replacement): StringBuilder = {
+    val out = new StringBuilder
+
+    val c = cursor(delimiter, move)
+    var lastPos = 0
+
+    while (c.moveNext()) {
+      out.append(s, lastPos, pos)
+      f(this, out)
+      lastPos = mark
+    }
+    out.append(s, lastPos, s.length)
+  }
+
+  def appendInto(sb: StringBuilder, startOff: Int, endOff: Int) =
+    sb.append(s, pos+startOff, mark+endOff)
+
 }
