@@ -618,7 +618,7 @@ object MakeFiles {
       } else {
         val us = link.getPath.split("/").filter(_.nonEmpty)
         val bs = base.getPath.split("/").filter(_.nonEmpty)
-        val prefixLen = (0 until us.length).prefixLength { i => us(i) == bs(i) }
+        val prefixLen = (0 until math.min(bs.length, us.length)).prefixLength { i => us(i) == bs(i) }
         val backLevels = bs.length - prefixLen - 1
         val parts = Seq.fill(backLevels)("..") ++ us.drop(prefixLen)
         val partsWithoutLastDot = if (parts.length > 1 && parts.last == ".") parts.dropRight(1) else parts
