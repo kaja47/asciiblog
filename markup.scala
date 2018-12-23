@@ -144,8 +144,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     if (txt.contains(italicCheck)) {
       txt = italicRegex  .replaceAllIn(txt, """<i>$1</i>""")
     }
-    val i = txt.indexOf(italic2Check)
-    if (i != -1 && (i == 0 || txt.charAt(i-1) != ':')) { // text contains "//" that is not preceded by ':' (most likely url)
+    if (txt.contains(italic2Check)) {
       txt = italic2Regex .replaceAllIn(txt, """<i>$1</i>""")
     }
     if (txt.contains(emCheck)) {
