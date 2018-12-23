@@ -17,12 +17,16 @@ trait Layout extends ImageLayout {
   val baseUrl: String
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false, article: Option[Article] = None): String
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, tagsToShow: Seq[Article] = Seq()): String
+  def makeIndexArchive(articles: Seq[Article]): String
   def makeFullArticle(a: Article): String
+  def makeArticleBody(a: Article): String
   def makeTagIndex(base: Base): String
-  def addArrows(content: String, next: Article, prev: Article, includeBottom: Boolean = false): String
+  def addArrows(content: String, next: Article, prev: Article): String
 
   def articleUrl(a: Article): String
   def articleLink(a: Article, title: String, asLink: Boolean = true, allowImageMarker: Boolean = false): String
+  def rssLink(rss: String): String
+  def ogTags(a: Article): String
 }
 
 // this type is passed into markup
@@ -32,7 +36,7 @@ trait ImageLayout {
 
 
 
-class FlowLayoutMill(base: Base, blog: Blog, markup: Markup, val resolver: String => String) {
+class FlowLayoutMill(base: Base, blog: Blog, markup: Markup, val resolver: String => String) extends LayoutMill {
   def make(baseUrl: String): FlowLayout = FlowLayout(baseUrl, base, blog, markup, this)
 
   private def inlineStyles = s"""
@@ -181,11 +185,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     s"""<span class=$cl>$aTag$desc</span>"""
   }
 
-  def gallerySample(a: Article) =
-    a.extraImages.take(3).map { i =>
-      s"""<a href="${blog.relUrlFromSlug(a.slug)}"><img class=th src="${blog.thumbnailUrl(i)}"/></a>"""
-    }.mkString(" ")
-
   def rssLink(rss: String) =
     s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>"""
 
@@ -265,15 +264,15 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
   def makeFullArticle(a: Article): String = _makeFullArticle(a, false)
 
   // Bare article body, no title, no links to related articles, no tags. This method is used in RSS feeds.
-  def makeArticleBody(a: Article, compact: Boolean): String = {
+  def makeArticleBody(a: Article): String = {
     a.text.render(this, rel)+
     ifs(a.isTag, {
       val linked = a.slugsOfLinkedArticles(blog).toSet
       listOfLinks(base.allTags(a.asTag)._2.filter(a => !linked.contains(a.asSlug)), blog.tagFormat == "short")
     })+
-    ifs(!compact, a.extraImages.map(img => imgTag(img.asSmallThumbnail, if (img.localSource != null) img.localSource.text else a.text)).mkString(" "))+
-    ifs( compact, gallerySample(a))
+    a.extraImages.map { img => imgTag(img.asSmallThumbnail, if (img.localSource != null) img.localSource.text else a.text) }.mkString(" ")
   }
+
 
   def listOfLinks(list: Seq[Article], shortArticles: Boolean) =
     if (shortArticles) list.map(makeShortArticle).mkString+"<br/>&nbsp;"
@@ -296,9 +295,11 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
     val title = blog.hooks.title(base, blog, this, a, compact)
+    val prev = base.prev(a)
+    val next = base.next(a)
 
     "<article>"+
-    ifs(!compact, "<span class=f>"+makeNextPrevArrows(a)+"</span>")+
+    ifs(!compact && (prev != null || next != null), "<span class=f>"+makeNextPrevArrows(prev, next)+"</span>")+
     (if (title != null) title else if (!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
     ifs(a.isTag, {
       val sup = a.tags.visible.map(base.tagByTitle)
@@ -311,7 +312,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
       })
     })+
     ifs(title == null, "<br/>\n")+
-    makeArticleBody(a, compact)+
+    makeArticleBody(a)+
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
     "</article>"+
     ifs(!compact,
@@ -339,11 +340,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
       .sortBy { case (_, (t, as)) => (~as.size, t.slug) }
       .map { case (_, (t, as)) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
-  def addArrows(content: String, next: Article, prev: Article, includeBottom: Boolean = false) = {
-    "<span class=f>"+_makeNextPrevArrows(next, prev)+"</span>"+
-    content+
-    (if (includeBottom) "<span class=f>"+_makeNextPrevArrows(next, prev)+"</span>" else "")
-  }
+  def addArrows(content: String, next: Article, prev: Article) =
+    makeNextPrevArrows(next, prev)+content+makeNextPrevArrows(next, prev)
 
   private def makeDateWithLinkToPubBy(a: Article, asLink: Boolean) =
     if (a.pubBy != null && !asLink) articleLink(a.pubBy, makeDate(a))
@@ -371,14 +369,11 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     if (t.isSupertag) s"<b>$html</b>" else html
   }
 
-  def makeNextPrevArrows(a: Article) = {
-    val (prev, next) = (base.prev(a), base.next(a))
-    if (prev == null && next == null) "" else  _makeNextPrevArrows(prev, next)
-  }
-
-  def _makeNextPrevArrows(prev: Article, next: Article) =
+  def makeNextPrevArrows(prev: Article, next: Article) =
+    "<span class=f>"+
     (if (prev == null) "«««" else s"""<a href="${rel(blog.absUrl(prev))}">«««</a>""")+" "+
-    (if (next == null) "»»»" else s"""<a href="${rel(blog.absUrl(next))}">»»»</a>""")
+    (if (next == null) "»»»" else s"""<a href="${rel(blog.absUrl(next))}">»»»</a>""")+
+    "</span>"
 
   def makeTagLinks(tags: Seq[Article]) = tags.map(makeTagLink).mkString(" ")
 

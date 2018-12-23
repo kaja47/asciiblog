@@ -1286,7 +1286,7 @@ object MakeFiles {
       }
     }
 
-    val layout = new FlowLayoutMill(base, blog, markup, resolver)
+    val layout: LayoutMill = new FlowLayoutMill(base, blog, markup, resolver)
 
     timer("generate and save files", blog) {
     timer("generate and save files - archive", blog) {
@@ -1294,7 +1294,7 @@ object MakeFiles {
       val l = layout.make(blog.absUrl(a))
       val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
       val next = archivePages.lift(idx+1).map(_._1).getOrElse(null)
-      val body = l.addArrows(l.makeIndexArchive(as), prev, next, true)
+      val body = l.addArrows(l.makeIndexArchive(as), prev, next)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, containImages = as.exists(_.hasImageMarker)), oldFileIndex)
       a
     }
@@ -1330,7 +1330,7 @@ object MakeFiles {
       var l = layout.make(blog.absUrl(a))
       val prev = imgsPages.lift(idx-1).getOrElse(null)
       val next = imgsPages.lift(idx+1).getOrElse(null)
-      val body = l.addArrows(l.makeFullArticle(a), prev, next, true)
+      val body = l.addArrows(l.makeFullArticle(a), prev, next)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = true), oldFileIndex)
     }
     }
@@ -1363,7 +1363,7 @@ object MakeFiles {
     }
 
     def mkBody(a: Article) = {
-      val body = layout.make(null).makeArticleBody(a, true)
+      val body = layout.make(null).makeArticleBody(a)
       FlowLayout.updateLinks(body, url => blog.addParamMediumFeed(url))
     }
     fileIndex ++= saveXml("rss", makeRSS(base.feed.take(blog.rssLimit), if (blog.articlesInRss) mkBody else null), oldFileIndex)
