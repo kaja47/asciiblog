@@ -122,7 +122,12 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
   private def mkParagraph(_txt: String, aliases: Map[String, String], relativize: String => String): String = {
     var txt = _txt
     if (txt.contains(blackoutCheck)) {
-      txt = blackoutRegex.replaceAllIn(txt, m => ("█"*(m.group(0).length-2)).grouped(5).mkString("<wbr>"))
+      txt = blackoutRegex.replaceAllIn(txt, m => {
+          val sb = new StringBuilder()
+          val len = m.end - m.start - 2
+          for (i <- 0 to len/5) { sb.append("█████").append("<wbr>") }
+          sb.delete(sb.length-5, sb.length).toString
+      })
     }
     if (txt.contains(altCheck)) {
       txt = altRegex     .replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
