@@ -121,52 +121,66 @@ object Blog {
     val cfgDirectory = cfgFile.getParentFile
     val inline = if (cfg.contains("inline!")) Seq(cfgFile) else Seq()
 
+    def cfgStr (key: String, default: String)  = cfg.getOrElse(key, default).trim
+    def cfgBool(key: String, default: Boolean) = {
+      val str = cfgStr(key, default.toString)
+      try str.toBoolean catch {
+        case e: java.lang.IllegalArgumentException => sys.error(s"$key: expected boolean, '$str' given")
+      }
+    }
+    def cfgInt (key: String, default: Int) = {
+      val str = cfgStr(key, default.toString)
+      try str.toInt catch {
+        case e: java.lang.IllegalArgumentException => sys.error(s"$key: expected integer, '$str' given")
+      }
+    }
+
     val b = new Blog(
       title                  = cfg("title"),
       baseUrl                = cfg("baseUrl"),
-      files                  = inline ++ spaceSeparatedStrings(cfg.getOrElse("files", "").trim).flatMap(f => globFiles(f, cfgDirectory)), // relative paths are relative to config file
-      encoding               = cfg.getOrElse("encoding", "utf-8"),
+      files                  = inline ++ spaceSeparatedStrings(cfgStr("files", "")).flatMap(f => globFiles(f, cfgDirectory)), // relative paths are relative to config file
+      encoding               = cfgStr ("encoding", "utf-8"),
       outDir                 = cfg.get("outDir").map(f => newFile(f, cfgDirectory)).getOrElse(null),
-      articlesOnIndex        = cfg.getOrElse("fullArticlesOnIndex", "5").toInt,
-      groupArchiveBy         = cfg.getOrElse("groupArchiveBy", "year").ensuring(f => Set("year", "month").contains(f) || f.matches("\\d+")),
-      archiveFormat          = cfg.getOrElse("archiveFormat", "link").ensuring(f => Set("link", "short").contains(f)),
-      tagFormat              = cfg.getOrElse("tagFormat", "link").ensuring(f => Set("link", "short").contains(f)),
-      cssStyle               = cfg.getOrElse("style", ""),
+      articlesOnIndex        = cfgInt ("fullArticlesOnIndex", 5),
+      groupArchiveBy         = cfgStr ("groupArchiveBy", "year").ensuring(f => f == "year" || f == "month" || f.matches("\\d+"), "groupArchiveBy must be set to 'year', 'month' or some integer"),
+      archiveFormat          = cfgStr ("archiveFormat", "link") .ensuring(f => f == "link" || f == "short",                      "archiveFormat must be set to 'year' or 'month'"),
+      tagFormat              = cfgStr ("tagFormat", "link")     .ensuring(f => f == "link" || f == "short",                      "tagFormat must be set to 'link' or 'short'"),
+      cssStyle               = cfgStr ("style", ""),
       cssFile                = cfg.get("cssFile").map(f => newFile(f, cfgDirectory)).getOrElse(null),
-      header                 = cfg.getOrElse("header", ""),
-      footer                 = cfg.getOrElse("footer", ""),
-      thumbWidth             = cfg.getOrElse("thumbnailWidth", "150").toInt,
-      thumbHeight            = cfg.getOrElse("thumbnailHeight", "100").toInt,
-      bigThumbWidth          = cfg.getOrElse("bigThumbnailWidth", "800").toInt,
-      rssLimit               = cfg.getOrElse("rssLimit", Int.MaxValue.toString).toInt,
-      articlesInRss          = cfg.getOrElse("fullArticlesInRss", "false").toBoolean,
-      similarLimit           = cfg.getOrElse("similarLinksLimit", "5").toInt,
-      sortByDate             = cfg.getOrElse("sortByDate", "false").toBoolean,
-      imageRoot              = cfg.getOrElse("imageRoot", ""),
-      articlesMustBeSorted   = cfg.getOrElse("articlesMustBeSorted", "false").toBoolean,
-      articlesMustNotBeMixed = cfg.getOrElse("articlesMustNotBeMixed", "false").toBoolean,
-      language               = cfg.getOrElse("language", "en"),
-      dumpAll                = cfg.getOrElse("dumpAll", "false").toBoolean, // ignore hidden articles, dump everything into main feed
-      fileSuffix             = cfg.getOrElse("fileSuffix", ".html"),
-      imageMarker            = cfg.getOrElse("imageMarker", ""),
-      albumsDir              = cfg.getOrElse("albumsDir", ""),
-      allowComments          = cfg.getOrElse("allowComments", "false").toBoolean,
-      shareLinks             = cfg.getOrElse("shareLinks", "false").toBoolean,
-      demandExplicitSlugs    = cfg.getOrElse("demandExplicitSlugs", "false").toBoolean,
-      excludeFutureArticles  = cfg.getOrElse("excludeFutureArticles", "false").toBoolean,
+      header                 = cfgStr ("header", ""),
+      footer                 = cfgStr ("footer", ""),
+      thumbWidth             = cfgInt ("thumbnailWidth", 150),
+      thumbHeight            = cfgInt ("thumbnailHeight", 100),
+      bigThumbWidth          = cfgInt ("bigThumbnailWidth", 800),
+      rssLimit               = cfgInt ("rssLimit", Int.MaxValue),
+      articlesInRss          = cfgBool("fullArticlesInRss", false),
+      similarLimit           = cfgInt ("similarLinksLimit", 5),
+      sortByDate             = cfgBool("sortByDate", false),
+      imageRoot              = cfgStr ("imageRoot", ""),
+      articlesMustBeSorted   = cfgBool("articlesMustBeSorted", false),
+      articlesMustNotBeMixed = cfgBool("articlesMustNotBeMixed", false),
+      language               = cfgStr ("language", "en"),
+      dumpAll                = cfgBool("dumpAll", false), // dump everything into main feed including hidden articles
+      fileSuffix             = cfgStr ("fileSuffix", ".html"),
+      imageMarker            = cfgStr ("imageMarker", ""),
+      albumsDir              = cfgStr ("albumsDir", ""),
+      allowComments          = cfgBool("allowComments", false),
+      shareLinks             = cfgBool("shareLinks", false),
+      demandExplicitSlugs    = cfgBool("demandExplicitSlugs", false),
+      excludeFutureArticles  = cfgBool("excludeFutureArticles", false),
 
-      defaultUser            = cfg.getOrElse("defaultUser", null),
-      openGraph              = cfg.getOrElse("openGraph", "false").toBoolean,
-      twitterSite            = cfg.getOrElse("twitter.site", ""),
-      twitterCreator         = cfg.getOrElse("twitter.creator", ""),
+      defaultUser            = cfgStr ("defaultUser", null),
+      openGraph              = cfgBool("openGraph", false),
+      twitterSite            = cfgStr ("twitter.site", ""),
+      twitterCreator         = cfgStr ("twitter.creator", ""),
 
       args                   = args,
       translation            = translation ++ cfg.collect { case (k, v) if k.startsWith("translation.") => k.split("\\.", 2)(1) -> v } ,
 
       hooks                  = Class.forName(cfg.getOrElse("hooks", "asciiblog.NoHooks")).newInstance().asInstanceOf[Hooks],
 
-      printTiming            = cfg.getOrElse("printTiming", "false").toBoolean,
-      printErrors            = cfg.getOrElse("printErrors", "true").toBoolean,
+      printTiming            = cfgBool("printTiming", false),
+      printErrors            = cfgBool("printErrors", true),
 
       cfg = cfg
     )
