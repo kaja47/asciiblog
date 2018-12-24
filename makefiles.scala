@@ -23,14 +23,22 @@ object Make extends App {
     sys.exit()
   }
 
-  val (blog, markup, base, resolver) = MakeFiles.init(args)
-  MakeFiles.makeFiles(blog, base, markup, resolver)
+  try {
+    val (blog, markup, base, resolver) = MakeFiles.init(args)
+    MakeFiles.makeFiles(blog, base, markup, resolver)
 
-  timer.end()
-  println("total: "+timer.ms)
+    timer.end()
+    println("total: "+timer.ms)
 
-  blog.hooks.afterGenerate(base, blog)
+    blog.hooks.afterGenerate(base, blog)
+  } catch {
+    case e: ConfigurationException =>
+      println("configuration error: "+e.message)
+  }
 }
+
+
+class ConfigurationException(val message: String, val valueGiven: String = null) extends Exception(message)
 
 
 case class Blog (
@@ -121,23 +129,29 @@ object Blog {
     val cfgDirectory = cfgFile.getParentFile
     val inline = if (cfg.contains("inline!")) Seq(cfgFile) else Seq()
 
-    def cfgStr (key: String, default: String)  = cfg.getOrElse(key, default).trim
+    def cfgStr_! (key: String): String = {
+      if (!cfg.contains(key)) throw new ConfigurationException(s"key `$key` required")
+      cfg(key).trim
+    }
+    def cfgStr (key: String, default: String) = cfg.getOrElse(key, default).trim
     def cfgBool(key: String, default: Boolean) = {
       val str = cfgStr(key, default.toString)
       try str.toBoolean catch {
-        case e: java.lang.IllegalArgumentException => sys.error(s"$key: expected boolean, '$str' given")
+        case e: java.lang.IllegalArgumentException =>
+          throw new ConfigurationException(s"$key: expected boolean, '$str' given")
       }
     }
     def cfgInt (key: String, default: Int) = {
       val str = cfgStr(key, default.toString)
       try str.toInt catch {
-        case e: java.lang.IllegalArgumentException => sys.error(s"$key: expected integer, '$str' given")
+        case e: java.lang.IllegalArgumentException =>
+          throw new ConfigurationException(s"$key: expected integer, '$str' given")
       }
     }
 
     val b = new Blog(
-      title                  = cfg("title"),
-      baseUrl                = cfg("baseUrl"),
+      title                  = cfgStr_!("title"),
+      baseUrl                = cfgStr_!("baseUrl"),
       files                  = inline ++ spaceSeparatedStrings(cfgStr("files", "")).flatMap(f => globFiles(f, cfgDirectory)), // relative paths are relative to config file
       encoding               = cfgStr ("encoding", "utf-8"),
       outDir                 = cfg.get("outDir").map(f => newFile(f, cfgDirectory)).getOrElse(null),
@@ -177,7 +191,7 @@ object Blog {
       args                   = args,
       translation            = translation ++ cfg.collect { case (k, v) if k.startsWith("translation.") => k.split("\\.", 2)(1) -> v } ,
 
-      hooks                  = Class.forName(cfg.getOrElse("hooks", "asciiblog.NoHooks")).newInstance().asInstanceOf[Hooks],
+      hooks                  = Class.forName(cfgStr("hooks", "asciiblog.NoHooks")).newInstance().asInstanceOf[Hooks],
 
       printTiming            = cfgBool("printTiming", false),
       printErrors            = cfgBool("printErrors", true),
