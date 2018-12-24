@@ -183,6 +183,21 @@ object util {
     sb.toString
   }
 
+  def quoteHTMLAttribute(attr: String): String = {
+    def mustBeQuoted(attr: String): Boolean = {
+      val chars = " \t\n\r\f\"'`=<>"
+      var i = 0; while (i < attr.length) {
+        if (chars.indexOf(attr.charAt(i)) != -1) {
+          return true
+        }
+        i += 1
+      }
+      false
+    }
+
+    if (mustBeQuoted(attr)) "\""+attr+"\"" else attr
+  }
+
   def splitByRepeating[T](xs: Seq[T], t: T): Seq[Seq[T]] = {
     var i = 0
 

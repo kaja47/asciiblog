@@ -179,8 +179,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     val src  = rel(blog.absUrlFromPath(srcPath))
     val href = rel(if (linkTo == null) img.url else linkTo)
 
-    val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src="$src"/>"""
-    val aTag   = if (!img.zoomable && linkTo == null) imgTag else s"""<a href="$href">$imgTag</a>"""
+    val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src=${util.quoteHTMLAttribute(src)} />"""
+    val aTag   = if (!img.zoomable && linkTo == null) imgTag else s"""<a href=${util.quoteHTMLAttribute(href)}>$imgTag</a>"""
 
     s"""<span class=$cl>$aTag$desc</span>"""
   }
@@ -354,7 +354,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
   def articleLink(a: Article, title: String, asLink: Boolean = true, allowImageMarker: Boolean = false) =
     if (a.link != null || asLink)
-      s"""<i><a href="${articleUrl(a)}">$title</a></i>"""+ifs(allowImageMarker && a.hasImageMarker, blog.imageMarker)
+      "<i><a href="+util.quoteHTMLAttribute(articleUrl(a))+">"+title+"</a></i>"+ifs(allowImageMarker && a.hasImageMarker, blog.imageMarker)
     else
       s"""<i>$title</i>"""+ifs(allowImageMarker && a.hasImageMarker, blog.imageMarker)
 

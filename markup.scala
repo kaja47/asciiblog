@@ -141,7 +141,8 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
         if (link == Blog.invalidLinkMarker) {
           sb append s.group(1).asString()
         } else {
-          sb append "<a href=\"" append relativize(link) append "\">" append s.group(1).asString() append "</a>"
+          val l = relativize(link)
+          sb append "<a href=" append util.quoteHTMLAttribute(l) append ">" append s.group(1).asString() append "</a>"
         }
       }.toString
     }
@@ -165,7 +166,8 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     }
     if (txt.contains(noteCheck)) {
       txt = noteRegex.replaceAllIn(txt, m => {
-        Regex.quoteReplacement(s"""<a href="$noteUrl#fn${m.group(1)}"><sup>${m.group(1)}</sup></a> """)
+        val l = noteUrl+"#fn"+m.group(1)
+        Regex.quoteReplacement(s"""<a href=${util.quoteHTMLAttribute(l)}><sup>${m.group(1)}</sup></a> """)
       })
     }
     txt = preposRegex.replaceAllIn(txt, "$1\u00A0")
