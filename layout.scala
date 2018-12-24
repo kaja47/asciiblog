@@ -253,8 +253,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
         as.reverse.map { a => (month(a.date), Some(a)) }
       }
       y+" "+mas.map {
-        case (m, Some(a)) => articleLink(a, "&nbsp;"+m+"&nbsp;")
-        case (m, None) => "&nbsp;"+m+"&nbsp;"
+        case (m, Some(a)) => articleLink(a, "\u00A0"+m+"\u00A0")
+        case (m, None) => "\u00A0"+m+"\u00A0"
       }.mkString(" ")
     }.mkString("<br/>")+
     undated.map { a => "<br/>"+articleLink(a, txl("undated")) }.mkString+
