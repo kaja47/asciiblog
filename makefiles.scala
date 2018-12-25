@@ -183,7 +183,7 @@ object Blog {
       demandExplicitSlugs    = cfgBool("demandExplicitSlugs", false),
       excludeFutureArticles  = cfgBool("excludeFutureArticles", false),
 
-      defaultUser            = cfgStr ("defaultUser", null),
+      defaultUser            = cfgStr ("defaultUser", ""),
       openGraph              = cfgBool("openGraph", false),
       twitterSite            = cfgStr ("twitter.site", ""),
       twitterCreator         = cfgStr ("twitter.creator", ""),
@@ -203,7 +203,8 @@ object Blog {
     val imgRoot2 = if (imgRoot1.endsWith("/")) imgRoot1 else imgRoot1+"/"
 
     b.copy(
-      imageRoot = imgRoot2
+      imageRoot = imgRoot2,
+      defaultUser = if (b.defaultUser.isEmpty) null else b.defaultUser
     )
   }
 
