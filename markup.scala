@@ -175,40 +175,60 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
   }
 
   private def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String): String =
-    segments.map {
-      case Heading(txt)         => "<h3>"+mkParagraph(txt, aliases, relativize)+"</h3>"
-      case Hr()                 => "<hr/>\n"
-      case Linkref(_)           => ""
-      case Block("html", txt)   => txt
-      case Block("div",  txt)   => s"<div>$txt</div>"
-      case Block("code", txt)   => s"<pre>${util.escape(txt)}</pre>"
-      case Block("pre",  txt)   => s"<pre>${util.escape(txt)}</pre>"
-      case Block("comment",_)   => ""
+    _mkText(segments, l, aliases, relativize, new StringBuilder(1024))
+
+  private def _mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String, sb: StringBuilder): String = {
+    segments.foreach {
+      case Heading(txt)         => sb.append("<h3>").append(mkParagraph(txt, aliases, relativize)).append("</h3>")
+      case Hr()                 => sb.append("<hr/>\n")
+      case Linkref(_)           =>
+      case Block("html", txt)   => sb.append(txt)
+      case Block("div",  txt)   => sb.append("<div>").append(txt).append("</div>")
+      case Block("code", txt)   => sb.append("<pre>").append(util.escape(txt)).append("</pre>")
+      case Block("pre",  txt)   => sb.append("<pre>").append(util.escape(txt)).append("</pre>")
+      case Block("comment",_)   =>
       case Block(tpe, _)        => sys.error(s"unknown block type '$tpe'")
-      case Images(images)       => images.map(img => l.imgTag(img, this)).mkString(" ")
-      case Paragraph(txt)       => "<p>"+mkParagraph(txt, aliases, relativize)+"</p>"
-      case Blockquote(sx)       => "<blockquote>"+mkText(sx, l, aliases, relativize)+"</blockquote>"
-      case Inline(txt)          => mkParagraph(txt, aliases, relativize)
-      case ByLine(txt)          => "<div style='text-align:right'>"+mkParagraph(txt, aliases, relativize)+"</div>"
-      case SegmentSeq(sx)       => mkText(sx, l, aliases, relativize)
+      case Images(images)       => images.foreach { img => sb.append(l.imgTag(img, this)).append(" ") }
+      case Paragraph(txt)       => sb.append("<p>").append(mkParagraph(txt, aliases, relativize)).append("</p>")
+      case Blockquote(sx)       => sb.append("<blockquote>"); _mkText(sx, l, aliases, relativize, sb); sb.append("</blockquote>")
+      case Inline(txt)          => sb.append(mkParagraph(txt, aliases, relativize))
+      case ByLine(txt)          => sb.append("<div style='text-align:right'>").append(mkParagraph(txt, aliases, relativize)).append("</div>")
+      case SegmentSeq(sx)       => _mkText(sx, l, aliases, relativize, sb)
       case BulletList(items)    =>
-        "<ul>"+items.map { it => "<li>"+mkText(Seq(it), l, aliases, relativize)+"</li>" }.mkString("\n")+"</ul>"
+        sb.append("<ul>")
+        items.foreach { it =>
+          sb.append("<li>")
+          _mkText(Seq(it), l, aliases, relativize, sb)
+          sb.append("</li>\n")
+        }
+        sb.append("</ul>")
+
       case list @ NumberedList(items) =>
-        "<ol>"+items.zipWithIndex.map {
+        sb.append("<ol>")
+        items.zipWithIndex.foreach {
           case ((num, it), i) =>
             val id    = if (validRefTargets(num) == list) s""" id="fn$num""""  else ""
             val value = if (num != i+1)                   s""" value="$num"""" else ""
-            s"""<li${id}${value}>${mkText(Seq(it), l, aliases, relativize)}</li>"""
-        }.mkString("\n")+"</ol>"
+            sb.append("<li").append(id).append(value).append(">")
+            _mkText(Seq(it), l, aliases, relativize, sb)
+            sb.append("</li>\n")
+        }
+        sb.append("</ol>")
+
       case Table(rows, columns) =>
-        "<table>"+
-        rows.map(cols =>
-          "<tr>"+
-          cols.map(cell => "<td>"+mkParagraph(cell.txt, aliases, relativize)+"</td>").mkString+
-          "</tr>"
-        ).mkString+
-        "</table>"
-    }.mkString("")
+        sb.append("<table>")
+        rows.foreach { cols =>
+          sb.append("<tr>")
+          cols.foreach { cell =>
+            sb.append("<td>").append(mkParagraph(cell.txt, aliases, relativize)).append("</td>")
+          }
+          sb.append("</tr>")
+        }
+        sb.append("</table>")
+    }
+
+    sb.toString
+  }
 
 }
 
