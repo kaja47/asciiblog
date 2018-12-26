@@ -1351,7 +1351,7 @@ object MakeFiles {
 
     for ((image, jobs) <- resizeJobs) {
       try {
-        lazy val file: BufferedImage = {
+        lazy val fullImage = {
           if (blog.localImages && image.url.startsWith(blog.imageRoot)) {
             val path = URLDecoder.decode(image.url.drop(blog.imageRoot.length), "utf8")
             val localFile = new File(blog.imageDir, path)
@@ -1362,9 +1362,11 @@ object MakeFiles {
             ImageIO.read(new URL(image.url))
           }
         }
+
         for ((thumbFile, w, h, sharpenStrength) <- jobs if !thumbFile.exists) {
+          val fi = fullImage
           println(s"into $thumbFile")
-          file match {
+          fi match {
             case null => println(s"ImageIO.read(${image.url}) == null")
             case full =>
               val suffix = image.url.split("\\.").last.toLowerCase
@@ -1379,7 +1381,12 @@ object MakeFiles {
               }
           }
         }
-      } catch { case e: IIOException => println(e) }
+      } catch {
+        case e: IIOException =>
+          println(e)
+          println(s"note: you might want to set `localImages false` in your config file in order to fetch all images from server (${blog.imageRoot})")
+          println(s"note: you might want to set `localImages true` in your config file in order to fetch all images from local directory (${blog.imageDir})")
+      }
     }
     }
 
