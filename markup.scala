@@ -171,6 +171,28 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
       })
     }
     txt = preposRegex.replaceAllIn(txt, "$1\u00A0")
+
+    /*
+    {
+      if (txt.length >= 2) {
+        def ws(ch: Char) = (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')
+
+        val res = new StringBuilder(txt.length+128)
+        var pos = 0
+
+        var i = 2; while (i < txt.length) {
+          if (ws(txt.charAt(i)) && isPreposChar(txt.charAt(i-1)) && ws(txt.charAt(i-2))) {
+            res.append(txt, pos, i).append("\u00A0")
+            pos = i+1
+          }
+          i += 1
+        }
+        res.append(txt, pos, txt.length)
+        txt = res.toString
+      }
+    }
+    */
+
     txt
   }
 
@@ -263,7 +285,12 @@ object AsciiMarkup extends Markup {
   val emRegex       = """---""".r
   val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
   val noteRegex     = """(?x) \[\[ (\d++) \]\]""".r
-  val preposRegex   = """(?xuUms) ((?:^|\W)[ksvzouiKSVZOUIA])\s++(?=\w)""".r // for unbreakable space between preposition and word (czech)
+  val preposRegex   = """(?xuUms) ((?:^|\s|\>)[ksvzouiKSVZOUIA])\s++(?=\w)""".r // for unbreakable space between preposition and word (czech)
+
+  val preposCharsLen = 123
+  val preposChars = Array.tabulate[Boolean](preposCharsLen) { i => "ksvzouiaKSVZOUIA".indexOf(i) != -1 }
+
+  def isPreposChar(ch: Char) = ch < preposCharsLen && preposChars(ch)
 
   val codeCheck     = """`"""
   val boldCheck     = """**"""
