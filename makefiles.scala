@@ -199,6 +199,14 @@ object Blog {
       cfg = cfg
     )
 
+    if (!isAbsolute(b.baseUrl)) {
+      throw new ConfigurationException(s"baseUrl must be aboslute url, '${b.baseUrl}' given")
+    }
+
+    if (b.imageRoot.nonEmpty && !isAbsolute(b.imageRoot)) {
+      throw new ConfigurationException(s"imageRoot must be aboslute url, '${b.imageRoot}' given")
+    }
+
     val imgRoot1 = if (b.imageRoot.nonEmpty) b.imageRoot else b.baseUrl
     val imgRoot2 = if (imgRoot1.endsWith("/")) imgRoot1 else imgRoot1+"/"
 
