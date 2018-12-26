@@ -2,7 +2,7 @@ package asciiblog
 
 import MakeFiles.{ hash, tagSlug, invert, UrlOps, isAbsolute }
 import java.io.{ File, BufferedWriter, OutputStreamWriter, FileOutputStream }
-import java.net.{ URL, URI }
+import java.net.{ URL, URI, URLDecoder }
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.{ Date, GregorianCalendar, Calendar, Locale }
@@ -44,7 +44,10 @@ class ConfigurationException(val message: String, val valueGiven: String = null)
 case class Blog (
   val title: String,
   val baseUrl: String,
+  val imageRoot: String,
   val files: Seq[File],
+  val imageDir: File,
+  val localImages: Boolean,
   val encoding: String,
   val outDir: File,
   val articlesOnIndex: Int,
@@ -62,7 +65,6 @@ case class Blog (
   val articlesInRss: Boolean,
   val similarLimit: Int,
   val sortByDate: Boolean,
-  val imageRoot: String,
   val articlesMustBeSorted: Boolean,
   val articlesMustNotBeMixed: Boolean,
   val language: String,
@@ -152,7 +154,10 @@ object Blog {
     val b = new Blog(
       title                  = cfgStr_!("title"),
       baseUrl                = cfgStr_!("baseUrl"),
+      imageRoot              = cfgStr ("imageRoot", ""),
       files                  = inline ++ spaceSeparatedStrings(cfgStr("files", "")).flatMap(f => globFiles(f, cfgDirectory)), // relative paths are relative to config file
+      imageDir               = cfg.get("imageDir").fold(cfgDirectory)(f => if (f.isEmpty) cfgDirectory else newFile(f, cfgDirectory)),
+      localImages            = cfgBool("localImages", true),
       encoding               = cfgStr ("encoding", "utf-8"),
       outDir                 = cfg.get("outDir").map(f => newFile(f, cfgDirectory)).getOrElse(null),
       articlesOnIndex        = cfgInt ("fullArticlesOnIndex", 5),
@@ -170,7 +175,6 @@ object Blog {
       articlesInRss          = cfgBool("fullArticlesInRss", false),
       similarLimit           = cfgInt ("similarLinksLimit", 5),
       sortByDate             = cfgBool("sortByDate", false),
-      imageRoot              = cfgStr ("imageRoot", ""),
       articlesMustBeSorted   = cfgBool("articlesMustBeSorted", false),
       articlesMustNotBeMixed = cfgBool("articlesMustNotBeMixed", false),
       language               = cfgStr ("language", "en"),
@@ -1347,12 +1351,19 @@ object MakeFiles {
 
     for ((image, jobs) <- resizeJobs) {
       try {
-        lazy val file = {
-          println(s"downloading ${image.url}")
-          ImageIO.read(new URL(image.url))
+        lazy val file: BufferedImage = {
+          if (blog.localImages && image.url.startsWith(blog.imageRoot)) {
+            val path = URLDecoder.decode(image.url.drop(blog.imageRoot.length), "utf8")
+            val localFile = new File(blog.imageDir, path)
+            println(s"resizing local image ${localFile}")
+            ImageIO.read(localFile)
+          } else {
+            println(s"resizing image ${image.url}")
+            ImageIO.read(new URL(image.url))
+          }
         }
         for ((thumbFile, w, h, sharpenStrength) <- jobs if !thumbFile.exists) {
-          println(s"resizing image ${image.url} -> $thumbFile")
+          println(s"into $thumbFile")
           file match {
             case null => println(s"ImageIO.read(${image.url}) == null")
             case full =>
