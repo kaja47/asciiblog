@@ -229,9 +229,10 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
         sb.append("<ol>")
         items.zipWithIndex.foreach {
           case ((num, it), i) =>
-            val id    = if (validRefTargets(num) == list) s""" id="fn$num""""  else ""
-            val value = if (num != i+1)                   s""" value="$num"""" else ""
-            sb.append("<li").append(id).append(value).append(">")
+            sb.append("<li")
+            if (validRefTargets(num) == list) { sb.append(" id=").append(util.quoteHTMLAttribute("fn"+num)) }
+            if (num != i+1)                   { sb.append(" value=").append(util.quoteHTMLAttribute(num.toString)) }
+            sb.append(">")
             _mkText(Seq(it), l, aliases, relativize, sb)
             sb.append("</li>\n")
         }
