@@ -144,6 +144,16 @@ class Slurp(val s: String, from: Int, to: Int, groups: Int = 0) { self =>
   def char(ch: Char) = oneChar(ch)
   def digit() = digits(1, 1)
 
+  def string(str: String): this.type = {
+    if (!_match) return this
+    if (s.regionMatches(mark, str, 0, str.length)) {
+      mark += str.length
+    } else {
+      _match = false
+    }
+    this
+  }
+
   def until(ch: Char): this.type = { //runWhile(_ != ch, 0, MAX)
     if (!_match) return this
     val i = s.indexOf(ch, mark)
