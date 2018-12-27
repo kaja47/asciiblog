@@ -37,7 +37,7 @@ class Slurp(val s: String, from: Int, to: Int, groups: Int = 0) { self =>
   }
 
   def isEnd = pos >= to
-  def touchesEnd = mark > to
+  def touchesEnd = mark >= to
   def matchLength = mark - pos
 
   def matches = _match
@@ -192,12 +192,17 @@ class Slurp(val s: String, from: Int, to: Int, groups: Int = 0) { self =>
   def delimited(begin: Char, end: Char) = char(begin).to(end)
   def quoted(delim: Char): this.type = quoted(delim, delim)
   def quoted(begin: Char, end: Char): this.type = {
+    if (!_match) return this
     char(begin)
     var i = mark
     while (i < to && (s.charAt(i) != end || s.charAt(i-1) == '\\')) {
       i += 1
     }
-    mark = i + 1
+    if (i < to && s.charAt(i) == end) {
+      mark = i + 1
+    } else {
+      _match = false
+    }
     this
   }
 
