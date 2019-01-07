@@ -45,22 +45,22 @@ a          { color: inherit; }
 .f         { float: right; }
 .b         { max-width: 46em; font-family: monospace; line-height: 1.3; }
 blockquote { margin:0; padding:0; font-style:italic; }
-.about     { text-decoration: underline red; }
+.about     { text-decoration: dotted underline; }
 .thz, .fr, .main
-           { font-size: 0.8em }
+           { font-size: .8em }
 span.thz   { width: ${blog.thumbWidth}px; display: inline-block; vertical-align: top; }
 span.fr    { text-align: right; max-width: 45%; float: right; }
-span.main  { text-align: center; display: block; margin-bottom: 0.5em; }
+span.main  { text-align: center; display: block; margin-bottom: .5em; }
 span.main img, span.fr img
            { max-width: 100%; }
 h2         { display: inline; margin: 0; font-size:1em; }
-hr         { border: 0px dotted gray; border-top-width: 1px; margin: 0.8em 4em; }
+hr         { border: 0; border-top: 1px dotted gray; margin: .8em 4em; }
 p          { margin: 1.4em 0; }
-.sh        { float: left; clear: both; margin: 0.8em 0; }
-.shimg     { float: left; margin: 0 0.5em 0 0; }
+.sh        { float: left; clear: both; margin: .8em 0; }
+.shimg     { float: left; margin: 0 .5em 0 0; }
 footer     { font-size: 0.9em; border-top: 1px dashed gray; padding-top: 1em; color: #222; }
 article    { margin-bottom: 4em; }
-aside      { clear:both; margin-bottom: 2em; font-size: 0.9em; }
+aside      { clear:both; margin-bottom: 2em; font-size: .9em; }
 """.trim
 
   import CssMinimizer._
