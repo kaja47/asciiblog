@@ -4,6 +4,7 @@ import scala.collection.mutable
 import scala.util.matching.Regex
 import java.util.regex.{ Pattern, Matcher }
 import java.io.File
+import java.lang.StringBuilder
 
 class TopK[T: Ordering](count: Int) {
   private[this] val ord = implicitly[Ordering[T]].reverse
@@ -24,7 +25,6 @@ class TopK[T: Ordering](count: Int) {
 }
 
 object XMLSW {
-  import java.lang.StringBuilder
 
   def document(body: XMLSW => Unit, sb: StringBuilder): StringBuilder = {
     new XMLSW(sb).document(body)
@@ -41,9 +41,15 @@ object XMLSW {
   }
 }
 
-class XMLSW(sb: java.lang.StringBuilder) {
+class XMLSW(sb: java.lang.StringBuilder, val html5: Boolean = false) {
+  def builder = sb
+
   def document(body: XMLSW => Unit) = {
-    sb.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
+    if (html5) {
+      sb.append("<!DOCTYPE html>")
+    } else {
+      sb.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
+    }
     body(this)
   }
 
@@ -64,15 +70,41 @@ class XMLSW(sb: java.lang.StringBuilder) {
 
   def element(localName: String, attributes: Seq[(String, String)], content: String): Unit = {
     startElem(localName, attributes)
-    txt(content)
+    writeString(content, false)
     endElem(localName)
   }
 
-  def text(t: String): Unit = txt(t)
+  def element2(localName: String)(attributes: XMLSW => Unit)(body: XMLSW => Unit): this.type = {
+    sb.append("<").append(localName)
+    attributes(this)
+    sb.append(">")
+    body(this)
+    endElem(localName)
+    this
+  }
+
+  def shortElement2(localName: String)(attributes: XMLSW => Unit): this.type = {
+    sb.append("<").append(localName)
+    attributes(this)
+    if (html5) {
+      sb.append(">")
+    } else {
+      sb.append("/>")
+    }
+    this
+  }
+
+  def attr(key: String, value: String): this.type = {
+    writeAttr(key, value)
+    this
+  }
+
+  def text(t: String): Unit = writeString(t, false)
+
 
   private def startElem(localName: String, attributes: Seq[(String, String)]) = {
     sb.append("<").append(localName)
-    attrs(attributes)
+    writeAttrs(attributes)
     sb.append(">")
   }
 
@@ -81,18 +113,23 @@ class XMLSW(sb: java.lang.StringBuilder) {
 
   private def shortElem(localName: String, attributes: Seq[(String, String)]) = {
     sb.append("<").append(localName)
-    attrs(attributes)
+    writeAttrs(attributes)
     sb.append("/>")
   }
 
-  private def attrs(attributes: Seq[(String, String)]) =
-    for ((k, v) <- attributes) {
-      sb.append(" ").append(k).append("=\"")
-      txt(v, true)
-      sb.append("\"")
-    }
+  private def writeAttrs(attributes: Seq[(String, String)]) =
+    for ((k, v) <- attributes) writeAttr(k, v)
 
-  private def txt(txt: String, escapeDoubleQuotes: Boolean = false) = {
+
+  private def writeAttr(key: String, value: String) = {
+    sb.append(" ").append(key).append("=")
+    val q = !html5 || util.mustHTMLAttributeBeQuoted(value)
+    if (q) sb.append("\"")
+    writeString(value, true)
+    if (q) sb.append("\"")
+  }
+
+  private def writeString(txt: String, escapeDoubleQuotes: Boolean) = {
     var start = 0
     var i = 0; while (i < txt.length) {
       (txt.charAt(i): @annotation.switch) match {
@@ -106,7 +143,7 @@ class XMLSW(sb: java.lang.StringBuilder) {
           sb.append(txt, start, i).append("&lt;")
           start = i+1
         case '"' => if (escapeDoubleQuotes) {
-          sb.append(txt, start, i).append("&qt;")
+          sb.append(txt, start, i).append("&quot;")
           start = i+1
         }
         case _ =>
@@ -169,7 +206,7 @@ object util {
   }
 
   def escape(s: String): String = {
-    val sb = new StringBuilder()
+    val sb = new StringBuilder
     var i = 0; while (i < s.length) {
       s.charAt(i) match {
         case '"' => sb append "&quot;"
@@ -183,19 +220,21 @@ object util {
     sb.toString
   }
 
-  def quoteHTMLAttribute(attr: String): String = {
-    def mustBeQuoted(attr: String): Boolean = {
-      val chars = " \t\n\r\f\"'`=<>"
-      var i = 0; while (i < attr.length) {
-        if (chars.indexOf(attr.charAt(i)) != -1) {
-          return true
-        }
-        i += 1
-      }
-      false
-    }
+  def quoteHTMLAttribute(attr: String): String =
+    quoteHTMLAttribute(attr, new StringBuilder).toString
 
-    if (mustBeQuoted(attr)) "\""+attr+"\"" else attr
+  def quoteHTMLAttribute(attr: String, sb: StringBuilder): StringBuilder =
+    if (mustHTMLAttributeBeQuoted(attr)) sb.append("\"").append(attr).append("\"") else sb.append(attr)
+
+  def mustHTMLAttributeBeQuoted(attr: String): Boolean = {
+    val chars = " \t\n\r\f\"'`=<>"
+    var i = 0; while (i < attr.length) {
+      if (chars.indexOf(attr.charAt(i)) != -1) {
+        return true
+      }
+      i += 1
+    }
+    false
   }
 
   def splitByRepeating[T](xs: Seq[T], t: T): Seq[Seq[T]] = {
