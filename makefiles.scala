@@ -848,6 +848,9 @@ object MakeFiles {
               if (mkBody != null) {
                 w.element("description", mkBody(a))
               }
+              for (t <- a.tags.visible) {
+                w.element("category", t.title)
+              }
             }
           }
         }
