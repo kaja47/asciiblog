@@ -79,17 +79,13 @@ aside      { clear:both; margin-bottom: 2em; font-size: .9em; }
 
 
 object FlowLayout {
-  val __ahrefRegex = """(?xs) (<a [^>]* href=") ([^"]+) (" [^>]* >) (.*?) (</a>)""".r
-
-  private val stripTagRegex = """\<.*?\>""".r
-  private val truncateRegex = """\s+(\w+)?$|\<\w+$""".r
+  private val stripTagRegex = """\<.*?\>""".r // TODO less crude way to strip tags
 
   def stripTags(html: String) =
-    stripTagRegex.replaceAllIn(html, "") // TODO less crude way to strip tags
+    if (html.indexOf('<') == -1) html else stripTagRegex.replaceAllIn(html, "")
 
   def truncate(txt: String, len: Int, append: String = "\u2026"): String =
     if (txt.length <= len) txt else {
-      //truncateRegex.replaceAllIn(txt.take(len), "")+append
       val lastSpace = txt.lastIndexOf(" ", len)
       txt.substring(0, if (lastSpace < 0) len else lastSpace)+append
     }

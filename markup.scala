@@ -47,7 +47,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
   import AsciiText._
 
   def render(l: ImageLayout, relativize: String => String): String = mkText(segments, l, resolvedLinks, relativize)
-  def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt) => txt }.headOption.getOrElse(""), resolvedLinks, identity)
+  def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt, _) => txt }.headOption.getOrElse(""), resolvedLinks, identity, true)
   def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l), "").render(null, identity)
 
   // Overwrites segments, doesn't resolve links again. This saves some work but
@@ -119,7 +119,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     }.toMap // last key should be used
   }
 
-  private def mkParagraph(_txt: String, aliases: Map[String, String], relativize: String => String): String = {
+  private def mkParagraph(_txt: String, aliases: Map[String, String], relativize: String => String, plaintext: Boolean = false): String = {
     var txt = _txt
     if (txt.contains(blackoutCheck)) {
       txt = blackoutRegex.replaceAllIn(txt, m => {
@@ -130,44 +130,51 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
       })
     }
     if (txt.contains(altCheck)) {
-      txt = altRegex     .replaceAllIn(txt, """<span class=about title="$2">$1</span>""")
+      txt = altRegex.replaceAllIn(txt, if (plaintext) "$1" else """<span class=about title="$2">$1</span>""")
     }
     if (txt.contains(ahrefCheck)) {
-      txt = ahrefRegex   .replaceAllIn(txt, m => Regex.quoteReplacement(relativize(aliases(m.group(1)))))
+      txt = ahrefRegex.replaceAllIn(txt, m => Regex.quoteReplacement(relativize(aliases(m.group(1)))))
     }
     if (txt.contains(linkCheck)) {
       txt = linkSlurpReplace(txt) { (s, sb) =>
-        val link = aliases(s.group(2).asString())
-        if (link == Blog.invalidLinkMarker) {
+        if (plaintext) {
           sb append s.group(1).asString()
         } else {
-          val l = relativize(link)
-          sb append "<a href=" append util.quoteHTMLAttribute(l) append ">" append s.group(1).asString() append "</a>"
+          val link = aliases(s.group(2).asString())
+          if (link == Blog.invalidLinkMarker) {
+            sb append s.group(1).asString()
+          } else {
+            val l = relativize(link)
+            sb append "<a href=" append util.quoteHTMLAttribute(l) append ">" append s.group(1).asString() append "</a>"
+          }
         }
       }.toString
     }
     if (txt.contains(commentCheck)) {
-      txt = commentRegex .replaceAllIn(txt, "")
+      txt = commentRegex.replaceAllIn(txt, "")
     }
     if (txt.contains(boldCheck)) {
-      txt = boldRegex    .replaceAllIn(txt, """<b>$1</b>""")
+      txt = boldRegex.replaceAllIn(txt, if (plaintext) "$1" else """<b>$1</b>""")
     }
     if (txt.contains(italicCheck)) {
-      txt = italicRegex  .replaceAllIn(txt, """<i>$1</i>""")
+      txt = italicRegex.replaceAllIn(txt, if (plaintext) "$1" else """<i>$1</i>""")
     }
     if (txt.contains(italic2Check)) {
-      txt = italic2Regex .replaceAllIn(txt, """<i>$1</i>""")
+      txt = italic2Regex.replaceAllIn(txt, if (plaintext) "$1" else  """<i>$1</i>""")
     }
     if (txt.contains(emCheck)) {
-      txt = emRegex      .replaceAllIn(txt, "&mdash;")
+      txt = emRegex.replaceAllIn(txt, "&mdash;")
     }
     if (txt.contains(codeCheck)) {
-      txt = codeRegex    .replaceAllIn(txt, m => "<code>"+Regex.quoteReplacement(util.escape(m.group(1)))+"</code>")
+      txt = codeRegex.replaceAllIn(txt, m => "<code>"+Regex.quoteReplacement(util.escape(m.group(1)))+"</code>")
     }
     if (txt.contains(noteCheck)) {
       txt = noteRegex.replaceAllIn(txt, m => {
-        val l = noteUrl+"#fn"+m.group(1)
-        Regex.quoteReplacement(s"""<a href=${util.quoteHTMLAttribute(l)}><sup>${m.group(1)}</sup></a> """)
+        if (plaintext) "" else {
+          val l = noteUrl+"#fn"+m.group(1)
+          val click = if (noteUrl.nonEmpty) "" else " onclick=\"document.querySelector('"+l+"').style.border='1px dotted black'\""
+          Regex.quoteReplacement(s"""<a$click href=${util.quoteHTMLAttribute(l)}><sup>${m.group(1)}</sup></a> """)
+        }
       })
     }
     txt = preposRegex.replaceAllIn(txt, "$1\u00A0")
