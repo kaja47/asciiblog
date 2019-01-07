@@ -441,7 +441,22 @@ object MakeFiles {
 
   private def file(f: String) = new File(thisDir, f)
 
-  private def crudelyMinify(js: String) = js.replaceAll("""(?<!let|function|in|return)\s+(?!in)|/\*.*?\*/|//.*\n""", "")
+  private def crudelyMinify(js: String) = {
+    val rr = "//\\s+s/(.*)/(.*)/\\s*".r
+    val pr = "//\\s+prep\\s+(.*)".r
+    val directives = js.lines.takeWhile(_.startsWith("//"))
+
+    val min = js
+      .replaceAll("""(?<!let|function|in|of|return)\s+(?!in|of)|/\*.*?\*/|//.*\n""", "")
+      .replaceAll(""";}""", "}")
+
+    directives.foldLeft(min) { case (js, dir) =>
+      dir match {
+        case rr(from, to) => js.replace(from, to)
+        case pr(prep)     => prep+js
+      }
+    }
+  }
   def keyValuesIterator(f: File, enc: String) = io.Source.fromFile(f, enc).getLines.collect(keyVal)
   def keyValuesMap(f: File) = keyValuesIterator(f, "utf-8").toMap // TODO
 
