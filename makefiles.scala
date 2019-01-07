@@ -76,6 +76,7 @@ case class Blog (
   val shareLinks: Boolean,
   val demandExplicitSlugs: Boolean,
   val excludeFutureArticles: Boolean,
+  val usersAsTags: Boolean,
 
   val defaultUser: String,
   val openGraph: Boolean,
@@ -186,6 +187,7 @@ object Blog {
       shareLinks             = cfgBool("shareLinks", false),
       demandExplicitSlugs    = cfgBool("demandExplicitSlugs", false),
       excludeFutureArticles  = cfgBool("excludeFutureArticles", false),
+      usersAsTags            = cfgBool("usersAsTags", false),
 
       defaultUser            = cfgStr ("defaultUser", ""),
       openGraph              = cfgBool("openGraph", false),
@@ -1021,6 +1023,16 @@ object MakeFiles {
         a.copy(tags = a.tags.copy(visible = (a.tags.visible ++ implied).distinct))
       }
     }
+    }
+
+    timer("user lists", blog) {
+      if (blog.usersAsTags) {
+        articles = articles.map { a =>
+          if (a.author == null || a.author.isEmpty || a.author == blog.defaultUser) a else {
+            a.copy(tags = a.tags.copy(visible = Tag(a.author) +: a.tags.visible))
+          }
+        }
+      }
     }
 
     // Maps all article slugs (main ones and aliases) to their absolute urls.
