@@ -119,17 +119,20 @@ object CssMinimizer {
       case xMedia(media, rules) => "@media "+media+"{"+render(rules)+"}"
     }.mkString
 
+  def minimizeAndRender(css: Seq[xCSS], classesTagsIds: Set[String]): String =
+    minimizeAndRenderSB(css, classesTagsIds, new StringBuilder(64)).toString
 
-  def render2(css: Seq[xCSS]): String =
-    renderSB(css, new StringBuilder(64)).result
-
-  def renderSB(css: Seq[xCSS], sb: StringBuilder): StringBuilder = {
+  def minimizeAndRenderSB(css: Seq[xCSS], classesTagsIds: Set[String], sb: StringBuilder): StringBuilder = {
     css foreach {
-      case xRule(selector, _, styles) =>
-        selector.addString(sb, ",").append("{").append(styles).append("}")
+      case xRule(selectors, splitSelectors, styles) =>
+        val activeSelectors = selectors zip splitSelectors collect { case (s, ss) if ss == wildcard || ss.forall(classesTagsIds.contains) => s }
+        if (activeSelectors.nonEmpty) {
+          activeSelectors.addString(sb, ",").append("{").append(styles).append("}")
+        }
+
       case xMedia(media, rules) =>
         sb.append("@media ").append(media).append("{")
-        renderSB(rules, sb)
+        minimizeAndRenderSB(rules, classesTagsIds, sb)
         sb.append("}")
     }
     sb

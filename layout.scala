@@ -64,11 +64,12 @@ aside      { clear:both; margin-bottom: 2em; font-size: .9em; }
 """.trim
 
   import CssMinimizer._
-  private val optStyle = optimize(parseCSS(inlineStyles) ++ parseCSS(blog.cssStyle))
+  private val optimizedStyle = optimize(parseCSS(inlineStyles) ++ parseCSS(blog.cssStyle))
+  private lazy val fullMinimizedStyle = render(optimizedStyle)
 
   def style(cats: Set[String]) = cats match {
-    case null => render(optStyle)
-    case cats => render2(minimize(optStyle, cats))
+    case null => fullMinimizedStyle
+    case cats => minimizeAndRender(optimizedStyle, cats)
   }
 
   val defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
