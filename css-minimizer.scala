@@ -1,5 +1,13 @@
 package asciiblog
 
+import com.steadystate.css.parser._
+import com.steadystate.css.dom._
+import com.steadystate.css.format.CSSFormat
+import org.w3c.css.sac.InputSource
+import org.w3c.dom.css._
+import java.io.StringReader
+//import java.lang.StringBuilder
+import scala.collection.mutable
 
 /**
  * usage:
@@ -8,14 +16,6 @@ package asciiblog
  * render(minimize(optimize(st1 ++ st2), classesTagsIds))
  */
 object CssMinimizer {
-  import com.steadystate.css.parser._ 
-  import com.steadystate.css.dom._
-  import com.steadystate.css.format.CSSFormat
-  import org.w3c.css.sac.InputSource
-  import org.w3c.dom.css._
-  import java.io.StringReader
-  import scala.collection.mutable
-
   sealed trait CSS
   case class Rule(selectors: Seq[String], styles: Seq[(String, String)]) extends CSS
   case class Media(media: String, rules: Seq[CSS]) extends CSS
@@ -31,14 +31,15 @@ object CssMinimizer {
 
     val fmt = new CSSFormat().setRgbAsHex(true).setUseSourceStringValues(true)
 
-    def toLocalRepr(rs: CSSRuleList): Seq[CSS] =
-      for (i <- 0 until rs.getLength) yield {
-        rs.item(i) match {
+    def toLocalRepr(rules: CSSRuleList): Seq[CSS] =
+      for (i <- 0 until rules.getLength) yield {
+        rules.item(i) match {
           case r: CSSStyleRuleImpl =>
             val ss = r.getSelectors
             val selectors = 0 until ss.getLength map { i => ss.item(i).toString }
             val st = r.getStyle
-            val styles = 0 until st.getLength map { i => st.item(i) -> st.getPropertyCSSValue(st.item(i)).asInstanceOf[CSSValueImpl].getCssText(fmt) }
+            val styles = 0 until st.getLength map { i => st.item(i) -> minifyCssValue(st.getPropertyCSSValue(st.item(i)).asInstanceOf[CSSValueImpl].getCssText(fmt)) }
+
             Rule(selectors, styles)
 
           case r: CSSMediaRuleImpl =>
@@ -48,6 +49,10 @@ object CssMinimizer {
             sys.error(s"unsupported css rule $r")
         }
       }
+
+    def minifyCssValue(value: String) = value
+      .replaceAll("0(\\.\\d+em)", "$1")
+      .replaceAll("#([0-9a-f])\\1([0-9a-f])\\2([0-9a-f])\\3", "#$1$2$3")
 
     toLocalRepr(rules)
   }
@@ -92,7 +97,7 @@ object CssMinimizer {
       selectorRegex.findAllMatchIn(selector).map { m => m.group(1) }.toSet
     }
 
-  private def joinStyles(css: Seq[CSS]): Seq[xCSS] = 
+  private def joinStyles(css: Seq[CSS]): Seq[xCSS] =
     css.map {
       case Rule(selectors, styles) => xRule(selectors, selectors.map(splitSelectors), styles.map { case (p, v) => p+":"+v }.mkString(";"))
       case Media(media, rules) => xMedia(media, joinStyles(rules))
@@ -103,7 +108,7 @@ object CssMinimizer {
       case xRule(selectors, splitSelectors, styles) =>
         val activeSelectors = selectors zip splitSelectors collect { case (s, ss) if ss == wildcard || ss.forall(classesTagsIds.contains) => s }
         if (activeSelectors.isEmpty) None else Some(xRule(activeSelectors, null, styles))
-      case xMedia(media, rules) => 
+      case xMedia(media, rules) =>
         val cs = minimize(rules, classesTagsIds)
         if (cs.isEmpty) None else Some(xMedia(media, cs))
     }
