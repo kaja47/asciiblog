@@ -108,6 +108,7 @@ object FlowLayout {
 
     // following code is just a faster version of regexes above
     val idents = collection.mutable.Set[String]()
+    idents += "body"
 
     var pos = html.indexOf('<', 0)
     while (pos != -1) {
@@ -213,22 +214,20 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     val h = blog.hooks.header(base, blog, this, article)
     val header = if (h != null) h else mill.header.get(rel)
     val footer = mill.footer.get(rel)
-    val body = "<body><div class=b>"+header+content+footer+"</div></body>"
+    val body = "<div class=b>"+header+content+footer+"</div>"
     val cats: Set[String] = if (includeCompleteStyle) null else classesAndTags(body)
 
 s"""<!DOCTYPE html>
 <html${ifs(blog.hasOgTags, " prefix=\"og: http://ogp.me/ns#\"")}>
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
 <title>${ifs(title, title+" | ")+blog.title}</title>
 ${rssLink("rss.xml")}
 ${ifs(headers)}
 ${if (blog.cssFile == null) { s"""<style>${mill.style(cats)}</style>""" }
-  else { s"""<link rel="stylesheet" href="${rel("style.css")}" type="text/css"/>""" } }
+  else { s"""<link rel=stylesheet href="${rel("style.css")}" type=text/css>""" } }
 ${ifs(containImages, s"<script>$galleryScript</script>")}
-</head>$body
-</html>"""
+$body"""
   }
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, tagsToShow: Seq[Article] = Seq()): String =
@@ -237,11 +236,11 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
     blog.hooks.afterFirstArticle(base, blog, this, fullArticles)+
     (if (tagsToShow.nonEmpty) "<aside>"+tagsToShow.map(makeTagLink).mkString(" ")+"</aside>" else "")+
     fullArticles.drop(1).map(_makeFullArticle(_, true)).mkString("\n")+
-    listOfLinks(links, blog.archiveFormat == "short")+"<br/>"+
-    (if (!groupArchiveByMonth) "<div style='clear:both'>"+listOfLinks(archiveLinks, false)+"</div>" else groupArchive(archiveLinks))+"<br/>"
+    listOfLinks(links, blog.archiveFormat == "short")+"<br>"+
+    (if (!groupArchiveByMonth) "<div style='clear:both'>"+listOfLinks(archiveLinks, false)+"</div>" else groupArchive(archiveLinks))+"<br>"
 
   def makeIndexArchive(articles: Seq[Article]): String =
-    listOfLinks(articles, blog.archiveFormat == "short")+"<br/>"
+    listOfLinks(articles, blog.archiveFormat == "short")+"<br>"
 
 
   private def groupArchive(archiveLinks: Seq[Article]) = {
@@ -257,8 +256,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
         case (m, Some(a)) => articleLink(a, "\u00A0"+m+"\u00A0")
         case (m, None) => "\u00A0"+m+"\u00A0"
       }.mkString(" ")
-    }.mkString("<br/>")+
-    undated.map { a => "<br/>"+articleLink(a, txl("undated")) }.mkString+
+    }.mkString("<br>")+
+    undated.map { a => "<br>"+articleLink(a, txl("undated")) }.mkString+
     "</div>"
   }
 
@@ -276,16 +275,16 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
 
   def listOfLinks(list: Seq[Article], shortArticles: Boolean) =
-    if (shortArticles) list.map(makeShortArticle).mkString+"<br/>&nbsp;"
+    if (shortArticles) list.map(makeShortArticle).mkString+"<br>&nbsp;"
     else {
       val l = blog.hooks.list(base, blog, this, list)
-      if (l != null) l else list.map(makeLink).mkString("<br/>")+"<br/>"
+      if (l != null) l else list.map(makeLink).mkString("<br>")+"<br>"
     }
 
   def rowOfLinks(list: Seq[Article]) =
     list.map(a => articleLink(a, a.title)).mkString(", ")
 
-  def makeShortArticle(a: Article): String = "<div class=sh>"+makeTitle(a)+"<br/>"+makeShortArticleBody(a)+"</div>"
+  def makeShortArticle(a: Article): String = "<div class=sh>"+makeTitle(a)+"<br>"+makeShortArticleBody(a)+"</div>"
 
   def makeShortArticleBody(a: Article): String = {
     val img = a.images.find(_.mods == "main").map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
@@ -301,7 +300,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
 
     "<article>"+
     ifs(!compact && (prev != null || next != null), "<span class=f>"+makeNextPrevArrows(prev, next)+"</span>")+
-    (if (title != null) title else if (!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br/>")+
+    (if (title != null) title else if (!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br>")+
     ifs(a.isTag, {
       val sup = a.tags.visible.map(base.tagByTitle)
       val sub = base.allTags(a.asTag)._2.filter(_.isTag)
@@ -312,7 +311,7 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
         "</div>"
       })
     })+
-    ifs(title == null, "<br/>\n")+
+    ifs(title == null, "<br>\n")+
     makeArticleBody(a)+
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
     "</article>"+
@@ -325,8 +324,8 @@ ${ifs(containImages, s"<script>$galleryScript</script>")}
       })+
       ifs((blog.allowComments || blog.shareLinks) && !a.isTag, "<hr/>")+
       ifs(a.tags.visible.nonEmpty, "<p>"+txl("tags")+" "+makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle))+"</p>")+
-      //ifs(a.license, a.license+"<br/>")+
-      ifs(a.pubArticles.nonEmpty,"<p>"+txl("published")  +"<br/>"+a.pubArticles.map(makeLink).mkString("<br/>")+"</p>")+
+      //ifs(a.license, a.license+"<br>")+
+      ifs(a.pubArticles.nonEmpty,"<p>"+txl("published")  +"<br>"+a.pubArticles.map(makeLink).mkString("<br>")+"</p>")+
       ifs(a.pubBy != null,       "<p>"+txl("publishedBy")+" "    +articleLink(a.pubBy, makeDate(a), allowImageMarker = true)+"</p>")+
       ifs(a.similar.nonEmpty,    "<p>"+(if (a.isTag) txl("similarTags") else txl("similar"))+
                                                                   " "+a.similar.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString(", ")  +"</p>")+
