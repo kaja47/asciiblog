@@ -183,8 +183,11 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     s"""<span class=$cl>$aTag$desc</span>"""
   }
 
-  def rssLink(rss: String) =
-    s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>"""
+  def rssLink(rss: String) = {
+    val w = new XMLSW(new java.lang.StringBuilder(100), true)
+    (w.shortElement2("link") { _.attr("rel", "alternate").attr("type", "application/rss+xml").attr("href", rel(rss)) }).builder.toString
+    //s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>"""
+  }
 
   def ogTags(a: Article): String = {
     if (blog.hasOgTags) {
@@ -194,14 +197,24 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
         if (mainImg != null) ("summary_large_image", mainImg)
         else                 ("summary", otherImg)
 
-      """<meta name="twitter:card" content=""""+tpe+""""/>""" +
-      """<meta property="og:type" content="article"/>""" +
-      """<meta property="og:url" content=""""+escape(baseUrl)+""""/>""" +
-      """<meta property="og:title" content=""""+escape(a.title)+""""/>""" +
-      """<meta property="og:description" content=""""+escape(truncate(plaintextDescription(a), 200))+""""/>""" +
-      ifs(img,                 """<meta property="og:image" content=""""+escape(img)+""""/>""") +
-      ifs(blog.twitterSite,    """<meta name="twitter:site" content=""""+escape(blog.twitterSite)+""""/>""") +
-      ifs(blog.twitterCreator, """<meta name="twitter:creator" content=""""+escape(blog.twitterCreator)+""""/>""")
+      val sb = new java.lang.StringBuilder(300)
+      val w = new XMLSW(sb, html5 = true)
+      w.shortElement2("meta") { _.attr("name",     "twitter:card"  ).attr("content", tpe) }
+      w.shortElement2("meta") { _.attr("property", "og:type"       ).attr("content", "article") }
+      w.shortElement2("meta") { _.attr("property", "og:url"        ).attr("content", baseUrl) }
+      w.shortElement2("meta") { _.attr("property", "og:title"      ).attr("content", a.title) }
+      w.shortElement2("meta") { _.attr("property", "og:description").attr("content", truncate(plaintextDescription(a), 200)) }
+
+      if(img != null) {
+        w.shortElement2("meta") { _.attr("property", "og:image").attr("content", img) }
+      }
+      if(blog.twitterSite.nonEmpty) {
+        w.shortElement2("meta") { _.attr("name", "twitter:site").attr("content", blog.twitterSite) }
+      }
+      if(blog.twitterCreator.nonEmpty) {
+        w.shortElement2("meta") { _.attr("name", "twitter:creator").attr("content", blog.twitterCreator) }
+      }
+      sb.toString
     } else ""
   }
 
