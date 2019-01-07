@@ -1,69 +1,80 @@
-let box = document.createElement('div');
-box.style = 'display:none;position:fixed;top:0px;left:0px;background-color:rgba(0,0,0,0.7);width:100%;height:100%';
-let img = document.createElement('img');
-img.style = 'display:block;margin:auto;max-width:100%;max-height:100%';
-let tp = document.createElement('div');
-tp.style = 'position:fixed;top:0px;right:0px;font-size:1.5em;padding:0.5em;background:rgba(255,255,255,0.7);cursor:pointer';
+// s/zoom/Z/
+// s/box/B/
+// s/corner/C/
+// s/image/I/
+// s/links/K/
+// s/show/S/
+// s/active/A/
+// s/label/L/
+// s/document.createElement/E/
+// s/document/D/
+// s/.appendChild/[P]/
+// s/.style/[T]/
+// s/width:100%;/'+W+'/
+// s/height:100%;/'+H+'/
+// s/position:fixed;top:0;/'+F+'/
+// s/+''//
+// s/''+//
+// prep let D=document,P="appendChild",E=t=>D.createElement(t),W='width:100%;',H='height:100%;',F='position:fixed;top:0;',T='style';
 
-let zoom = document.createElement('a');
-zoom.textContent = "🔍";
-zoom.addEventListener('click', function(e) { e.stopPropagation(); });
-tp.appendChild(zoom);
+let box    = document.createElement('div'),
+		image  = document.createElement('img'),
+		corner = document.createElement('div'),
+		label  = document.createElement('span');
+		zoom   = document.createElement('a'),
+		links  = [], // a tags with images inside
+		active = 0;
 
-tp.appendChild(document.createTextNode(" ❌"));
+box.style    = 'display:none;position:fixed;top:0;left:0;background-color:rgba(0,0,0,0.7);width:100%;height:100%;';
+image.style  = 'display:block;margin:auto;max-width:100%;max-height:100%;';
+corner.style = 'position:fixed;top:0;right:0;font-size:1.2em;padding:.5em;background:#aaa';
 
-let label = document.createElement('div');
-label.style='position:fixed;bottom:0px;left:0px;font-size:1em;padding:0.5em;background:rgba(255,255,255,0.7)';
+corner.appendChild(label);
 
-box.appendChild(img);
-box.appendChild(tp);
-box.appendChild(label);
-box.addEventListener('click', function(e) { hide(); }, false);
-img.addEventListener('click', function(e) { move(1); e.stopPropagation(); });
+zoom.textContent = "[+]";
+zoom.onclick = e => e.stopPropagation();
+corner.appendChild(zoom);
 
-let imgs = [], active = null;
+corner.appendChild(document.createTextNode(" ❌"));
 
-function move(n) { show(active + n); }
-function hide() { box.style.display = "none"; }
+box.appendChild(image);
+box.appendChild(corner);
+box.onclick = e => show(-1, e);
+image.onclick = e => show(active+1, e);
 
-function show(i) {
-	if (i >= imgs.length || i < 0) {
-		hide();
-	} else {
-		box.style.display = "block";
-		img.src = "";
-		img.src = zoom.href = imgs[i].parentNode.href;
+
+function show(i, e) {
+	if (links[i]) {
+		image.src = zoom.href = links[i].href;
 		active = i;
-		let t = imgs[i].parentElement.parentElement;
-		label.style.display = (t.textContent ? 'block' : 'none');
-		t = t.cloneNode(true);
+		let t = links[i].parentNode.cloneNode(true);
 		t.removeChild(t.firstChild); // remove img tag itself
-		t.setAttribute('class', '');
-		label.textContent = '';
-		label.appendChild(t);
+		label.innerHTML = t.innerHTML;
 	}
+	box.style.display = (links[i] ? "block" : "none");
+	e.preventDefault();
+	e.stopPropagation();
 }
 
-window.addEventListener('load', function (e) {
-	let is = document.querySelectorAll('img.thz');
-	for (let i = 0; i < is.length; i++) {
-		if (is[i].parentNode.href.match(/.*(jpg|png|gif)/i)) {
-			imgs.push(is[i]);
-		}
-	}
-	for (let i = 0; i < imgs.length; i++) {
-		imgs[i].addEventListener('click', function (e) {
-			show(i);
-			e.preventDefault();
-		});
-	}
-	document.body.appendChild(box);
-});
+window.onload = x => {
+	links = Array.from(document.querySelectorAll('img.thz'), n => n.parentNode);
+	links.forEach((n, i) => { n.onclick = e => show(i, e); });
 
-document.addEventListener('keydown', function (e) {
+//	for (let n of document.querySelectorAll('img.thz')) {
+//		let a = n.parentNode;
+//		//if (a.href.match(/.*(jpg|png|gif)/i)) {
+//			links.push(a);
+//		//}
+//	}
+//	links.forEach((n, i) => {
+//		n.onclick = e => show(i, e);
+//	});
+	document.body.appendChild(box);
+};
+
+document.onkeydown = e => {
 	if (box.style.display === 'block') {
-		let k = {/* <- -> */ 37:-1, 39:1, /* PgUp, PgDn */ 33:-1, 34:1};
-		if (e.keyCode in k) { move(k[e.keyCode]); e.preventDefault(); }
-		else { hide(); }
+		let k = {/* <- -> */ 37:-1, 39:1, /* PgUp, PgDn */ 33:-1, 34:1}[e.keyCode];
+		show(k ? (active+k) : -1, e);
 	}
-});
+};
