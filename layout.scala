@@ -166,7 +166,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
       case i => ("thz", blog.thumbnailUrl(img))
     }
     val desc = if (showDesc) {
-      val title   = ifs(img.title, t.paragraph(img.title)).trim
+      val title   = ifs(img.title, t.paragraph(img.title).trim)
       val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim
       val source  = ifs(img.source, s"""(<a href="${img.source}">${txl("source")}</a>)""")
       val license = (ifs(img.license)+" "+source).trim
@@ -186,7 +186,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
   def rssLink(rss: String) = {
     val w = new XMLSW(new java.lang.StringBuilder(100), true)
     (w.shortElement2("link") { _.attr("rel", "alternate").attr("type", "application/rss+xml").attr("href", rel(rss)) }).builder.toString
-    //s"""<link rel="alternate" type="application/rss+xml" href="${rel(rss)}"/>"""
   }
 
   def ogTags(a: Article): String = {
@@ -314,7 +313,7 @@ $body"""
       val sup = a.tags.visible.map(base.tagByTitle)
       val sub = base.allTags(a.asTag)._2.filter(_.isTag)
       ifs(sub.nonEmpty || sup.nonEmpty, {
-        "<div style='font-size:0.85em'>"+
+        "<div style=font-size:0.85em>"+
         ifs(sup.nonEmpty, txl("supersections")+" "+rowOfLinks(sup)+" ")+
         ifs(sub.nonEmpty, txl("subsections")  +" "+rowOfLinks(sub))+
         "</div>"

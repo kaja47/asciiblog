@@ -1290,7 +1290,7 @@ object MakeFiles {
     }
     }
 
-    timer("generate and save files - tags") {
+    timer("generate and save files - tags", blog) {
     base.allTags foreach { case (t, (a, as)) =>
       var l = layout.make(blog.absUrl(a))
       val body = l.makeFullArticle(a.imagesWithoutArticleTags)
