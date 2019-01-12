@@ -833,7 +833,7 @@ object MakeFiles {
   def yearmonth(d: Date) = (year(d), month(d))
 
 
-  def makeRSS(articles: Seq[Article], mkBody: Article => String)(implicit blog: Blog): String = {
+  def makeRSS(articles: Seq[Article], mkBody: Article => String, selfUrl: String)(implicit blog: Blog): String = {
     val format = new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US)
     def rssdate(date: Date) = if (date == null) "" else format.format(date)
 
@@ -841,6 +841,8 @@ object MakeFiles {
       w.element("rss", Seq("version" -> "2.0")) { w =>
         w.element("channel") { w =>
           w.element("title", blog.title)
+          w.element("description", "")
+          w.element("link", selfUrl)
           for (a <- articles) {
             w.element("item") { w =>
               w.element("title", a.title)
@@ -878,9 +880,6 @@ object MakeFiles {
 
     Seq(f -> h)
   }
-
-  def saveXml(f: String, content: String, fileIndex: Map[String, String] = Map())(implicit blog: Blog): Seq[(String, String)] =
-    saveFile(f+".xml", content, fileIndex)
 
 
 
@@ -1297,7 +1296,7 @@ object MakeFiles {
       val body = l.makeFullArticle(a.imagesWithoutArticleTags)
       val hasImages = a.images.nonEmpty || as.exists(_.images.nonEmpty)
       fileIndex ++= saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")), oldFileIndex)
-      fileIndex ++= saveXml(a.slug, makeRSS(as.take(blog.rssLimit), null), oldFileIndex)
+      fileIndex ++= saveFile(a.slug+".xml", makeRSS(as.take(blog.rssLimit), null, blog.absUrlFromPath(a.slug+".xml")), oldFileIndex)
     }
 
     {
@@ -1311,7 +1310,7 @@ object MakeFiles {
       val body = layout.make(null).makeArticleBody(a)
       FlowLayout.updateLinks(body, url => blog.addParamMediumFeed(url))
     }
-    fileIndex ++= saveXml("rss", makeRSS(base.feed.take(blog.rssLimit), if (blog.articlesInRss) mkBody else null), oldFileIndex)
+    fileIndex ++= saveFile("rss.xml", makeRSS(base.feed.take(blog.rssLimit), if (blog.articlesInRss) mkBody else null, blog.absUrlFromPath("rss.xml")), oldFileIndex)
 
     if (blog.allowComments) {
       val l = layout.make(blog.absUrlFromPath("comments.php"))
