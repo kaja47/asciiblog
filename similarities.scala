@@ -92,12 +92,6 @@ class Similarities(articles: Seq[Article]) {
     topk.getAll.map(key => arts(key.idx))
   }
 
-  def sortBySimilarity(bs: Seq[Article], a: Article): Seq[Article] = {
-    val atags = a.tags.visible.toSet
-    def timeOf(a: Article) = if (a.date != null) a.date.getTime else 0
-    def commonTags(b: Article) = b.tags.visible.count { bt => atags.contains(bt) }
-    bs.map { b => (b, (~commonTags(b), ~timeOf(b), b.slug)) }.sortBy(_._2).map(_._1)
-  }
 
   def similarTags(t: Tag, count: Int): Seq[Article] = {
     if (!tm.contains(t)) return Seq()
