@@ -177,9 +177,8 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
         }
       })
     }
-    txt = preposRegex.replaceAllIn(txt, "$1\u00A0")
+    //txt = preposRegex.replaceAllIn(txt, "$1\u00A0")
 
-    /*
     {
       if (txt.length >= 2) {
         def ws(ch: Char) = (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')
@@ -198,7 +197,6 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
         txt = res.toString
       }
     }
-    */
 
     txt
   }
