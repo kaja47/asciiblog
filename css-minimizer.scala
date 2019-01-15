@@ -6,22 +6,16 @@ import com.steadystate.css.format.CSSFormat
 import org.w3c.css.sac.InputSource
 import org.w3c.dom.css._
 import java.io.StringReader
-//import java.lang.StringBuilder
+import java.lang.StringBuilder
 import scala.collection.mutable
 
-/**
- * usage:
- * val st1 = parseCSS("a { color: red; }")
- * val st2 = parseCSS("a { color: black; }")
- * render(minimize(optimize(st1 ++ st2), classesTagsIds))
- */
 object CssMinimizer {
   sealed trait CSS
   case class Rule(selectors: Seq[String], styles: Seq[(String, String)]) extends CSS
   case class Media(media: String, rules: Seq[CSS]) extends CSS
 
   sealed trait xCSS
-  case class xRule(selectors: Seq[String], splitSelectors: Seq[Set[String]], styles: String) extends xCSS
+  case class xRule(selectors: Seq[String], splitSelectors: Seq[Seq[String]], styles: String) extends xCSS
   case class xMedia(media: String, rules: Seq[xCSS]) extends xCSS
 
   def parseCSS(cssString: String): Seq[CSS] = {
@@ -89,12 +83,12 @@ object CssMinimizer {
     res
   }
 
-  private val wildcard = Set("*")
+  private val wildcard = Seq("*")
   private val unrecognizedChars = """(?x) [^\w\s\.\#] """.r
   private val selectorRegex     = """(?x) \G ( [.\#]? \w+ ) \s*""".r
-  private def splitSelectors(selector: String): Set[String] =
+  private def splitSelectors(selector: String): Seq[String] =
     if (!unrecognizedChars.findFirstIn(selector).isEmpty) wildcard else {
-      selectorRegex.findAllMatchIn(selector).map { m => m.group(1) }.toSet
+      selectorRegex.findAllMatchIn(selector).map { m => m.group(1) }.toVector.distinct
     }
 
   private def joinStyles(css: Seq[CSS]): Seq[xCSS] =
@@ -103,38 +97,120 @@ object CssMinimizer {
       case Media(media, rules) => xMedia(media, joinStyles(rules))
     }
 
-  def minimize(css: Seq[xCSS], classesTagsIds: Set[String]): Seq[xCSS] =
-    css.flatMap {
-      case xRule(selectors, splitSelectors, styles) =>
-        val activeSelectors = selectors zip splitSelectors collect { case (s, ss) if ss == wildcard || ss.forall(classesTagsIds.contains) => s }
-        if (activeSelectors.isEmpty) None else Some(xRule(activeSelectors, null, styles))
-      case xMedia(media, rules) =>
-        val cs = minimize(rules, classesTagsIds)
-        if (cs.isEmpty) None else Some(xMedia(media, cs))
-    }
+  //type CSSIdents = mutable.Set[String]
 
-  def render(css: Seq[xCSS]): String =
-    css.map {
-      case xRule(selector, _, styles) => selector.mkString(",")+"{"+styles+"}"
-      case xMedia(media, rules) => "@media "+media+"{"+render(rules)+"}"
-    }.mkString
-
-  def minimizeAndRender(css: Seq[xCSS], classesTagsIds: Set[String]): String =
+  def minimizeAndRender(css: Seq[xCSS], classesTagsIds: CSSIdents): String =
     minimizeAndRenderSB(css, classesTagsIds, new StringBuilder(64)).toString
 
-  def minimizeAndRenderSB(css: Seq[xCSS], classesTagsIds: Set[String], sb: StringBuilder): StringBuilder = {
+  def minimizeAndRenderSB(css: Seq[xCSS], classesTagsIds: CSSIdents, sb: StringBuilder): StringBuilder = {
     css foreach {
-      case xRule(selectors, splitSelectors, styles) =>
-        val activeSelectors = selectors zip splitSelectors collect { case (s, ss) if ss == wildcard || ss.forall(classesTagsIds.contains) => s }
-        if (activeSelectors.nonEmpty) {
-          activeSelectors.addString(sb, ",").append("{").append(styles).append("}")
+      case xRule(selectors, splitSelectors, styles) => {
+        var matches = false
+        var i = 0; while (i < selectors.size) {
+          val ss = splitSelectors(i)
+          if (ss == wildcard || classesTagsIds == null || classesTagsIds.containsAll(ss)) {
+            if (matches) sb.append(",")
+            sb.append(selectors(i))
+            matches = true
+          }
+          i += 1
         }
 
+        if (matches) sb.append("{").append(styles).append("}")
+      }
       case xMedia(media, rules) =>
         sb.append("@media ").append(media).append("{")
         minimizeAndRenderSB(rules, classesTagsIds, sb)
         sb.append("}")
     }
     sb
+  }
+}
+
+
+import CssMinimizer._
+
+class CSSMinimizeJob(optimizedStyle: Seq[xCSS]) {
+  lazy val fullMinimizedStyle = minimizeAndRender(optimizedStyle, null)
+
+  def styleFor(html: String, minimize: Boolean = true) =
+    if (!minimize) fullMinimizedStyle
+    else minimizeAndRender(optimizedStyle, CSSMinimizeJob.classesAndTags(html))
+}
+
+
+object CSSMinimizeJob {
+  def apply(css: String) = new CSSMinimizeJob(optimize(parseCSS(css)))
+
+  //private val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
+  //private val idRegex    = """(?x) id=   (?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
+  //private val tagRegex   = """\<([a-zA-Z]\w*?)\W""".r
+  def classesAndTags(html: String) = {
+    //val classes = classRegex.findAllMatchIn(html).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
+    //val ids     = idRegex   .findAllMatchIn(html).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
+    //val tags: Iterator[String]    = tagRegex.findAllMatchIn(html).map(_.group(1))
+    //(tags ++ classes.map("."+_) ++ ids.map("#"+_)).toSet
+
+    // following code is just a faster version of regexes above
+    //val idents = mutable.Set[String]()
+    val idents = new CSSIdents
+    idents += "body"
+    idents += "html"
+
+    var pos = html.indexOf('<', 0)
+    while (pos != -1) {
+      var i = pos+1
+      while (i < html.length && Character.isLetterOrDigit(html.charAt(i))) { i += 1 }
+      if (i > pos+1) { idents += html.substring(pos+1, i) }
+      pos = html.indexOf('<', i)
+    }
+
+    def p(prelude: String, prefix: String) = {
+      var pos = html.indexOf(prelude, 0)
+      while (pos != -1) {
+        pos = pos+prelude.length
+        var i = pos
+
+        val q = html.charAt(i)
+        if (q == '"' || q == '\'') {
+          i = html.indexOf(q, i+1)
+          for (c <- html.substring(pos+1, i).split(" ")) {
+            idents += prefix+c
+          }
+
+        } else {
+          while (i < html.length && Character.isLetterOrDigit(html.charAt(i))) { i += 1 }
+          idents += prefix+html.substring(pos, i)
+        }
+
+        pos = html.indexOf(prelude, i)
+      }
+    }
+
+    p("class=", ".")
+    p("id=",    "#")
+    idents
+  }
+}
+
+class CSSIdents {
+  private val arr = new Array[Long](4)
+
+  private def add(h: Int) =
+    arr((h >>> 6) % 4) |= (1 << (h % 64))
+
+  def += (s: String) = add(s.hashCode)
+
+  def contains(s: String) = {
+    val h = s.hashCode
+    (arr((h >>> 6) % 4) & (1 << (h % 64))) != 0
+  }
+
+  def containsAll(ss: Seq[String]): Boolean = {
+    var i = 0; while (i < ss.size) {
+      if (!contains(ss(i))) return false
+      i += 1
+    }
+    true
   }
 }

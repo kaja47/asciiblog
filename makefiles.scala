@@ -1148,7 +1148,7 @@ object MakeFiles {
 
         a.copy(
           dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
-          backlinks = bs.sortBy(byDate), //sim.sortBySimilarity(bs, a),
+          backlinks = bs.sortBy(byDate),
           similar = if (!a.isTag) sim.similarByTags(a, count = blog.similarLimit, without = bs) else sim.similarTags(a.asTag, count = blog.similarLimit),
           pubArticles = a.pub.map(base.bySlug),
           pubBy = pubBy
@@ -1280,7 +1280,7 @@ object MakeFiles {
     }
 
     timer("generate and save files - articles", blog) {
-    base.articles.par foreach { a =>
+    base.articles foreach { a =>
       if (a.link == null || a.link.isEmpty) { // TODO?
         var l = layout.make(blog.absUrl(a))
         val aa = a.imagesWithoutArticleTags

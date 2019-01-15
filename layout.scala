@@ -63,14 +63,7 @@ article    { margin-bottom: 4em; }
 aside      { clear:both; margin-bottom: 2em; font-size: .9em; }
 """.trim
 
-  import CssMinimizer._
-  private val optimizedStyle = optimize(parseCSS(inlineStyles) ++ parseCSS(blog.cssStyle))
-  private lazy val fullMinimizedStyle = render(optimizedStyle)
-
-  def style(cats: Set[String]) = cats match {
-    case null => fullMinimizedStyle
-    case cats => minimizeAndRender(optimizedStyle, cats)
-  }
+  val css = CSSMinimizeJob(inlineStyles + "\n" + blog.cssStyle)
 
   val defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
   val header = new PrepatedText(if (blog.header.nonEmpty) blog.header else defaultHeader, resolver)
@@ -92,54 +85,6 @@ object FlowLayout {
 
   def updateLinks(content: String, f: String => String) =
     ahrefRegex.replaceAllIn(content, m => Regex.quoteReplacement(f(m.group(1))))
-
-  //private val classRegex = """(?x) class=(?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
-  //private val idRegex    = """(?x) id=   (?: ("|')([\w\ ]+?)\1 | (\w+) )""".r
-  //private val tagRegex   = """\<([a-zA-Z]\w*?)\W""".r
-  def classesAndTags(html: String): Set[String] = {
-    //val classes = classRegex.findAllMatchIn(html).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
-    //val ids     = idRegex   .findAllMatchIn(html).map { m => if (m.group(2) != null) m.group(2) else m.group(3) }.flatMap(_.split("\\s+"))
-    //val tags: Iterator[String]    = tagRegex.findAllMatchIn(html).map(_.group(1))
-    //(tags ++ classes.map("."+_) ++ ids.map("#"+_)).toSet
-
-    // following code is just a faster version of regexes above
-    val idents = collection.mutable.Set[String]()
-    idents += "body"
-
-    var pos = html.indexOf('<', 0)
-    while (pos != -1) {
-      var i = pos+1
-      while (i < html.length && Character.isLetterOrDigit(html.charAt(i))) { i += 1 }
-      if (i > pos+1) { idents += html.substring(pos+1, i) }
-      pos = html.indexOf('<', i)
-    }
-
-    def p(prelude: String, prefix: String) = {
-      var pos = html.indexOf(prelude, 0)
-      while (pos != -1) {
-        pos = pos+prelude.length
-        var i = pos
-
-        val q = html.charAt(i)
-        if (q == '"' || q == '\'') {
-          i = html.indexOf(q, i+1)
-          for (c <- html.substring(pos+1, i).split(" ")) {
-            idents += prefix+c
-          }
-
-        } else {
-          while (i < html.length && Character.isLetterOrDigit(html.charAt(i))) { i += 1 }
-          idents += prefix+html.substring(pos, i)
-        }
-
-        pos = html.indexOf(prelude, i)
-      }
-    }
-
-    p("class=", ".")
-    p("id=",    "#")
-    idents.toSet
-  }
 }
 
 
@@ -223,19 +168,17 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     val header = if (h != null) h else mill.header.get(rel)
     val footer = mill.footer.get(rel)
     val body = "<div class=b>"+header+content+footer+"</div>"
-    val cats: Set[String] = if (includeCompleteStyle) null else classesAndTags(body)
 
-s"""<!DOCTYPE html>
-<html${ifs(blog.hasOgTags, " prefix=\"og: http://ogp.me/ns#\"")}>
-<meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1">
-<title>${ifs(title, title+" | ")+blog.title}</title>
-${rssLink("rss.xml")}
-${ifs(headers)}
-${if (blog.cssFile == null) { s"""<style>${mill.style(cats)}</style>""" }
-  else { s"""<link rel=stylesheet href="${rel("style.css")}" type=text/css>""" } }
-${ifs(containImages, s"<script>$galleryScript</script>")}
-$body"""
+    "<!DOCTYPE html>\n"+
+    "<html"+ ifs(blog.hasOgTags, " prefix=\"og: http://ogp.me/ns#\"") + ">\n"+
+    "<meta charset=utf-8>"+
+    "<meta name=viewport content=\"width=device-width,initial-scale=1\">"+
+    "<title>"+ ifs(title, title+" | ")+blog.title+"</title>"+
+    rssLink("rss.xml")+
+    ifs(headers)+
+    ( if (blog.cssFile == null) "<style>"+mill.css.styleFor(body, !includeCompleteStyle)+"</style>" else "<link rel=stylesheet href=\""+rel("style.css")+"\" type=text/css>")+
+    ifs(containImages, "<script>"+galleryScript+"</script>\n")+
+    body
   }
 
   def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveByMonth: Boolean = false, tagsToShow: Seq[Article] = Seq()): String =
@@ -364,7 +307,7 @@ $body"""
     if (a.link != null || asLink)
       "<i><a href="+util.quoteHTMLAttribute(articleUrl(a))+">"+title+"</a></i>"+ifs(allowImageMarker && a.hasImageMarker, blog.imageMarker)
     else
-      s"""<i>$title</i>"""+ifs(allowImageMarker && a.hasImageMarker, blog.imageMarker)
+      "<i>"+title+"</i>"+ifs(allowImageMarker && a.hasImageMarker, blog.imageMarker)
 
   def makeLink(a: Article) = {
     val title = blog.hooks.listTitle(base, blog, this, a)
