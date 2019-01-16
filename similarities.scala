@@ -4,27 +4,28 @@ import MakeFiles.invert
 import util.intersectionSize
 import java.{ lang => jl }
 
-class Similarities(articles: Seq[Article]) {
-  private val arts: Array[Article] = articles.toArray
-  private val tags: Map[Tag, Article] = arts.iterator.collect { case a if a.isTag => (a.asTag, a) }.toMap
-  private val slugMap: Map[Slug, Int] = arts.iterator.zipWithIndex.map { case (k, v) => (k.asSlug, v) }.toMap
-  private val tm: Map[Tag, Array[Int]] = {
-    val tagMap = invert(arts.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) })
-    tagMap.map { case (t, as) =>
-      val idxs = as.map(a => slugMap(a.asSlug)).toArray
-      java.util.Arrays.sort(idxs)
-      (t, idxs)
-    }
-  }
-  private val tagsToRecommend: Seq[(Tag, Array[Int])] = {
-    // do not recommend tags that
-    // - are used only as hidden tags
-    // - are associated with only one article
+class Similarities(_articles: Seq[Article], count: Int) {
+  private[this] val arts: Array[Article] = _articles.toArray
+  private[this] val tags: Map[Tag, Article] = arts.iterator.collect { case a if a.isTag => (a.asTag, a) }.toMap
+  private[this] val slugMap: Map[Slug, Int] = arts.iterator.zipWithIndex.map { case (k, v) => (k.asSlug, v) }.toMap
+  private[this] val tagMap: Map[Tag, Array[Int]] =
+    invert(arts.map { a => (a, (a.tags.visible ++ a.tags.hidden).distinct) })
+      .map { case (t, as) =>
+        val idxs = as.map(a => slugMap(a.asSlug)).toArray
+        java.util.Arrays.sort(idxs)
+        (t, idxs)
+      }
+
+  // do not recommend tags that
+  // - are used only as hidden tags
+  // - are associated with only one article
+  private[this] val tagsToRecommend: Seq[(Tag, Array[Int])] = {
     val visibleTags = arts.iterator.flatMap(a => a.tags.visible).toSet
-    tm.iterator.filter { case (t, as) => visibleTags.contains(t) && as.length > 1 }.toVector
+    tagMap.iterator.filter { case (t, as) => visibleTags.contains(t) && as.length > 1 }.toVector
   }
-  private val reverseRels: Map[Slug, Seq[Slug]] =
-    invert(articles.collect { case a if a.rel.nonEmpty => (a.asSlug, a.rel.map(Slug)) })
+
+  private[this] val reverseRels: Map[Slug, Seq[Slug]] =
+    invert(_articles.collect { case a if a.rel.nonEmpty => (a.asSlug, a.rel.map(Slug)) })
 
   private def dateDiff(a: Article, b: Article): Int = {
     val ta = if (a.date == null) 0 else (a.date.getTime/(1000*3600)).toInt
@@ -32,10 +33,35 @@ class Similarities(articles: Seq[Article]) {
     Math.abs(ta - tb)
   }
 
+  private[this] val similarities: Array[Seq[Article]] = {
+    val sims = arts.map {
+      case a if a.isTag => similarTags(a.asTag, count)
+      case a            => similarArticles(a, count, a.backlinks)
+    }
+
+    Array.tabulate(sims.length) { i =>
+      arts(i) match {
+        case a if !a.isTag && a.tags.isEmpty && a.rel.nonEmpty =>
+          // not terribly optimized, but it's called only few times
+          // TODO return sorted by frequency
+          val slugs = sims(i).map(_.slug).toSet
+          val extraSims = sims(i)
+            .flatMap(a => sims(slugMap(a.asSlug)))
+            .filter(a => !slugs.contains(a.slug))
+            .distinct
+            .take(count - sims(i).size)
+
+          sims(i) ++ extraSims
+        case a => sims(i)
+      }
+    }
+  }
+
+  def apply(a: Article) = similarities(slugMap(a.asSlug))
 
   def similarArticles(a: Article, count: Int, without: Seq[Article]): Seq[Article] = {
-    val arrs = (a.tags.visible ++ a.tags.hidden).map(tm)
-    if (arrs.isEmpty && a.rel.isEmpty) return Seq()
+    if (a.tags.isEmpty && a.rel.isEmpty) return Seq()
+    val arrs = (a.tags.visible ++ a.tags.hidden).map(tagMap)
 
     val freq = new Array[Int](arts.length) // article idx -> count
     for (arr <- arrs) {
@@ -79,7 +105,7 @@ class Similarities(articles: Seq[Article]) {
 
 
   def similarTags(t: Tag, count: Int): Seq[Article] = {
-    if (!tm.contains(t)) return Seq()
+    if (!tagMap.contains(t)) return Seq()
 
     case class Key(sim: Double, tag: Tag)
     val topk = new TopK[Key](count)((a: Key, b: Key) => {
@@ -87,12 +113,14 @@ class Similarities(articles: Seq[Article]) {
       if (c1 != 0) c1 else a.tag.title.compareTo(b.tag.title)
     })
 
-    val idxs = tm(t)
+    val idxs = tagMap(t)
     val fst = idxs(0)
     val lst = idxs(idxs.length-1)
 
     for ((t2, idxs2) <- tagsToRecommend if t2 != t) {
-      if (!(fst > idxs2(idxs2.length-1) || lst < idxs2(0))) { // overlap check
+      // overlap check
+      if (!(fst > idxs2(idxs2.length-1) || lst < idxs2(0))) {
+        // maximum possible similarity
         val maxSim = 1.0 * Math.min(idxs.length, idxs2.length) / Math.max(idxs.length, idxs2.length)
         if (topk.size < count || maxSim >= topk.head.sim) {
           val in = intersectionSize(idxs, idxs2)

@@ -379,6 +379,7 @@ case class Image(
 case class Slug(id: String)
 case class Tags(visible: Seq[Tag] = Seq(), hidden: Seq[Tag] = Seq()) {
   def merge(t: Tags) = Tags(visible ++ t.visible, hidden ++ t.hidden)
+  def isEmpty = visible.isEmpty && hidden.isEmpty
 }
 case class Tag(title: String, supertag: Boolean = false) {
   override def toString = "Tag("+hashTag+")"
@@ -1138,8 +1139,7 @@ object MakeFiles {
 
     val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
 
-    articles = timer("populate", blog) {
-      val sim = new Similarities(articles)
+    articles = timer("populate backlinks and pubBy", blog) {
       val base = Base(articles, null)
 
       articles.map { a =>
@@ -1149,11 +1149,15 @@ object MakeFiles {
         a.copy(
           dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
           backlinks = bs.sortBy(byDate),
-          similar = if (!a.isTag) sim.similarByTags(a, count = blog.similarLimit, without = bs) else sim.similarTags(a.asTag, count = blog.similarLimit),
           pubArticles = a.pub.map(base.bySlug),
           pubBy = pubBy
         )
       }
+    }
+
+    articles = timer("populate similarities", blog) {
+      val sim = new Similarities(articles, blog.similarLimit)
+      articles.map { a => a.copy(similar = sim(a)) }
     }
 
     var tagMap = invert(articles.map { a => (a, (a.tags.visible).distinct) })
