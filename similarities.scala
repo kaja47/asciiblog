@@ -26,70 +26,55 @@ class Similarities(articles: Seq[Article]) {
   private val reverseRels: Map[Slug, Seq[Slug]] =
     invert(articles.collect { case a if a.rel.nonEmpty => (a.asSlug, a.rel.map(Slug)) })
 
-  def similarByTags(a: Article, count: Int, without: Seq[Article]): Seq[Article] = {
-    def dateDiff(a: Article, b: Article): Int = {
-      val ta = if (a.date == null) 0 else (a.date.getTime/(1024*1024)).toInt
-      val tb = if (b.date == null) 0 else (b.date.getTime/(1024*1024)).toInt
-      Math.abs(ta - tb)
-    }
+  private def dateDiff(a: Article, b: Article): Int = {
+    val ta = if (a.date == null) 0 else (a.date.getTime/(1000*3600)).toInt
+    val tb = if (b.date == null) 0 else (b.date.getTime/(1000*3600)).toInt
+    Math.abs(ta - tb)
+  }
 
+
+  def similarArticles(a: Article, count: Int, without: Seq[Article]): Seq[Article] = {
     val arrs = (a.tags.visible ++ a.tags.hidden).map(tm)
     if (arrs.isEmpty && a.rel.isEmpty) return Seq()
 
     val freq = new Array[Int](arts.length) // article idx -> count
-    var minIdx = arts.length
-    var maxIdx = 0
     for (arr <- arrs) {
       var i = 0; while (i < arr.length) {
         freq(arr(i)) += 1
         i += 1
       }
-      minIdx = Math.min(minIdx, arr(0))
-      maxIdx = Math.max(maxIdx, arr(arr.length-1))
     }
 
     for (id <- a.rel) {
       val i = slugMap(Slug(id))
       freq(i) += 64
-      minIdx = Math.min(minIdx, i)
-      maxIdx = Math.max(maxIdx, i)
     }
     for (id <- reverseRels.getOrElse(a.asSlug, Seq())) {
       val i = slugMap(id)
       freq(i) += 1
-      minIdx = Math.min(minIdx, i)
-      maxIdx = Math.max(maxIdx, i)
     }
 
     for (a <- without ; i <- slugMap.get(a.asSlug)) freq(i) = 0
     for (i <- slugMap.get(a.asSlug)) freq(i) = 0
 
-    case class Key(commonTags: Int, dateDiff: Int, idx: Int)
-    val topk = new TopK[Key](count)(new Ordering[Key]{
-      def compare(a: Key, b: Key): Int = {
-        val c1 = jl.Integer.compare(a.commonTags, b.commonTags)
-        if (c1 != 0) return c1
-        val c2 = jl.Integer.compare(b.dateDiff, a.dateDiff)
-        if (c2 != 0) return c2
-        jl.Integer.compare(a.idx, b.idx)
-      }
-    })
+    val topk = new LongTopK(count)
 
-    var twoPlus = 0
-    var j = minIdx; while (j < maxIdx) {
-      if (freq(j) >= 2) { twoPlus += 1 }
-      j += 1
+    def pack(commonTags: Int, dateDiff: Int, idx: Int): Long = {
+      require(commonTags < 128 && commonTags > 0) // 1B
+      require(dateDiff >= 0)                      // 4B
+      require(idx < (1<<24))                      // 3B
+      commonTags.toLong << 56 | ((~dateDiff).toLong & 0xffffffffL) << 24 | idx
     }
-    val min = if (twoPlus >= count) 2 else 1
+    def unpack(x: Long) = x.toInt & ((1 << 24) - 1)
 
-    var i = minIdx; while (i < maxIdx) {
-      if (freq(i) >= min) {
+    var i = 0; while (i < arts.length) {
+      if (freq(i) >= 1) {
         // articles with most tags in common, published closest together
-        topk.add(Key(freq(i), dateDiff(a, arts(i)), i))
+        topk.add(pack(freq(i), dateDiff(a, arts(i)), i))
       }
       i += 1
     }
-    topk.getAll.map(key => arts(key.idx))
+    topk.getAll.map(key => arts(unpack(key)))
   }
 
 

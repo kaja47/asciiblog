@@ -24,6 +24,102 @@ class TopK[T: Ordering](count: Int) {
   def isEmpty  = heap.isEmpty
 }
 
+
+class LongTopK(count: Int) {
+  protected var arr = new Array[Long](count)
+  // top points behind the last element
+  protected var top = 0
+  protected var min = Long.MinValue
+
+  def size = top
+  def isEmpty = top == (0)
+  def nonEmpty = top != (0)
+
+  def head = {
+    if (top == 0) throw new NoSuchElementException
+    arr(0)
+  }
+
+  /** returns value that was deleted or Int.MinValue */
+  def add(x: Long): Unit = {
+    if (size < count) {
+      _insert(x)
+      min = arr(0)
+
+    } else if (x > min) {
+      _deleteMinAndInsert(x)
+      min = arr(0)
+
+    }
+  }
+
+  def getAll(): Array[Long] = {
+    val res = new Array[Long](size)
+    var i = res.length-1 ; while (i >= 0) {
+      res(i) = arr(0)
+      _deleteMin()
+      i -= 1
+    }
+    res
+  }
+
+  private def _insert(x: Long) = {
+    arr(top) = x
+    swim(top)
+    top += 1
+  }
+
+  private def _deleteMin() = {
+    if (top == 0) throw new NoSuchElementException("underflow")
+    top -= 1
+    swap(0, top)
+    arr(top) = 0
+    sink(0)
+  }
+
+  private def _deleteMinAndInsert(x: Long) = {
+    if (top == 0) throw new NoSuchElementException("underflow")
+    arr(0) = x
+    sink(0)
+  }
+
+  private def swap(a: Int, b: Int) = {
+    val tmp = arr(a)
+    arr(a) = arr(b)
+    arr(b) = tmp
+  }
+
+  private def parent(pos: Int) = (pos - 1) / 2
+  private def child(pos: Int) = pos * 2 + 1
+
+  // moves value at the given position up towards the root
+  private def swim(_pos: Int): Unit = {
+    var pos = _pos
+    while (pos > 0 && arr(parent(pos)) > arr(pos)) {
+      swap(parent(pos), pos)
+      pos = parent(pos)
+    }
+  }
+
+  // moves value at the given position down towards leaves
+  private def sink(_pos: Int): Unit = {
+    val key = arr(_pos)
+    var pos = _pos
+    while (child(pos) < top) {
+      var ch = child(pos)
+      if ((ch+1) < top && arr(ch+1) < arr(ch)) ch += 1
+      if (key <= arr(ch)) {
+        arr(pos) = key
+        return
+      }
+      arr(pos) = arr(ch)
+      pos = ch
+    }
+    arr(pos) = key
+  }
+}
+
+
 object XMLSW {
 
   def document(body: XMLSW => Unit, sb: StringBuilder): StringBuilder = {
