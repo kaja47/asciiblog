@@ -130,9 +130,15 @@ object XMLSW {
   def document(body: XMLSW => Unit): StringBuilder =
     document(body, new StringBuilder)
 
-  def element(localName: String)(body: XMLSW => Unit): StringBuilder = {
+  def element(localName: String, attributes: Seq[(String, String)] = Seq.empty)(body: XMLSW => Unit): StringBuilder = {
     val sb = new StringBuilder
-    new XMLSW(sb).element(localName)(body)
+    new XMLSW(sb).element(localName, attributes)(body)
+    sb
+  }
+
+  def element(localName: String, attributes: Seq[(String, String)], body: String): StringBuilder = {
+    val sb = new StringBuilder
+    new XMLSW(sb).element(localName, attributes, body)
     sb
   }
 }
