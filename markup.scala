@@ -201,7 +201,20 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     txt
   }
 
-  private def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String): String =
+  def mkMods(m: Mods): String = {
+    if (m.isEmpty) return "" // the most mods are always empty
+
+    val (ids, classes) =
+      if (m.classes.isEmpty) (Array[String](), Array[String]())
+      else m.classes.split(" ").partition(_.startsWith("#"))
+
+    (if (m.title.nonEmpty)  " title="+util.quoteHTMLAttribute(m.title)                       else "")+
+    (if (classes.nonEmpty)  " class="+util.quoteHTMLAttribute(classes.mkString(" "))         else "")+
+    (if (ids.nonEmpty)      " id="   +util.quoteHTMLAttribute(ids.map(_.tail).mkString(" ")) else "")+
+    (if (m.styles.nonEmpty) " style="+util.quoteHTMLAttribute(m.styles)                      else "")
+  }
+
+  def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String): String =
     _mkText(segments, l, aliases, relativize, new StringBuilder(1024))
 
   private def _mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String, sb: StringBuilder): String = {
@@ -216,7 +229,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
       case Block("comment",_)   =>
       case Block(tpe, _)        => sys.error(s"unknown block type '$tpe'")
       case Images(images)       => images.foreach { img => sb.append(l.imgTag(img, this)).append(" ") }
-      case Paragraph(txt)       => sb.append("<p>").append(mkParagraph(txt, aliases, relativize)).append("</p>")
+      case Paragraph(txt, mods) => sb.append("<p").append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize)).append("</p>")
       case Blockquote(sx)       => sb.append("<blockquote>"); _mkText(sx, l, aliases, relativize, sb); sb.append("</blockquote>")
       case Inline(txt)          => sb.append(mkParagraph(txt, aliases, relativize))
       case ByLine(txt)          => sb.append("<div style='text-align:right'>").append(mkParagraph(txt, aliases, relativize)).append("</div>")
@@ -264,7 +277,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
 sealed trait Segment
 sealed trait Textual extends Segment { def txt: String }
 final case class Heading(txt: String) extends Segment with Textual
-final case class Paragraph(txt: String) extends Segment with Textual
+final case class Paragraph(txt: String, mods: Mods = Mods()) extends Segment with Textual
 final case class Inline(txt: String) extends Segment with Textual
 final case class ByLine(txt: String) extends Segment with Textual
 final case class Hr() extends Segment
@@ -278,6 +291,13 @@ final case class NumberedList(items: Seq[(Int, Segment)]) extends Segment
 final case class Table(rows: Seq[Seq[Cell]], columns: Int) extends Segment
 
 case class Cell(txt: String, span: Int = 1)
+
+case class Mods(title: String = "", classes: String = "", styles: String = "") {
+  def join(a: String, b: String, delim: String) = if (a.isEmpty || b.isEmpty) a+b else a+delim+b
+  def merge(m: Mods) = Mods(join(title, m.title, " "), join(classes, m.classes, " "), join(styles, m.styles, ";"))
+  def isEmpty = title.isEmpty && classes.isEmpty && styles.isEmpty
+}
+
 
 
 object AsciiMarkup extends Markup {
@@ -313,6 +333,43 @@ object AsciiMarkup extends Markup {
   val commentRegex          = """(?xs) \<!--.*?--\>""".r
 
   val commentCheck          = """<!--"""
+
+  // .(title)  .[class1 class2 #id]  .{color:blue}  .<  .>  .<>  .=
+  def findMods(line: String): Option[(Mods, Int)] = {
+    val s = Slurp(line)
+    while (s.to('.').matches && !s.touchesEnd) {
+      s.ignore()
+      var mods = Mods()
+      val start = s.pos
+      var ok = true
+      while (ok && !s.touchesEnd) {
+        ok = modAlternatives.exists { case (f, ex) =>
+          f(s)
+          if (s.matches) {
+            val x = ex(s)
+            s.ignore()
+            mods = mods.merge(x)
+            true
+          } else {
+            s.unmatch().tryAgain()
+            false
+          }
+        }
+      }
+      if (ok) return Some((mods, start-1))
+    }
+    None
+  }
+
+  private val modAlternatives = Seq[(Slurp => Unit, Slurp => Mods)](
+    (_.quoted('(', ')'), s => Mods(title   = s.asString(1, -1))),
+    (_.quoted('[', ']'), s => Mods(classes = s.asString(1, -1))),
+    (_.quoted('{', '}'), s => Mods(styles  = s.asString(1, -1))),
+    (_.string("<>"),     s => Mods(styles = "text-align:center")),
+    (_.string(">"),      s => Mods(styles = "text-align:right")),
+    (_.string("<"),      s => Mods(styles = "text-align:left")),
+    (_.string("="),      s => Mods(styles = "text-align:justify"))
+  )
 
   private def segmentText(lines: Seq[String], resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = {
     def matchAllLines[T](ls: Seq[String], prefix: String)(f: PartialFunction[String, T]): Option[Seq[T]] = {
@@ -359,14 +416,25 @@ object AsciiMarkup extends Markup {
         }.map(mkTable)
 
       }.getOrElse {
-        Paragraph(ls.mkString("\n"))
+        val firstLine = ls.head
+        val lastLine  = ls.last
+
+        val (lines, mods) = findMods(firstLine) match {
+          case Some((mods, pos)) =>   (firstLine.substring(0, pos) +: ls.tail, mods)
+          case None => findMods(lastLine) match {
+            case Some((mods, pos)) => (ls.init :+ lastLine.substring(0, pos), mods)
+            case None =>              (ls, Mods())
+          }
+        }
+
+        Paragraph(lines.mkString("\n"), mods)
       }
     }
 
     def mergeParagraphsIntoLists(segments: Seq[Segment]): Seq[Segment] = // TODO more general mechanism for not only paragraphs
       segments.foldLeft(Vector[Segment]()) { (res, s) =>
         (s, res.lastOption) match {
-          case (s @ Paragraph(txt), Some(BulletList(items))) if txt.lines.forall(_.startsWith("  ")) =>
+          case (Paragraph(txt, _), Some(BulletList(items))) if txt.lines.forall(_.startsWith("  ")) =>
             items.last match {
               case SegmentSeq(ss) =>
                 res.init :+ BulletList(items.init :+ SegmentSeq(ss :+ s))
@@ -374,7 +442,7 @@ object AsciiMarkup extends Markup {
                 res.init :+ BulletList(items.init :+ SegmentSeq(Seq(last, s)))
             }
 
-          case (Paragraph(txt), Some(NumberedList(items))) if txt.lines.forall(_.startsWith("  ")) =>
+          case (Paragraph(txt, _), Some(NumberedList(items))) if txt.lines.forall(_.startsWith("  ")) =>
             items.last match {
               case (i, SegmentSeq(ss)) =>
                 res.init :+ NumberedList(items.init :+ (i, SegmentSeq(ss :+ s)))
