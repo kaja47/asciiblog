@@ -57,7 +57,9 @@ function show(i, e) {
 }
 
 window.onload = x => {
-	links = Array.from(document.querySelectorAll('img.thz'), n => n.parentNode);
+	links = Array.from(document.querySelectorAll('img.thz'), n => n.parentNode)
+		.filter(n => n.href.match(/.*(jpg|png|gif)/i));
+
 	links.forEach((n, i) => { n.onclick = e => show(i, e); });
 
 //	for (let n of document.querySelectorAll('img.thz')) {
