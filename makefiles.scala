@@ -1465,7 +1465,9 @@ object MakeFiles {
     }
 
 
-  //println(T.t)
+  if (blog.printTiming) {
+    println(T.t)
+  }
 
   } catch {
     case e: Exception =>
