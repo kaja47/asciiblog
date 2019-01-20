@@ -545,13 +545,15 @@ object MakeFiles {
     def relativize(url: String, baseUrl: String): String = {
       if (baseUrl == null || url.startsWith("#")) return url
 
+      require(baseUrl.startsWith(blog.baseUrl))
+
       // fast path for absolute foreign urls
-      if ((url.startsWith("https://") || url.startsWith("http://")) && !url.startsWith(blog.baseUrl)) {
+      if (!url.startsWith(blog.baseUrl) && (url.startsWith("https://") || url.startsWith("http://"))) {
         return url
       }
 
       // fast path
-      if (url.startsWith(blog.baseUrl) && baseUrl.startsWith(blog.baseUrl)) {
+      if (url.startsWith(blog.baseUrl)) {
         val len = Math.min(url.length, baseUrl.length)
         var prefixLength = 0
         var i = blog.baseUrl.length; while (i < len && (url.charAt(i) == baseUrl.charAt(i))) {
@@ -570,11 +572,29 @@ object MakeFiles {
         }
       }
 
+      // special case for relative url: count how deep is baseUrl and add as many "../" parts
+      // TODO more general
+      if (url == "rss.xml") {
+        var levels = 0
+        var i = blog.baseUrl.length+1; while (i < baseUrl.length) {
+          if (baseUrl.charAt(i) == '/') levels += 1
+          i += 1
+        }
+        return if (levels == 0) url else {
+          val sb = new java.lang.StringBuilder(url.length+levels*3)
+          var i = 0; while (i < levels) {
+            sb.append("../")
+            i += 1
+          }
+          sb.append(url).toString
+        }
+      }
+
       // General case that can handle everything. Code above can be deleted and
       // everything will work just fine (albeit slowly).
       val link = new URI(url)
       val base = new URI(baseUrl)
-      require(baseUrl.startsWith(blog.baseUrl) && base.isAbsolute)
+      require(base.isAbsolute)
 
       if (link.getHost != null && link.getHost != base.getHost) {
         url
