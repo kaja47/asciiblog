@@ -217,6 +217,7 @@ object Blog {
     val imgRoot2 = if (imgRoot1.endsWith("/")) imgRoot1 else imgRoot1+"/"
 
     b.copy(
+      baseUrl   = if (b.baseUrl.endsWith("/")) b.baseUrl.init else b.baseUrl,
       imageRoot = imgRoot2,
       defaultUser = if (b.defaultUser.isEmpty) null else b.defaultUser
     )
