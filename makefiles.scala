@@ -1132,15 +1132,15 @@ object MakeFiles {
     }
 
     timer("checks", blog) {
-    val allIds = new mutable.HashSet[String]()
-    for (a <- articles.iterator.map(_.slug) ++ articles.iterator.flatMap(_.aliases)) {
-      if (allIds.contains(a)) { sys.error(s"duplicate slug/alias '${a}'") }
-      allIds += a
+    val allIds = new mutable.HashMap[String, Article]()
+    for (a <- articles; id <- Iterator(a.slug) ++ a.aliases.iterator) {
+      if (allIds.contains(id)) { sys.error(s"duplicate slug/alias '${id}', used in $a and ${allIds(id)}") }
+      allIds.put(id, a)
     }
 
     articles foreach { a =>
-      a.pub foreach { id => if (!allIds(id)) sys.error(s"id [$id] is not defined (used as pub in article '${a.title})'") }
-      a.rel foreach { id => if (!allIds(id)) sys.error(s"id [$id] is not defined (used as rel in article '${a.title})'") }
+      a.pub foreach { id => if (!allIds.contains(id)) sys.error(s"id [$id] is not defined (used as pub in article '${a.title})'") }
+      a.rel foreach { id => if (!allIds.contains(id)) sys.error(s"id [$id] is not defined (used as rel in article '${a.title})'") }
     }
     }
 
