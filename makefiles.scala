@@ -1035,6 +1035,26 @@ object MakeFiles {
       }
     }
 
+    timer("make tags case insensitive", blog) {
+      // TODO choose tag variant with mixed cases
+      val caseCanonization = articles.iterator
+        .flatMap { a => a.tags.visible ++ a.tags.hidden }
+        .toVector.distinct
+        .groupBy { t => (t.supertag, t.title.toLowerCase) }
+        .filter { case (_, variants) => variants.size > 1 }
+        .flatMap { case ((supertag, lower), variants) =>
+          val canonicalVariant = variants.sortBy(_.title.count(Character.isUpperCase)).last
+          variants.map { v => v -> Tag(canonicalVariant.title, supertag) }
+        }.toMap withDefault identity
+
+      articles = articles.map { a =>
+        a.copy(tags = a.tags.copy(
+          visible = a.tags.visible.map(caseCanonization),
+          hidden  = a.tags.visible.map(caseCanonization)
+        ))
+      }
+    }
+
     // Maps all article slugs (main ones and aliases) to their absolute urls.
     // Bit of a hack, this lazy function closes over mutable variable articles.
     // So when it's finally called it sould use the most recent and up to date
