@@ -98,7 +98,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
 
-  private def plaintextDescription(a: Article): String =
+  def plaintextDescription(a: Article): String =
     stripTags(a.text.firstParagraph).replace('\n', ' ')
 
   private def mainImageUrl(a: Article): String  = a.images.find(_.mods == "main").map(_.url).getOrElse(null)
