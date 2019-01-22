@@ -743,9 +743,9 @@ object MakeFiles {
     val isTag = meta.contains("supertag") || meta.contains("tag") || (slug != null && isTagSlug(slug))
     val inFeed = xxx == null && !isTag
     val realSlug =
-      if (slug != null && slug != "") slug else
-        if (isTag) tagSlug(title)
-        else generateSlug(title)
+      if (slug != null && slug != "") slug
+      else if (isTag) tagSlug(title)
+      else generateSlug(title)
 
     if ((slug == null || slug == "") && blog.demandExplicitSlugs && !title.startsWith("???"))
       sys.error(s"article ${title} is missing explicit slug")
@@ -1009,7 +1009,7 @@ object MakeFiles {
     }
 
     if (blog.articlesMustBeSorted) { // ordered by date
-    timer("order by date", blog) {
+    timer("articlesMustBeSorted", blog) {
       val dated = articles.filter(_.date != null)
       val ordered = dated == dated.sortBy(~_.date.getTime)
       if (!ordered) sys.error("articles are not ordered by date")
@@ -1030,8 +1030,8 @@ object MakeFiles {
     }
     }
 
-    timer("user lists", blog) {
-      if (blog.usersAsTags) {
+    if (blog.usersAsTags) {
+      timer("user lists", blog) {
         articles = articles.map { a =>
           if (a.author == null || a.author.isEmpty || a.author == blog.defaultUser) a else {
             a.copy(tags = a.tags.copy(visible = Tag(a.author) +: a.tags.visible))
@@ -1115,7 +1115,7 @@ object MakeFiles {
       if (a.imgtags.isEmpty) a else a.addImageTags(a.imgtags)
     }
 
-    timer("checks", blog) {
+    timer("check slugs and alias for uniqueness", blog) {
     val allIds = new mutable.HashMap[String, Article]()
     for (a <- articles; id <- Iterator(a.slug) ++ a.aliases.iterator) {
       if (allIds.contains(id)) { sys.error(s"duplicate slug/alias '${id}', used in $a and ${allIds(id)}") }
