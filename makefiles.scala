@@ -68,7 +68,6 @@ case class Blog (
   val articlesMustBeSorted: Boolean,
   val articlesMustNotBeMixed: Boolean,
   val language: String,
-  val dumpAll: Boolean,
   val fileSuffix: String,
   val imageMarker: String,
   val albumsDir: String,
@@ -179,7 +178,6 @@ object Blog {
       articlesMustBeSorted   = cfgBool("articlesMustBeSorted", false),
       articlesMustNotBeMixed = cfgBool("articlesMustNotBeMixed", false),
       language               = cfgStr ("language", "en"),
-      dumpAll                = cfgBool("dumpAll", false), // dump everything into main feed including hidden articles
       fileSuffix             = cfgStr ("fileSuffix", ".html"),
       imageMarker            = cfgStr ("imageMarker", ""),
       albumsDir              = cfgStr ("albumsDir", ""),
@@ -757,7 +755,7 @@ object MakeFiles {
       sys.error("some metainformation was not processed: "+_metaLines.toSeq)
 
     val isTag = meta.contains("supertag") || meta.contains("tag") || (slug != null && isTagSlug(slug))
-    val inFeed = blog.dumpAll || (xxx == null && !isTag)
+    val inFeed = xxx == null && !isTag
     val realSlug =
       if (slug != null && slug != "") slug else
         if (isTag) tagSlug(title)
@@ -976,7 +974,7 @@ object MakeFiles {
     val now = new Date
     articles = articles.filter { a =>
       val isInPast = a.date == null || a.date.before(now)
-      blog.dumpAll || !blog.excludeFutureArticles || (!hiddenSlugs.contains(a.slug) && isInPast)
+      !blog.excludeFutureArticles || (!hiddenSlugs.contains(a.slug) && isInPast)
     }
     }
 
