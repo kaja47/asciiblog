@@ -260,6 +260,30 @@ class XMLSW(sb: java.lang.StringBuilder, val html5: Boolean = false) {
 
 object util {
 
+  def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] = {
+    val res = mutable.Map[B, mutable.ArrayBuffer[A]]()
+    for ((a, bs) <- m; b <- bs) { res.getOrElseUpdate(b, new mutable.ArrayBuffer[A]) += a }
+    res.iterator.map { case (b, as) => (b, as.toVector) }.toMap
+  }
+
+  def invert1[A, B](m: Seq[(A, Seq[B])]): Map[B, A] = {
+    val res = mutable.Map[B, A]()
+    for ((a, bs) <- m; b <- bs) { res.getOrElseUpdate(b, a) }
+    res.toMap
+  }
+
+  def distinctBy[T, U](xs: Seq[T])(f: T => U): Seq[T] = // TODO replace by builtin method in scala 2.13
+    if (xs.length <= 1) xs else {
+      val set = mutable.Set[U]()
+      val b = xs.genericBuilder[T]
+      for (x <- xs) {
+        if (set.add(f(x))) {
+          b += x
+        }
+      }
+      b.result()
+    }
+
   def intersectionSize(a: Array[Int], b: Array[Int]): Int = {
     var size, ai, bi = 0
     while (ai < a.length && bi < b.length) {

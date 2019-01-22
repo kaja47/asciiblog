@@ -1,7 +1,6 @@
 package asciiblog
 
-import MakeFiles.invert
-import util.intersectionSize
+import util.{ intersectionSize, invert }
 import java.{ lang => jl }
 
 class Similarities(_articles: Seq[Article], count: Int) {

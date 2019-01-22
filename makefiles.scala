@@ -1,6 +1,6 @@
 package asciiblog
 
-import MakeFiles.{ hash, tagSlug, invert, UrlOps, isAbsolute }
+import MakeFiles.{ hash, tagSlug, UrlOps, isAbsolute }
 import java.io.{ File, BufferedWriter, OutputStreamWriter, FileOutputStream }
 import java.net.{ URL, URI, URLDecoder }
 import java.security.MessageDigest
@@ -506,20 +506,6 @@ object MakeFiles {
     val (newBlog, base, resolver) = makeBase(blog, markup)
     (newBlog, markup, base, resolver)
   }
-
-
-  def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] = {
-    val res = mutable.Map[B, mutable.ArrayBuffer[A]]()
-    for ((a, bs) <- m; b <- bs) { res.getOrElseUpdate(b, new mutable.ArrayBuffer[A]) += a }
-    res.iterator.map { case (b, as) => (b, as.toVector) }.toMap
-  }
-
-  def invert1[A, B](m: Seq[(A, Seq[B])]): Map[B, A] = {
-    val res = mutable.Map[B, A]()
-    for ((a, bs) <- m; b <- bs) { res.getOrElseUpdate(b, a) }
-    res.toMap
-  }
-
 
   def isAbsolute(url: String) = url.startsWith("http") && new URI(url).isAbsolute
   def addParam(url: String, param: String) =
@@ -1154,17 +1140,6 @@ object MakeFiles {
     }
     }
 
-    def distinctBy[T, U](xs: Seq[T])(f: T => U): Seq[T] = // TODO replace by builtin method in scala 2.13
-      if (xs.length <= 1) xs else {
-        val set = mutable.Set[U]()
-        val b = xs.genericBuilder[T]
-        for (x <- xs) {
-          if (set.add(f(x))) {
-            b += x
-          }
-        }
-        b.result()
-      }
 
     val backlinks: Map[Slug, Seq[Article]] = timer("backlinks", blog) {
       invert(articles.map { a => (a, a.slugsOfLinkedArticles) })
