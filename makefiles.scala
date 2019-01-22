@@ -259,7 +259,7 @@ case class Article(
   inFeed: Boolean = true
 ) {
   val date = if (dates.isEmpty) null else dates.head
-  def prettyDate = if (date == null) "" else "<"+new SimpleDateFormat("MM-dd-yyyy").format(date)+">"
+  private def prettyDate = if (date == null) "" else "<"+new SimpleDateFormat("MM-dd-yyyy").format(date)+">"
   override def toString = (if (isTag) "Article[Tag]" else "Article")+s"($prettyDate$title)"
   def asSlug: Slug = Slug(slug)
   def isSupertag = meta.isSupertag
@@ -391,7 +391,7 @@ case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
   lazy val bySlug: Map[String, Article] = all.map(a => (a.slug, a)).toMap
   lazy val articles = all.filter(a => !a.isTag)
   lazy val feed     = all.filter(a => !a.isTag && a.inFeed)
-  lazy val images = all.sortBy { a => (Option(a.date), a.title) }.reverse
+  lazy val images   = all.sortBy(a => (Option(a.date), a.title)).reverse
     .flatMap { a => a.images.map(_.copy(inText = false, localSource = a)) }
 
   lazy val allTags: Map[Tag, (Article, Seq[Article])] = { // [tag -> (article reprsenting this tag, articles tagged by this tag)]
