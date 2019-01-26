@@ -1263,11 +1263,14 @@ object MakeFiles {
       cal.add(Calendar.YEAR, -1)
       val yearAgo = cal.getTime()
 
-      base.all.filter(a => a.date != null && a.date.after(yearAgo))
+      val thisYearArticles = base.all.filter(a => a.date != null && a.date.after(yearAgo))
+      val articles = if (thisYearArticles.size >= 30) thisYearArticles else base.feed.take(30)
+
+      articles
         .flatMap(_.tags.visible)
         .groupBy(a => a).toSeq
-        .filter { case (t, ts) => ts.size >= 3 }
-        .sortBy { case (t, ts) => ~ts.size }
+        .filter { case (_, ts) => ts.size >= 3 }
+        .sortBy { case (_, ts) => ~ts.size }
         .take(25)
         .map { case (t, _) => base.allTags(t)._1 }
     }
