@@ -256,7 +256,9 @@ case class Article(
   similar: Seq[Article] = Seq(),
   pubArticles: Seq[Article] = Seq(),
   pubBy: Article = null,
-  inFeed: Boolean = true
+  inFeed: Boolean = true,
+  next: Article = null,
+  prev: Article = null
 ) {
   val date = if (dates.isEmpty) null else dates.head
   private def prettyDate = if (date == null) "" else "<"+new SimpleDateFormat("MM-dd-yyyy").format(date)+">"
@@ -404,11 +406,6 @@ case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
   }
 
   def tagByTitle(t: Tag): Article = allTags(t)._1
-
-  private lazy val slug2ord: Map[String, Int] = feed.map(_.slug).zipWithIndex.toMap
-
-  def next(a: Article): Article = slug2ord.get(a.slug).flatMap { ord => feed.lift(ord+1) }.getOrElse(null)
-  def prev(a: Article): Article = slug2ord.get(a.slug).flatMap { ord => feed.lift(ord-1) }.getOrElse(null)
 
   private def move(a: Article, tag: Tag, n: Int): Article = {
     val as = tagMap(tag)
@@ -1150,28 +1147,40 @@ object MakeFiles {
       }
     }
 
+    if (blog.sortByDate) {
+      articles = articles.sortBy(byDate)
+    }
+
     articles = timer("populate similarities", blog) {
       val sim = new Similarities(articles, blog.similarLimit)
       articles.map { a => a.copy(similar = sim(a)) }
     }
 
-    var tagMap = invert(articles.map { a => (a, (a.tags.visible).distinct) })
-
-    if (blog.sortByDate) { // newest first, articles without date last
-      articles = articles.sortBy(byDate)
-      tagMap = tagMap.map { case (t, as) => (t, as.sortBy(byDate)) }
+    timer("populate next and prev", blog) {
+      val feed = articles.filter(a => a.inFeed && !a.isTag)
+      val slug2ord = feed.map(_.slug).zipWithIndex.toMap
+      articles = articles.map { a =>
+        if (a.isTag) a else {
+          a.copy(
+            next = slug2ord.get(a.slug).flatMap { ord => feed.lift(ord+1) }.getOrElse(null),
+            prev = slug2ord.get(a.slug).flatMap { ord => feed.lift(ord-1) }.getOrElse(null)
+          )
+        }
+      }
     }
 
-    tagMap = timer("final tagmap", blog) {
+    val tagMap = timer("tagMap", blog) {
+      val tagMap = invert(articles.map { a => (a, (a.tags.visible).distinct) })
       val tagArticle = articles.iterator.collect { case a if a.isTag => (a.asTag, a) }.toMap
 
       tagMap.map { case (t, as) =>
         val key = tagArticle(t).meta.value("sortby")
 
         if (key == null) { // sort by order linked in article (order for << >> navigation)
+          val sortedAs = if (blog.sortByDate) as.sortBy(byDate) else as
           val linked = tagArticle(t).slugsOfLinkedArticles.distinct
-          val tagged = as.map(_.asSlug)
-          val artMap = as.map(a => (a.asSlug, a)).toMap
+          val tagged = sortedAs.map(_.asSlug)
+          val artMap = sortedAs.map(a => (a.asSlug, a)).toMap
           (t, ((linked intersect tagged) ++ (tagged diff linked)).map(artMap))
 
         } else if (key == "title") {

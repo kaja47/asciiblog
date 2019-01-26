@@ -246,11 +246,9 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
 
   private def _makeFullArticle(a: Article, compact: Boolean): String = {
     val title = blog.hooks.title(base, blog, this, a, compact)
-    val prev = base.prev(a)
-    val next = base.next(a)
 
     "<article>"+
-    ifs(!compact && (prev != null || next != null), "<span class=f>"+makeNextPrevArrows(prev, next)+"</span>")+
+    ifs(!compact && (a.prev != null || a.next != null), "<span class=f>"+makeNextPrevArrows(a.prev, a.next)+"</span>")+
     (if (title != null) title else if (!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br>")+
     ifs(a.isTag, {
       val sup = a.tags.visible.map(base.tagByTitle)
