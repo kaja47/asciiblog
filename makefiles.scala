@@ -1019,14 +1019,13 @@ object MakeFiles {
     }
 
     timer("make tags case insensitive", blog) {
-      // TODO choose tag variant with mixed cases
       val caseCanonization = articles.iterator
         .flatMap { a => a.tags.visible ++ a.tags.hidden }
         .toVector.distinct
         .groupBy { t => (t.supertag, t.title.toLowerCase) }
         .filter { case (_, variants) => variants.size > 1 }
         .flatMap { case ((supertag, lower), variants) =>
-          val canonicalVariant = variants.sortBy(_.title.count(Character.isUpperCase)).last
+          val canonicalVariant = variants.maxBy(_.title.count(Character.isUpperCase))
           variants.map { v => v -> Tag(canonicalVariant.title, supertag) }
         }.toMap withDefault identity
 
@@ -1129,6 +1128,7 @@ object MakeFiles {
         .map { case (k, vs) => (k, vs.minBy(_.date)) }
     }
 
+    // newest first, articles without date last
     val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
 
     articles = timer("populate backlinks and pubBy", blog) {
