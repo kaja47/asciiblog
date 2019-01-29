@@ -176,7 +176,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     "<title>"+ ifs(title, title+" | ")+blog.title+"</title>"+
     rssLink("rss.xml")+
     ifs(headers)+
-    ( if (blog.cssFile == null) "<style>"+mill.css.styleFor(body, !includeCompleteStyle)+"</style>" else "<link rel=stylesheet href=\""+rel("style.css")+"\" type=text/css>")+
+    ( if (blog.cssFile == null) "<style>"+mill.css.styleFor(body, !includeCompleteStyle)+"</style>" else "<link rel=stylesheet href="+util.quoteHTMLAttribute(rel("style.css"))+" type=text/css>")+
     ifs(containImages, "<script>"+galleryScript+"</script>\n")+
     body
   }
@@ -314,14 +314,14 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
   }
 
   def makeTagLink(t: Article) = {
-    val html = s"""#<i><a href="${rel(blog.absUrl(t))}">${t.title}</a></i>"""
+    val html = s"""#<i><a href=${util.quoteHTMLAttribute(rel(blog.absUrl(t)))}>${t.title}</a></i>"""
     if (t.isSupertag) s"<b>$html</b>" else html
   }
 
   def makeNextPrevArrows(prev: Article, next: Article) =
     "<span class=f>"+
-    (if (prev == null) "«««" else s"""<a href="${rel(blog.absUrl(prev))}">«««</a>""")+" "+
-    (if (next == null) "»»»" else s"""<a href="${rel(blog.absUrl(next))}">»»»</a>""")+
+    (if (prev == null) "«««" else s"""<a href=${util.quoteHTMLAttribute(rel(blog.absUrl(prev)))}>«««</a>""")+" "+
+    (if (next == null) "»»»" else s"""<a href=${util.quoteHTMLAttribute(rel(blog.absUrl(next)))}>»»»</a>""")+
     "</span>"
 
   def makeTagLinks(tags: Seq[Article]) = tags.map(makeTagLink).mkString(" ")
