@@ -172,8 +172,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
       txt = noteRegex.replaceAllIn(txt, m => {
         if (plaintext) "" else {
           val l = noteUrl+"#fn"+m.group(1)
-          val click = if (noteUrl.nonEmpty) "" else " onclick=\"document.querySelector('"+l+"').style.border='1px dotted black'\""
-          Regex.quoteReplacement(s"""<a$click href=${util.quoteHTMLAttribute(l)}><sup>${m.group(1)}</sup></a> """)
+          Regex.quoteReplacement(s"""<a href=${util.quoteHTMLAttribute(l)}><sup>${m.group(1)}</sup></a> """)
         }
       })
     }
@@ -315,7 +314,6 @@ object AsciiMarkup extends Markup {
 
   val preposCharsLen = 123
   val preposChars = Array.tabulate[Boolean](preposCharsLen) { i => "ksvzouiaKSVZOUIA".indexOf(i) != -1 }
-
   def isPreposChar(ch: Char) = ch < preposCharsLen && preposChars(ch)
 
   val codeCheck     = """`"""
