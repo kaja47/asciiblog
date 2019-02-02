@@ -1391,19 +1391,7 @@ object MakeFiles {
 
     new File(blog.outDir, "t").mkdir()
 
-    import java.awt.image. { BufferedImage }
-    import javax.imageio. { IIOImage, ImageWriteParam }
-
-    def saveJpg(thumbFile: File, img: BufferedImage, quality: Float) = {
-      val ios = ImageIO.createImageOutputStream(thumbFile)
-      val writer = ImageIO.getImageWritersByFormatName("jpeg").next()
-      val params = writer.getDefaultWriteParam()
-      params.setCompressionMode(ImageWriteParam.MODE_EXPLICIT)
-      params.setCompressionQuality(quality)
-      writer.setOutput(ios)
-      writer.write(null, new IIOImage(img, null, null), params)
-      writer.dispose()
-    }
+    import java.awt.Color
 
     for ((image, jobs) <- resizeJobs) {
       try {
@@ -1431,7 +1419,7 @@ object MakeFiles {
               val strength = if (s == "png" || s == "gif") 0f else sharpenStrength
               val resized = ImageTools.resizeImage(full, w, h, leeway, strength)
               if (s == "jpg" || s == "jpeg") {
-                saveJpg(thumbFile, resized, 0.85f)
+                ImageTools.saveJpg(thumbFile, resized, 0.85f)
               } else {
                 ImageIO.write(resized, s, thumbFile)
               }

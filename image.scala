@@ -1,9 +1,22 @@
 package asciiblog
 
 import java.awt.image. { BufferedImage, Kernel, ConvolveOp }
-import java.awt.{ AlphaComposite, RenderingHints => RH }
+import java.awt.{ Color, Font, AlphaComposite, RenderingHints => RH }
+import javax.imageio. { ImageIO, IIOImage, ImageWriteParam }
+import java.io.File
 
 object ImageTools {
+
+  def saveJpg(f: File, img: BufferedImage, quality: Float) = {
+    val ios = ImageIO.createImageOutputStream(f)
+    val writer = ImageIO.getImageWritersByFormatName("jpeg").next()
+    val params = writer.getDefaultWriteParam()
+    params.setCompressionMode(ImageWriteParam.MODE_EXPLICIT)
+    params.setCompressionQuality(quality)
+    writer.setOutput(ios)
+    writer.write(null, new IIOImage(img, null, null), params)
+    writer.dispose()
+  }
 
   def resizeImage(src: BufferedImage, targetWidth: Int, targetHeight: Int = -1, leeway: Double, sharpenStrength: Float): BufferedImage = {
     require(leeway >= 1.0)
