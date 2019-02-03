@@ -81,6 +81,7 @@ case class Blog (
   val openGraph: Boolean,
   val twitterSite: String,
   val twitterCreator: String,
+  val textCards: Boolean,
 
   val args: Array[String],
   val translation: Map[String, String],
@@ -191,6 +192,7 @@ object Blog {
       openGraph              = cfgBool("openGraph", false),
       twitterSite            = cfgStr ("twitter.site", ""),
       twitterCreator         = cfgStr ("twitter.creator", ""),
+      textCards              = cfgBool("textCards", false),
 
       args                   = args,
       translation            = translation ++ cfg.collect { case (k, v) if k.startsWith("translation.") => k.split("\\.", 2)(1) -> v } ,
@@ -608,6 +610,7 @@ object MakeFiles {
 
     def thumbnailUrl(img: Image) = s"t/${img.thumb}-${blog.thumbWidth}x${blog.thumbHeight}"+imgSuffix(img)
     def bigThumbnailUrl(img: Image, half: Boolean) = s"t/${img.thumb}-${blog.bigThumbWidth / (if (half) 2 else 1)}"+imgSuffix(img)
+    def textCardUrl(a: Article) = s"t/card/${a.slug}.png"
   }
 
 
@@ -1392,6 +1395,23 @@ object MakeFiles {
     new File(blog.outDir, "t").mkdir()
 
     import java.awt.Color
+
+    def createCard(a: Article, w: Int = 480, h: Int = 240, background: Color = Color.WHITE, foreground: Color = Color.BLACK) = {
+      val dateFormat = new SimpleDateFormat("d. M. yyyy")
+      val line1 = (if (a.isTag) "#" else "")+a.title
+      val line2 = blog.twitterSite+(if (a.date != null) " — "+dateFormat.format(a.date) else "")
+      ImageTools.createCardImage(line1, line2, w, h, background, foreground)
+    }
+
+    if (blog.textCards) {
+      for (a <- base.all) {
+        val dest = new File(blog.outDir, blog.textCardUrl(a))
+        if (!dest.exists) {
+          dest.getParentFile.mkdirs()
+          ImageIO.write(createCard(a), "png", dest)
+        }
+      }
+    }
 
     for ((image, jobs) <- resizeJobs) {
       try {

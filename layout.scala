@@ -138,8 +138,10 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
       val mainImg  = mainImageUrl(a)
       val otherImg = otherImageUrl(a)
       val (tpe, img) =
-        if (mainImg != null) ("summary_large_image", mainImg)
-        else                 ("summary", otherImg)
+        if (mainImg != null)       ("summary_large_image", mainImg)
+        else if (otherImg != null) ("summary",             otherImg)
+        else if (blog.textCards)   ("summary_large_image", blog.absUrlFromPath(blog.textCardUrl(a)))
+        else                       ("summary",             null)
 
       val sb = new java.lang.StringBuilder(300)
       val w = new XMLSW(sb, html5 = true)

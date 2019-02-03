@@ -18,6 +18,54 @@ object ImageTools {
     writer.dispose()
   }
 
+  def createCardImage(title: String, subtitle: String, w: Int = 480, h: Int = 240, background: Color = Color.WHITE, foreground: Color = Color.BLACK): BufferedImage = {
+    val img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+    val g = img.createGraphics()
+    g.setRenderingHint(RH.KEY_TEXT_ANTIALIASING, RH.VALUE_TEXT_ANTIALIAS_ON)
+
+    g.setColor(background)
+    g.fillRect(0, 0, w, h)
+
+    g.setColor(foreground)
+
+    val line1 = title
+    val line2 = subtitle
+
+    val font1 = new Font("Lato Medium", Font.PLAIN, 36)
+    val font2 = new Font("Lato Medium", Font.PLAIN, 14)
+
+    val fm = g.getFontMetrics(font1)
+    val ratio = math.min(1, (w - 12f) / fm.stringWidth(line1))
+
+    g.setFont(font1.deriveFont(font1.getSize * ratio))
+    val w1 = g.getFontMetrics.stringWidth(line1)
+    val h1 = g.getFontMetrics.getAscent
+
+    val w2 = g.getFontMetrics(font2).stringWidth(line2)
+    val h2 = (g.getFontMetrics(font2).getAscent * 1.5).toInt
+
+    val totalHeight = h1 + h2
+
+    val y1 = h/2 - totalHeight/2 + (h1*0.9).toInt
+    val x1 = math.min((w-w1)/2, (w-w2)/2)
+
+    val y2 = y1+h2
+    val x2 = x1
+
+    g.drawString(line1, x1, y1)
+
+    //g.drawRect(x1, h/2 - totalHeight/2, 1, 1)
+    //g.drawRect(x1, y1, 1, 1)
+    //g.drawRect(x2, y2, 1, 1)
+
+    g.setFont(font2)
+    g.drawString(line2, x2, y2)
+
+    g.dispose()
+
+    img
+  }
+
   def resizeImage(src: BufferedImage, targetWidth: Int, targetHeight: Int = -1, leeway: Double, sharpenStrength: Float): BufferedImage = {
     require(leeway >= 1.0)
 
