@@ -24,8 +24,8 @@ object Make extends App {
   }
 
   try {
-    val (blog, markup, base, resolver) = MakeFiles.init(args)
-    MakeFiles.makeFiles(blog, base, markup, resolver)
+    val (blog, markup, base, resolver, changed) = MakeFiles.init(args)
+    MakeFiles.makeFiles(blog, base, markup, resolver, changed)
 
     timer.end()
     println("total: "+timer.ms)
@@ -89,6 +89,7 @@ case class Blog (
 
   val printTiming: Boolean  = false,
   val printErrors: Boolean = true,
+  val trackChangedArticles: Boolean = false,
 
   val cfg: Map[String, String] = Map()
 ) extends UrlOps {
@@ -201,6 +202,7 @@ object Blog {
 
       printTiming            = cfgBool("printTiming", false),
       printErrors            = cfgBool("printErrors", true),
+      trackChangedArticles   = cfgBool("trackChangedArticles", false),
 
       cfg = cfg
     )
@@ -502,8 +504,8 @@ object MakeFiles {
     val txl = keyValuesMap(file("lang."+cfg.getOrElse("language", "en")))
     val blog = f(Blog.populate(cfg, args, txl, cfgFile))
     val markup = AsciiMarkup
-    val (newBlog, base, resolver) = makeBase(blog, markup)
-    (newBlog, markup, base, resolver)
+    val (newBlog, base, resolver, changed) = makeBase(blog, markup)
+    (newBlog, markup, base, resolver, changed)
   }
 
   def isAbsolute(url: String) = url.startsWith("http") && new URI(url).isAbsolute
@@ -918,7 +920,7 @@ object MakeFiles {
 
 
 
-  def makeBase(implicit blog: Blog, markup: Markup): (Blog, Base, String => String) = {
+  def makeBase(implicit blog: Blog, markup: Markup): (Blog, Base, String => String, Set[Slug]) = {
     var articles: Vector[Article] = timer("readfiles", blog)(readGallery(blog) ++ readPosts(blog))
 
     articles = blog.hooks.prepareArticles(articles).toVector
@@ -1199,29 +1201,146 @@ object MakeFiles {
     }
 
     val base = blog.hooks.updateBase(Base(articles, tagMap), blog)
-    (blog, base, resolver)
+    val changed = timer("detect changed articles", blog) {
+      changedArticles(base, blog)
+    }
+
+    (blog, base, resolver, changed)
   }
 
 
 
-  def saveFile(f: String, content: String, fileIndex: Map[String, String] = Map())(implicit blog: Blog): (String, String) = { // filename -> hash
-    val ff = new File(blog.outDir, f)
+  def changedArticles(base: Base, blog: Blog): Set[Slug] = {
+    import scala.util.hashing.MurmurHash3.{ mix, finalizeHash, mapHash }
 
-    val p = ff.getParentFile
-    if (p != null) p.mkdirs()
+    def hashCode(a: Article) = {
+      var h = 0xcafebabe
+      h = mix(h, a.title.hashCode)
+      h = mix(h, a.slug.hashCode)
+      h = mix(h, a.author.##)
+      h = mix(h, a.dates.##)
+      h = mix(h, a.tags.##)
+      h = mix(h, a.meta.##)
+      //h = mix(h, a.rel.##)
+      h = mix(h, a.pub.##)
+      h = mix(h, a.aliases.##)
+      h = mix(h, a.implies.##)
+      h = mix(h, a.imgtags.##)
+      h = mix(h, a.link.##)
+      h = mix(h, a.notes.##)
+      h = mix(h, a.license.##)
+      h = mix(h, a.rawText.##)
+      //h = mix(h, a.text.##) // contains reference to globalNames
+      //h = mix(h, a.images.##)
+      h = skeletonHashCodes(a.backlinks, h)
+      h = skeletonHashCodes(a.similar, h)
+      h = skeletonHashCodes(a.pubArticles, h)
+      h = mix(h, a.pubBy.##)
+      h = mix(h, a.inFeed.##)
+      h = skeletonHashCode(a.next, h)
+      h = skeletonHashCode(a.prev, h)
+      finalizeHash(h, 99)
+    }
 
-    val h = hash(content)
+    def skeletonHashCode(a: Article, _h: Int): Int = {
+      var h = _h
+      if (a != null) {
+        h = mix(h, a.title.##)
+        h = mix(h, a.slug.##)
+      }
+      h
+    }
 
-    if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
-      val fw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(ff), "utf-8"))
-      fw.write(content)
+    def skeletonHashCodes(as: Seq[Article], _h: Int): Int = {
+      var h = _h
+      for (a <- as) h = skeletonHashCode(a, h)
+      h
+    }
+
+    val cacheFile = new File(blog.outDir, ".articleHashes")
+
+    def readHashes(): (Int, Map[String, Int]) = {
+      val Vector(cfgHash, lines @ _*) = io.Source.fromFile(cacheFile, "utf-8").getLines.toVector
+      val hashes =
+        lines.map { line =>
+          val Array(hash, s) = line.split(" ", 2)
+          (s, hash.toInt)
+        }.toMap
+
+      (cfgHash.toInt, hashes)
+    }
+
+    def writeHashes(cfgHash: Int, hashes: Map[String, Int]) = {
+      val fw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(cacheFile), "utf-8"))
+      fw.write(cfgHash+"\n")
+      for ((s, hash) <- hashes.toSeq.sortBy(_._1))  {
+        fw.write(hash+" "+s+"\n")
+      }
       fw.close()
     }
 
-    f -> h
+    def all = base.all.map(_.asSlug).toSet
+
+    if (!blog.trackChangedArticles) {
+      cacheFile.delete()
+      return all
+    }
+
+    val (newCfgHash, newHashes) = (mapHash(blog.cfg), base.all.map { a => (a.slug, hashCode(a)) }.toMap)
+    val (oldCfgHash, oldHashes) = if (!cacheFile.exists) (0, Map[String, Int]()) else readHashes()
+
+    writeHashes(newCfgHash, newHashes)
+
+    if (newCfgHash != oldCfgHash) return all
+
+    val invalidSlugs = mutable.Set[String]()
+    invalidSlugs ++= (newHashes.keySet -- oldHashes.keys)
+
+    for ((s, newHash) <- newHashes) {
+      if (oldHashes.contains(s) && oldHashes(s) != newHash) {
+        invalidSlugs += s
+      }
+    }
+
+    invalidSlugs.map(Slug).toSet
   }
 
-  def makeFiles(blog: Blog, base: Base, markup: Markup, resolver: String => String) = try {
+
+
+
+
+
+
+  class Saver(oldFileIndex: Map[String, String], changedSlugs: Set[Slug], blog: Blog) {
+    val fileIndex = collection.concurrent.TrieMap[String, String]()
+    def apply(articles: Seq[Article], f: String)(content: => String) = {
+      if (articles == null || articles.exists(a => changedSlugs.contains(a.asSlug)) || !oldFileIndex.contains(f)) {
+        fileIndex += saveFile(f, content, oldFileIndex)(blog)
+      } else {
+        fileIndex += (f -> oldFileIndex(f))
+      }
+    }
+
+    def saveFile(f: String, content: String, fileIndex: Map[String, String] = Map())(implicit blog: Blog): (String, String) = { // filename -> hash
+      val ff = new File(blog.outDir, f)
+
+      val p = ff.getParentFile
+      if (p != null) p.mkdirs()
+
+      val h = hash(content)
+
+      if (!fileIndex.contains(f) || fileIndex(f) != h || !ff.exists) {
+        val fw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(ff), "utf-8"))
+        fw.write(content)
+        fw.close()
+      }
+
+      f -> h
+    }
+  }
+
+
+  def makeFiles(blog: Blog, base: Base, markup: Markup, resolver: String => String, changed: Set[Slug]) = try {
     implicit val _blog = blog
 
     val oldFileIndex: Map[String, String] = {
@@ -1230,8 +1349,8 @@ object MakeFiles {
       else io.Source.fromFile(f).getLines.map{ l => val Array(k, v) = l.split(" ", 2); (v, k) }.toMap
     }
 
+    val save = new Saver(oldFileIndex, changed, blog)
 
-    val fileIndex = collection.concurrent.TrieMap[String, String]()
     val isIndexGallery = base.feed.take(blog.articlesOnIndex).exists(_.images.nonEmpty)
 
     val (fulls, rest) = base.feed.splitAt(blog.articlesOnIndex)
@@ -1262,11 +1381,13 @@ object MakeFiles {
     timer("generate and save files", blog) {
     timer("generate and save files - archive", blog) {
     val archiveLinks = archivePages.zipWithIndex.map { case ((a, as), idx) =>
-      val l = layout.make(blog.absUrl(a))
-      val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
-      val next = archivePages.lift(idx+1).map(_._1).getOrElse(null)
-      val body = l.addArrows(l.makeIndexArchive(as), prev, next)
-      fileIndex += saveFile(blog.relUrl(a), l.makePage(body, containImages = as.exists(_.hasImageMarker)), oldFileIndex)
+      save(as, blog.relUrl(a)) {
+        val l = layout.make(blog.absUrl(a))
+        val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
+        val next = archivePages.lift(idx+1).map(_._1).getOrElse(null)
+        val body = l.addArrows(l.makeIndexArchive(as), prev, next)
+        l.makePage(body, containImages = as.exists(_.hasImageMarker))
+      }
       a
     }
 
@@ -1288,9 +1409,11 @@ object MakeFiles {
     }
 
     val path = blog.relUrlFromSlug("index")
-    val l = layout.make(blog.absUrlFromPath(path))
-    val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month", tagsToShow = lastYearTags)
-    fileIndex += saveFile(path, l.makePage(body, containImages = isIndexGallery), oldFileIndex)
+    save(null, path) {
+      val l = layout.make(blog.absUrlFromPath(path))
+      val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month", tagsToShow = lastYearTags)
+      l.makePage(body, containImages = isIndexGallery)
+    }
     }
 
     timer("generate and save files - image pages", blog) {
@@ -1305,17 +1428,19 @@ object MakeFiles {
       val prev = imgsPages.lift(idx-1).getOrElse(null)
       val next = imgsPages.lift(idx+1).getOrElse(null)
       val body = l.addArrows(l.makeFullArticle(a), prev, next)
-      fileIndex += saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = true), oldFileIndex)
+      save(null, blog.relUrl(a))(l.makePage(body, a.title, containImages = true))
     }
     }
 
     timer("generate and save files - articles", blog) {
     base.articles foreach { a =>
       if (a.link == null || a.link.isEmpty) { // TODO?
-        var l = layout.make(blog.absUrl(a))
-        val aa = a.imagesWithoutArticleTags
-        val body = l.makeFullArticle(aa)
-        fileIndex += saveFile(blog.relUrl(aa), l.makePage(body, aa.title, containImages = aa.images.exists(_.zoomable), headers = l.ogTags(aa)), oldFileIndex)
+        save(Seq(a), blog.relUrl(a)) {
+          var l = layout.make(blog.absUrl(a))
+          val aa = a.imagesWithoutArticleTags
+          val body = l.makeFullArticle(aa)
+          l.makePage(body, aa.title, containImages = aa.images.exists(_.zoomable), headers = l.ogTags(aa))
+        }
       }
     }
     }
@@ -1325,14 +1450,14 @@ object MakeFiles {
       var l = layout.make(blog.absUrl(a))
       val body = l.makeFullArticle(a.imagesWithoutArticleTags)
       val hasImages = a.images.nonEmpty || as.exists(_.images.nonEmpty)
-      fileIndex += saveFile(blog.relUrl(a), l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")), oldFileIndex)
-      fileIndex += saveFile(a.slug+".xml", makeRSS(as.take(blog.rssLimit), null, blog.absUrlFromPath(a.slug+".xml")), oldFileIndex)
+      save(as :+ a, blog.relUrl(a))(l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")))
+      save(as :+ a, a.slug+".xml")(makeRSS(as.take(blog.rssLimit), null, blog.absUrlFromPath(a.slug+".xml")))
     }
 
     {
       val path = blog.relUrlFromSlug("tags")
       val l = layout.make(blog.absUrlFromPath(path))
-      fileIndex += saveFile(path, l.makePage(l.makeTagIndex(base)), oldFileIndex)
+      save(null, path)(l.makePage(l.makeTagIndex(base)))
     }
     }
 
@@ -1340,14 +1465,14 @@ object MakeFiles {
       val body = layout.make(null).makeArticleBody(a)
       FlowLayout.updateLinks(body, url => blog.addParamMediumFeed(url))
     }
-    fileIndex += saveFile("rss.xml", makeRSS(base.feed.take(blog.rssLimit), if (blog.articlesInRss) mkBody else null, blog.absUrlFromPath("rss.xml")), oldFileIndex)
+    save(null, "rss.xml")(makeRSS(base.feed.take(blog.rssLimit), if (blog.articlesInRss) mkBody else null, blog.absUrlFromPath("rss.xml")))
 
     if (blog.allowComments) {
       val l = layout.make(blog.absUrlFromPath("comments.php"))
       val p = l.makePage("{comments.body}", null, false,  null, includeCompleteStyle = true)
       val Array(pre, post) = p.split(Regex.quote("{comments.body}"))
 
-      fileIndex += saveFile("comments.php", {
+      save(null, "comments.php") {
         val replaces = blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v } ++ Seq(
           "{comments.prebody}"  -> pre,
           "{comments.postbody}" -> post,
@@ -1359,19 +1484,19 @@ object MakeFiles {
           cs = cs.replace(from, to)
         }
         cs
-      }, oldFileIndex)
+      }
       new File(".comments").mkdirs()
-      fileIndex += saveFile(".comments/.htaccess", "Deny from all", oldFileIndex)
+      save(null, ".comments/.htaccess")("Deny from all")
     }
 
-    //fileIndex += saveFile("out.php", outScript, oldFileIndex)
+    //save(null, "out.php")(outScript)
 
     if (blog.cssFile != null) {
-      fileIndex += saveFile("style.css", io.Source.fromFile(blog.cssFile).mkString, oldFileIndex)
+      save(null, "style.css")(io.Source.fromFile(blog.cssFile).mkString)
     }
 
-    fileIndex += saveFile("robots.txt", "User-agent: *\nAllow: /", oldFileIndex)
-    saveFile(".files", fileIndex.toSeq.sorted.map { case (file, hash) => hash+" "+file }.mkString("\n"), oldFileIndex)
+    save(null, "robots.txt")("User-agent: *\nAllow: /")
+    save(null, ".files")(save.fileIndex.toSeq.sorted.map { case (file, hash) => hash+" "+file }.mkString("\n"))
     }
 
 
@@ -1462,7 +1587,7 @@ object MakeFiles {
   } catch {
     case e: Exception =>
       // If anything goes wrong nuke .files index.
-      // It's necessary for correct conditional save in `saveFile` method.
+      // It's necessary for correct conditional save in `save` method.
       // In cases when I make some changes, program may overwrite few files and
       // than explode without updating .files index. Then if I revert that
       // change, program incorrectly thinks (according to index) that all files
@@ -1470,6 +1595,7 @@ object MakeFiles {
       // prevents this problem, because after every error, all files are
       // regenerated.
      new File(blog.outDir, ".files").delete()
+     new File(blog.outDir, ".articleHashes").delete()
      throw new Exception(e)
   }
 }
