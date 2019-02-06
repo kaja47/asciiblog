@@ -9,7 +9,7 @@ import java.lang.StringBuilder
 
 trait Markup {
   type ResolveLinkFunc = String => String
-  def process(text: Seq[String], resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): Text
+  def process(text: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): Text
 }
 
 trait Text {
@@ -40,21 +40,21 @@ object AsciiText {
   def linkSlurpReplace(txt: String)(f: Slurp.Replacement) =
     Slurp(txt, groups = 3).replace(linkUntil, linkSlurp, f)
 
-  def empty = AsciiText(Seq(), null, "")
+  def empty = AsciiText(Seq(), null)
 }
 
-case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl: String) extends Text { self =>
+case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc) extends Text { self =>
   import AsciiText._
 
   def render(l: ImageLayout, relativize: String => String): String = mkText(segments, l, resolvedLinks, relativize)
   def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt, _) => txt }.headOption.getOrElse(""), resolvedLinks, identity, true)
-  def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l), "").render(null, identity)
+  def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l)).render(null, identity)
 
   // Overwrites segments, doesn't resolve links again. This saves some work but
   // mainly it's there se error messages during link resolution are not
   // displayed twice
   def overwriteSegments(newSegments: Seq[Segment]) =
-    new AsciiText(newSegments, null, noteUrl) {
+    new AsciiText(newSegments, null) {
       override protected def resolvedLinks = self.resolvedLinks
     }
 
@@ -105,11 +105,9 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
   private lazy val validRefTargets: Map[Int, NumberedList] = {
     val refLinks = processTexts(segments, txt => noteRegex.findAllMatchIn(txt).map(_.group(1).toInt)).toSet
 
-    if (noteUrl.isEmpty) {
-      val refTargets = segments.collect { case NumberedList(items) => items.map(_._1) }.flatten.toSet
-      refLinks.foreach { num =>
-        if (!refTargets.contains(num)) sys.error(s"invalid reference $num")
-      }
+    val refTargets = segments.collect { case NumberedList(items) => items.map(_._1) }.flatten.toSet
+    refLinks.foreach { num =>
+      if (!refTargets.contains(num)) sys.error(s"invalid reference $num")
     }
 
     segments.flatMap {
@@ -171,7 +169,7 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc, noteUrl:
     if (txt.contains(noteCheck)) {
       txt = noteRegex.replaceAllIn(txt, m => {
         if (plaintext) "" else {
-          val l = noteUrl+"#fn"+m.group(1)
+          val l = "#fn"+m.group(1)
           Regex.quoteReplacement(s"""<a href=${util.quoteHTMLAttribute(l)}><sup>${m.group(1)}</sup></a> """)
         }
       })
@@ -300,7 +298,7 @@ case class Mods(title: String = "", classes: String = "", styles: String = "") {
 
 
 object AsciiMarkup extends Markup {
-  def process(text: Seq[String], resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = segmentText(text, resolver, noteUrl, imageRoot)
+  def process(text: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): AsciiText = segmentText(text, resolver, imageRoot)
 
   val codeRegex     = """(?xs) `    (.+?) `    """.r
   val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
@@ -369,7 +367,7 @@ object AsciiMarkup extends Markup {
     (_.string("="),      s => Mods(styles = "text-align:justify"))
   )
 
-  private def segmentText(lines: Seq[String], resolver: ResolveLinkFunc, noteUrl: String, imageRoot: String): AsciiText = {
+  private def segmentText(lines: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): AsciiText = {
     def matchAllLines[T](ls: Seq[String], prefix: String)(f: PartialFunction[String, T]): Option[Seq[T]] = {
       if (!ls.forall(_.startsWith(prefix))) return None
       val ms = ls.collect(f)
@@ -490,7 +488,7 @@ object AsciiMarkup extends Markup {
         }.toVector
 
     val finalSegments = joinNeighboringLists(mergeParagraphsIntoLists(segments))
-    AsciiText(finalSegments, resolver, noteUrl)
+    AsciiText(finalSegments, resolver)
   }
 
   private val imgRegex = """(?xm)

@@ -251,7 +251,6 @@ case class Article(
   implies: Seq[Tag] = Seq(), // only for tags
   imgtags: Seq[Tag] = Seq(),
   link: String = null,
-  notes: String = null,
   license: String = null,
   rawText: Seq[String] = Seq(),
   text: Text = null,
@@ -729,7 +728,6 @@ object MakeFiles {
     val tags    = chompMany(_metaLines, parseTags).fold(Tags()){ _ merge _ } /* 41 */
     val license = chompOne(_metaLines, parseLicense)
     val links   = chompOne(_metaLines, prefixedLine("link:"))
-    val notess  = chompOne(_metaLines, prefixedLine("notes:"))
     val authors = chompOne(_metaLines, prefixedLine("by:"), blog.defaultUser)
     val meta    = Meta(chompOne(_metaLines, prefixedList("meta:"), Seq.empty)) /* 27 */
     val rels    = chompOne(_metaLines, prefixedList("rel:"), Seq.empty)
@@ -772,7 +770,6 @@ object MakeFiles {
       implies = implies,
       imgtags = imgtags,
       link    = links,
-      notes   = notess,
       license = license,
       rawText = body,
       inFeed  = inFeed
@@ -1074,8 +1071,7 @@ object MakeFiles {
 
     timer("parse text", blog) {
     articles = articles.map { a =>
-      val noteUrl = if (a.notes == null) "" else blog.absUrlFromSlug(a.notes)
-      val txt = markup.process(a.rawText, link => resolveLink(link, globalNames, a), noteUrl, blog.imageRoot)
+      val txt = markup.process(a.rawText, link => resolveLink(link, globalNames, a), blog.imageRoot)
       a.copy(
         text = txt,
         images = (a.images ++ txt.images) // images might be already populated from readGallery()
@@ -1227,7 +1223,6 @@ object MakeFiles {
       h = mix(h, a.implies.##)
       h = mix(h, a.imgtags.##)
       h = mix(h, a.link.##)
-      h = mix(h, a.notes.##)
       h = mix(h, a.license.##)
       h = mix(h, a.rawText.##)
       //h = mix(h, a.text.##) // contains reference to globalNames
