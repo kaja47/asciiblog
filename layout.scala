@@ -46,9 +46,10 @@ a          { color: inherit; }
 .b         { max-width: 46em; font-family: monospace; line-height: 1.3; }
 blockquote { margin:0; padding:0; font-style:italic; }
 .about     { text-decoration: dotted underline; }
-.thz, .fr, .main
+.thz, .thr, .fr, .main
            { font-size: .8em }
 span.thz   { width: ${blog.thumbWidth}px; display: inline-block; vertical-align: top; }
+span.thr   { width: ${blog.thumbWidth}px; display: inline-block; vertical-align: top; float: right; }
 span.fr    { text-align: right; max-width: 45%; float: right; }
 span.main  { text-align: center; display: block; margin-bottom: .5em; }
 span.main img, span.fr img
@@ -106,9 +107,10 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
 
   def imgTag(img: Image, t: Text, showDesc: Boolean = true, linkTo: String = null) = {
     val (cl, srcPath) = img match {
-      case i if i.mods == "main" && i.align == ">" => ("fr", blog.bigThumbnailUrl(img, true))
-      case i if i.mods == "main" => ("main", blog.bigThumbnailUrl(img, false))
-      case i => ("thz", blog.thumbnailUrl(img))
+      case i if i.mods == "main" && i.align == ">" => ("fr",   blog.bigThumbnailUrl(img, true))
+      case i if i.mods == "main" =>                   ("main", blog.bigThumbnailUrl(img, false))
+      case i if i.align == ">" =>                     ("thr",  blog.thumbnailUrl(img))
+      case i =>                                       ("thz",  blog.thumbnailUrl(img))
     }
     val desc = if (showDesc) {
       val title   = ifs(img.title, t.paragraph(img.title).trim)
