@@ -42,13 +42,16 @@ class Similarities(_articles: Seq[Article], count: Int) {
       arts(i) match {
         case a if !a.isTag && a.tags.isEmpty && a.rel.nonEmpty =>
           // not terribly optimized, but it's called only few times
-          // TODO return sorted by frequency
           val slugs = sims(i).map(_.slug).toSet
           val extraSims = sims(i)
             .flatMap(a => sims(slugMap(a.asSlug)))
             .filter(a => !slugs.contains(a.slug))
-            .distinct
+            .groupBy(a => a.slug)
+            .toSeq
+            .map { case (_, as) => (as.head, as.size) }
+            .sortBy(~_._2)
             .take(count - sims(i).size)
+            .map(_._1)
 
           sims(i) ++ extraSims
         case a => sims(i)
