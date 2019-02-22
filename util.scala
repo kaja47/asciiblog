@@ -331,9 +331,11 @@ object util {
     else          (l, "")
   }
 
-  def escape(s: String): String = {
-    val sb = new StringBuilder
-    var i = 0; while (i < s.length) {
+  def escape(s: String): String =
+    escape(s, 0, s.length, new StringBuilder).toString
+
+  def escape(s: String, from: Int, to: Int, sb: StringBuilder): StringBuilder = {
+    var i = from; while (i < to) {
       s.charAt(i) match {
         case '"' => sb append "&quot;"
         case '&' => sb append "&amp;"
@@ -343,7 +345,7 @@ object util {
       }
       i += 1
     }
-    sb.toString
+    sb
   }
 
   def quoteHTMLAttribute(attr: String): String =
