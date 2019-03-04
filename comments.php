@@ -60,8 +60,9 @@ class CommentSection {
 		$lines = array_map('json_decode', array_map('trim', file($file)));
 		$block = $lines[0];
 		$cs = array();
+		$i = 0;
 		foreach (array_slice($lines, 1) as $c) {
-			$cs[$c->id] = $c;
+			$cs[isset($c->id) ? $c->id : $i++] = $c;
 		}
 		if (!$flat) {
 			foreach (array_reverse($cs) as $c) {
