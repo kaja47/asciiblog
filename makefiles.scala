@@ -306,6 +306,8 @@ case class Article(
   }
 
   def mkRawText = rawText.mkString("\n")
+
+  override def hashCode: Int = sys.error("articles should not be used as hashmap keys")
 }
 
 case class Meta(values: Seq[String] = Seq()) {
