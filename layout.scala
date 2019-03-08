@@ -223,7 +223,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     a.text.render(this, rel)+
     ifs(a.isTag, {
       val linked = a.slugsOfLinkedArticles(blog).toSet
-      listOfLinks(base.allTags(a.asTag)._2.filter(a => !linked.contains(a.asSlug)), blog.tagFormat == "short")
+      listOfLinks(base.allTags(a.asTag)._2.filter(a => !linked.contains(a.asSlug) && !a.isTag), blog.tagFormat == "short")
     })+
     a.extraImages.map { img => imgTag(img.asSmallThumbnail, if (img.localSource != null) img.localSource.text else a.text) }.mkString(" ")
   }
