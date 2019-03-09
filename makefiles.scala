@@ -153,6 +153,14 @@ object Blog {
       }
     }
 
+    def initHooks = {
+      val line = cfgStr("hooks", "asciiblog.NoHooks")
+      val parts = line.split(" ")
+      val clazz = parts.head
+      val args  = parts.tail
+      Class.forName(clazz).getDeclaredConstructor(args.map(_.getClass): _*).newInstance(args: _*).asInstanceOf[Hooks],
+    }
+
     val b = new Blog(
       title                  = cfgStr_!("title"),
       baseUrl                = cfgStr_!("baseUrl"),
@@ -198,7 +206,7 @@ object Blog {
       args                   = args,
       translation            = translation ++ cfg.collect { case (k, v) if k.startsWith("translation.") => k.split("\\.", 2)(1) -> v } ,
 
-      hooks                  = Class.forName(cfgStr("hooks", "asciiblog.NoHooks")).newInstance().asInstanceOf[Hooks],
+      hooks                  = initHooks,
 
       printTiming            = cfgBool("printTiming", false),
       printErrors            = cfgBool("printErrors", true),
