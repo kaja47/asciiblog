@@ -1164,7 +1164,8 @@ object MakeFiles {
 
     articles = timer("populate similarities", blog) {
       val sim = new Similarities(articles, blog.similarLimit)
-      articles.map { a => a.copy(similar = sim(a)) }
+      // similar might be already set by some user hook
+      articles.map { a => if (a.similar.nonEmpty) a else a.copy(similar = sim(a)) }
     }
 
     timer("populate next and prev", blog) {
