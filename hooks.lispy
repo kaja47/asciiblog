@@ -1,0 +1,29 @@
+(defn @index-prepend (base blog layout articles)
+      "")
+
+(defn @after-first-article (base blog layout articles)
+      "")
+
+(defn @full-article-bottom (base blog layout article)
+      "")
+
+(defn @title (base blog layout article compact)
+      null)
+
+(defn @list-title (base blog layout article)
+      null)
+
+(defn @list (base blog layout articles)
+      null)
+
+(defn @header (base blog layout article)
+      null)
+
+(defn @prepare-articles (articles)
+      articles)
+
+(defn @update-base (base blog)
+      base)
+
+(defn @after-generate(base blog)
+      null)

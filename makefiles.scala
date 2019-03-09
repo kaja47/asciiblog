@@ -97,36 +97,6 @@ case class Blog (
 }
 
 
-trait Hooks {
-  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String
-  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String
-  def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String
-  def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String
-  def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String
-  def list(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String
-  def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String
-
-  /** This hook is called after all articles are parsed, but before any processing and checks on them. */
-  def prepareArticles(articles: Seq[Article]): Seq[Article]
-  /** This hook is called after articles are processed and the final Base is computed. */
-  def updateBase(base: Base, blog: Blog): Base
-  /** This hook is called after blog is ganerated and cannot affect result in any way. */
-  def afterGenerate(base: Base, blog: Blog): Unit
-}
-
-class NoHooks extends Hooks {
-  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = ""
-  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = ""
-  def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String = ""
-  def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String = null
-  def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String = null
-  def list(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = null
-  def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String = null
-  def prepareArticles(articles: Seq[Article]): Seq[Article] = articles
-  def updateBase(base: Base, blog: Blog): Base = base
-  def afterGenerate(base: Base, blog: Blog): Unit = ()
-}
-
 
 object Blog {
   def populate(cfg: Map[String, String], args: Array[String], translation: Map[String, String], cfgFile: File) = {
