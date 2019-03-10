@@ -1,12 +1,5 @@
 package asciiblog
 
-import com.steadystate.css.parser._
-import com.steadystate.css.dom._
-import com.steadystate.css.format.CSSFormat
-import org.w3c.css.sac.InputSource
-import org.w3c.dom.css._
-import java.io.StringReader
-import java.lang.StringBuilder
 import scala.collection.mutable
 
 object CssMinimizer {
@@ -19,6 +12,14 @@ object CssMinimizer {
   case class xMedia(media: String, rules: Seq[xCSS]) extends xCSS
 
   def parseCSS(cssString: String): Seq[CSS] = {
+    import com.steadystate.css.parser._
+    import com.steadystate.css.dom._
+    import com.steadystate.css.format.CSSFormat
+    import org.w3c.css.sac.InputSource
+    import org.w3c.dom.css._
+    import java.io.StringReader
+    import java.lang.StringBuilder
+
     val source = new InputSource(new StringReader(cssString))
     val parser = new CSSOMParser(new SACParserCSS3)
     val rules = parser.parseStyleSheet(source, null, null).getCssRules
