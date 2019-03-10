@@ -8,7 +8,8 @@ object Highlighter {
   val highlighters: Map[String, Highlighter] = Map(
     "scala"      -> new ScalaHighlighter,
     "php"        -> new PHPHighlighter,
-    "javascript" -> new JSHighlighter
+    "javascript" -> new JSHighlighter,
+    "c"          -> new CHighlighter
   )
 
   def highlight(source: String, lang: String): String =  {
@@ -44,16 +45,15 @@ trait Highlighter {
 
 
 trait ProtoHighlighter extends Highlighter {
-
-
   def apply(source: String): Seq[Light] =
     regex.findAllMatchIn(source).map { m =>
       Light(m.start, m.end-m.start, _colorFor(m.matched))
     }.toVector
 
-  def tokens: Map[Int, Seq[String]]
+  def tokens: Seq[(Int, Seq[String])]
 
-  def mkTokenRegex(t: String): String = t
+  def mkTokenRegex(t: String): String =
+    (if (t.head.isLetter) "\\b" else "") + scala.util.matching.Regex.quote(t) + (if (t.last.isLetter) "\\b" else "")
 
   def regexes: Seq[String]
 
@@ -65,7 +65,7 @@ trait ProtoHighlighter extends Highlighter {
   def _colorFor(str: String): Int =
     tokenColors.get(str).getOrElse(colorFor(str))
 
-  lazy val regex = ((regexes :+ tokens.values.flatten.map(mkTokenRegex).mkString("|")): Seq[String])
+  lazy val regex = ((regexes :+ tokens.flatMap(_._2).map(mkTokenRegex).mkString("|")): Seq[String])
     .map(r => "("+r.trim+")")
     .mkString("|").r
 
@@ -81,52 +81,48 @@ trait ProtoHighlighter extends Highlighter {
 
 class ScalaHighlighter extends ProtoHighlighter {
 
-  val tokens = Map(
-    Red   -> "class trait extends with var val def if match case while do for type".split(" "),
-    Green -> "null true false this super new override final private protected import package <- -> =>".split(" ")
+  val tokens = Seq(
+    Red   -> "class trait object extends with var val def if else match case while do for type forSome try catch finally yield macro".split(" "),
+    Green -> "null true false ne eq this super new override final private protected implicit import package sealed <- -> => require".split(" ")
   )
-
-  override def mkTokenRegex(t: String): String =
-    (if (t.head.isLetter) "\\b" else "") + scala.util.matching.Regex.quote(t) + (if (t.last.isLetter) "\\b" else "")
 
   val regexes = Seq(
     """(?x)  @\w+ """,              // annotation
     """(?x)  \b[A-Z]\w*\b """,      // type
-    """(?x)  -? \b\d+ """,          // number
+    """(?x)  -? \b\d+(\.\d+)? """,  // number
     """(?xs) \"\"\" .*? \"\"\" """, // string
     """(?x)  " (\\"|[^"])* "   """, // string
     """(?x)  ' (\\'|.) ' """,       // char
     """(?xs) /\* .* \*/ """,        // comment
-    """(?xm) //.*$ """              // comment
+    """(?xm) //.*$ """,             // comment
+    """(?x)  (?<=(val|var|def)\s+) [a-z]\w* """ // declaration
   )
 
   def colorFor(str: String) = str match {
-    case str if str(0) == '@'  => Green
-    case str if str(0).isUpper => Blue
-    case str if str(0).isDigit => Purple
-    case str if str(0) == '-'  => Purple
-    case str if str(0) == '"'  => Yellow
-    case str if str(0) == '\'' => Yellow
-    case str if str(0) == '/'  => Gray
+    case str if str(0) == '@'   => Green
+    case str if str(0).isUpper  => Blue
+    case str if str(0).isDigit  => Purple
+    case str if str(0) == '-'   => Purple
+    case str if str(0) == '"'   => Yellow
+    case str if str(0) == '\''  => Yellow
+    case str if str(0) == '/'   => Gray
+    case str if str(0).isLetter => Green
   }
 }
 
 class PHPHighlighter extends ProtoHighlighter {
 
-  val tokens = Map(
+  val tokens = Seq(
     Gray   -> "<?php".split(" "),
-    Red    -> "class for if declare while foreach as function return yield from echo die <=> -> => $ !== != === == ... << >> < > <= >= ++ -- ** + - * / % ~ . ! && || & ^ | ?? ?:".split(" "),
+    Red    -> "class for if declare while foreach as function return yield from echo die isset unset <=> -> => $ !== != === == ... << >> < > <= >= ++ -- ** + - * / % ~ . ! && || & ^ | ?? ?:".split(" "),
     Purple -> "true false null new clone instanceof".split(" "),
     Blue   -> "private protected var const (bool) (float) (double) (string) (int) (void)".split(" "),
     Green  -> "namespace use".split(" ")
   )
 
-  override def mkTokenRegex(t: String): String =
-    (if (t.head.isLetter) "\\b" else "") + scala.util.matching.Regex.quote(t) + (if (t.last.isLetter) "\\b" else "")
-
   val regexes = Seq(
     """(?x)  (?<=\$) \w+ """,      // variable
-    """(?x)  -? \b\d+ """,         // number
+    """(?x)  -? \b\d+(\.\d+)? """, // number
     """(?x)  " (\\"|[^"])* "  """, // string
     """(?x)  ' (\\'|[^'])* '  """, // string
     """(?xs) /\* .* \*/ """,       // comment
@@ -134,27 +130,24 @@ class PHPHighlighter extends ProtoHighlighter {
   )
 
   def colorFor(str: String) = str match {
-    case str if str(0) == '$'  => Blue
-    case str if str(0).isDigit => Purple
-    case str if str(0) == '-'  => Purple
-    case str if str(0) == '/'  => Gray
-    case _                     => Orange
+    case str if str(0) == '$'   => Blue
+    case str if str(0).isDigit  => Purple
+    case str if str(0) == '-'   => Purple
+    case str if str(0) == '/'   => Gray
+    case _                      => Orange
   }
 
 }
 
 class JSHighlighter extends ProtoHighlighter {
 
-  val tokens = Map(
+  val tokens = Seq(
     Red   -> "for while do if return let var const document".split(" "),
     Green -> "null true false undefined new this =>".split(" ")
   )
 
-  override def mkTokenRegex(t: String): String =
-    (if (t.head.isLetter) "\\b" else "") + scala.util.matching.Regex.quote(t) + (if (t.last.isLetter) "\\b" else "")
-
   val regexes = Seq(
-    """(?x)  -? \b\d+ """,         // number
+    """(?x)  -? \b\d+(\.\d+)? """, // number
     """(?x)  " (\\"|[^"])* "  """, // string
     """(?x)  ' (\\'|[^'])* '  """, // string
     """(?xs) /\* .* \*/ """,       // comment
@@ -170,4 +163,28 @@ class JSHighlighter extends ProtoHighlighter {
     case _ => 0
   }
 
+}
+
+class CHighlighter extends ProtoHighlighter {
+  val tokens = Seq(
+    Red    -> "for return".split(" "),
+    Blue   -> "int long short char void signed unsigned float double size_t struct".split(" ")
+  )
+
+  val regexes = Seq(
+    """(?x)  -? \b\d+(\.\d+)? """, // number
+    """(?x)  " (\\"|[^"])* "  """, // string
+    """(?x)  ' (\\'|[^'])* '  """, // string
+    """(?xs) /\* .* \*/ """,       // comment
+    """(?xm) //.*$ """             // comment
+  )
+
+  def colorFor(str: String) = str match {
+    case str if str(0).isDigit => Purple
+    case str if str(0) == '-'  => Purple
+    case str if str(0) == '"'  => Yellow
+    case str if str(0) == '\'' => Yellow
+    case str if str(0) == '/'  => Gray
+    case _ => 0
+  }
 }
