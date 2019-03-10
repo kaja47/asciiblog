@@ -82,8 +82,8 @@ trait ProtoHighlighter extends Highlighter {
 class ScalaHighlighter extends ProtoHighlighter {
 
   val tokens = Map(
-    0 -> "class trait extends with var val def if match case while do for type".split(" "),
-    1 -> "null true false this super new override final private protected import package <- -> =>".split(" ")
+    Red   -> "class trait extends with var val def if match case while do for type".split(" "),
+    Green -> "null true false this super new override final private protected import package <- -> =>".split(" ")
   )
 
   override def mkTokenRegex(t: String): String =
@@ -101,30 +101,31 @@ class ScalaHighlighter extends ProtoHighlighter {
   )
 
   def colorFor(str: String) = str match {
-    case str if str(0) == '@'  => 1
-    case str if str(0).isUpper => 2
-    case str if str(0).isDigit => 3
-    case str if str(0) == '-'  => 3
-    case str if str(0) == '"'  => 4
-    case str if str(0) == '\'' => 4
-    case str if str(0) == '/'  => 5
+    case str if str(0) == '@'  => Green
+    case str if str(0).isUpper => Blue
+    case str if str(0).isDigit => Purple
+    case str if str(0) == '-'  => Purple
+    case str if str(0) == '"'  => Yellow
+    case str if str(0) == '\'' => Yellow
+    case str if str(0) == '/'  => Gray
   }
 }
 
 class PHPHighlighter extends ProtoHighlighter {
 
   val tokens = Map(
-    Gray -> "<?php".split(" "),
-    Red  -> "class for if declare while foreach as function return -> => $ == === ... != !== < > <= >= - + * / .".split(" "),
-    Purple -> "true false null".split(" "),
-    Blue -> "private protected var const".split(" ")
+    Gray   -> "<?php".split(" "),
+    Red    -> "class for if declare while foreach as function return yield from echo die <=> -> => $ !== != === == ... << >> < > <= >= ++ -- ** + - * / % ~ . ! && || & ^ | ?? ?:".split(" "),
+    Purple -> "true false null new clone instanceof".split(" "),
+    Blue   -> "private protected var const (bool) (float) (double) (string) (int) (void)".split(" "),
+    Green  -> "namespace use".split(" ")
   )
 
   override def mkTokenRegex(t: String): String =
     (if (t.head.isLetter) "\\b" else "") + scala.util.matching.Regex.quote(t) + (if (t.last.isLetter) "\\b" else "")
 
   val regexes = Seq(
-    """(?x) (?<=\$) \w+ """,       // variable
+    """(?x)  (?<=\$) \w+ """,      // variable
     """(?x)  -? \b\d+ """,         // number
     """(?x)  " (\\"|[^"])* "  """, // string
     """(?x)  ' (\\'|[^'])* '  """, // string
@@ -145,8 +146,8 @@ class PHPHighlighter extends ProtoHighlighter {
 class JSHighlighter extends ProtoHighlighter {
 
   val tokens = Map(
-    0 -> "for while do if return let var const document".split(" "),
-    1 -> "null true false undefined new this =>".split(" ")
+    Red   -> "for while do if return let var const document".split(" "),
+    Green -> "null true false undefined new this =>".split(" ")
   )
 
   override def mkTokenRegex(t: String): String =
@@ -161,11 +162,11 @@ class JSHighlighter extends ProtoHighlighter {
   )
 
   def colorFor(str: String) = str match {
-    case str if str(0).isDigit => 3
-    case str if str(0) == '-'  => 3
-    case str if str(0) == '"'  => 4
-    case str if str(0) == '\'' => 4
-    case str if str(0) == '/'  => 5
+    case str if str(0).isDigit => Purple
+    case str if str(0) == '-'  => Purple
+    case str if str(0) == '"'  => Yellow
+    case str if str(0) == '\'' => Yellow
+    case str if str(0) == '/'  => Gray
     case _ => 0
   }
 
