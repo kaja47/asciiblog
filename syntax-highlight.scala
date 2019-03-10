@@ -34,65 +34,6 @@ object Highlighter {
 
     sb.toString
   }
-
-  // packing
-
-  // contiguous ASCII characters
-  val chars = """()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"""
-  val first = chars(0).toInt
-  val last  = chars.last.toInt
-  val base  = chars.length
-
-  def packInt(x: Int): Char = {
-    require(x >= 0 && x < base, "packInt("+x+")")
-    chars(x)
-  }
-
-  def unpackInt(char: Char): Int =
-    char - first
-
-  private def deltas(lights: Seq[Light]): Seq[Light] = {
-    var prevEnd = 0
-    for (l <- lights) yield {
-      val newL = Light(l.start - prevEnd, l.length, l.color)
-      prevEnd = l.start + l.length
-      newL
-    }
-  }
-
-  private def normalize(lights: Seq[Light]): Seq[Light] =
-    lights.flatMap { l =>
-      var delta  = l.start
-      var length = l.length
-
-      val res = mutable.ListBuffer[Light]()
-
-      while (delta >= base) {
-        res += Light(base-1, 0, l.color)
-        delta -= base
-      }
-
-      while (length >= 0) {
-        res += Light(delta, length, l.color)
-        delta = 0
-        length -= base
-      }
-
-      res
-    }
-
-  private def packValid(lights: Seq[Light]): String = {
-    val sb = new StringBuilder
-    for (l <- lights) {
-      sb.append(packInt(l.start))
-      sb.append(packInt(l.length))
-      sb.append(packInt(l.color))
-    }
-    sb.toString
-  }
-
-  def pack(lights: Seq[Light]): String =
-    packValid(normalize(deltas(lights)))
 }
 
 case class Light(start: Int, length: Int, color: Int)
