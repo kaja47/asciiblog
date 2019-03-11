@@ -141,9 +141,12 @@ object Blog {
       encoding               = cfgStr ("encoding", "utf-8"),
       outDir                 = cfg.get("outDir").map(f => newFile(f, cfgDirectory)).getOrElse(null),
       articlesOnIndex        = cfgInt ("fullArticlesOnIndex", 5),
-      groupArchiveBy         = cfgStr ("groupArchiveBy", "year").ensuring(f => f == "year" || f == "month" || f.matches("\\d+"), "groupArchiveBy must be set to 'year', 'month' or some integer"),
-      archiveFormat          = cfgStr ("archiveFormat", "link") .ensuring(f => f == "link" || f == "short",                      "archiveFormat must be set to 'year' or 'month'"),
-      tagFormat              = cfgStr ("tagFormat", "link")     .ensuring(f => f == "link" || f == "short",                      "tagFormat must be set to 'link' or 'short'"),
+      groupArchiveBy         = cfgStr ("groupArchiveBy", "year").ensuring(f => f == "year" || f == "month" || f == "none" || f.matches("\\d+"),
+        "groupArchiveBy must be set to 'year', 'month', 'none' or some integer"),
+      archiveFormat          = cfgStr ("archiveFormat", "link") .ensuring(f => f == "link" || f == "short",
+        "archiveFormat must be set to 'year' or 'month'"),
+      tagFormat              = cfgStr ("tagFormat", "link")     .ensuring(f => f == "link" || f == "short",
+        "tagFormat must be set to 'link' or 'short'"),
       cssStyle               = cfgStr ("style", ""),
       cssFile                = cfg.get("cssFile").map(f => newFile(f, cfgDirectory)).getOrElse(null),
       header                 = cfgStr ("header", ""),
@@ -816,6 +819,7 @@ object MakeFiles {
   def year(d: Date): Int = calendar(d, Calendar.YEAR)
   def month(d: Date): Int = calendar(d, Calendar.MONTH)+1
   def yearmonth(d: Date) = (year(d), month(d))
+  def yearJanuary(d: Date) = (year(d), 1)
 
 
   def makeRSS(articles: Seq[Article], mkBody: Article => String, selfUrl: String)(implicit blog: Blog): String = {
@@ -1285,9 +1289,7 @@ object MakeFiles {
 
 
 
-
-
-  class Saver(oldFileIndex: Map[String, String], changedSlugs: Set[Slug], blog: Blog) {
+  class Saver(blog: Blog, changedSlugs: Set[Slug], oldFileIndex: Map[String, String]) {
     val fileIndex = collection.concurrent.TrieMap[String, String]()
     def apply(articles: Seq[Article], f: String)(content: => String) = {
       if (articles == null || articles.exists(a => changedSlugs.contains(a.asSlug)) || !oldFileIndex.contains(f)) {
@@ -1316,39 +1318,57 @@ object MakeFiles {
   }
 
 
-  def makeFiles(blog: Blog, base: Base, markup: Markup, resolver: String => String, changed: Set[Slug]) = try {
+
+
+  def makeFiles(blog: Blog, base: Base, markup: Markup, resolver: String => String, changedSlugs: Set[Slug]) = try {
     implicit val _blog = blog
 
-    val oldFileIndex: Map[String, String] = {
+    val save = new Saver(blog, changedSlugs, {
       val f = new File(blog.outDir, ".files")
       if (!f.exists) Map()
-      else io.Source.fromFile(f).getLines.map{ l => val Array(k, v) = l.split(" ", 2); (v, k) }.toMap
-    }
+      else io.Source.fromFile(f).getLines.map { l => val Array(k, v) = l.split(" ", 2); (v, k) }.toMap
+    })
 
-    val save = new Saver(oldFileIndex, changed, blog)
 
-    val isIndexGallery = base.feed.take(blog.articlesOnIndex).exists(_.images.nonEmpty)
-
+    // this madness split articles on feed into three groups
+    // - `fulls` - articles to display in full on index
+    // - `links` - articles to display in short form (either summary or link only)
+    // - `archivePages` - archive pages grouping articles by some criteria
+    //   (year, month, none, number). Those articles might or might not be
+    //   included in two previous groups.
     val (fulls, rest) = base.feed.splitAt(blog.articlesOnIndex)
-
-    def chunk[T: Ordering](as: Vector[Article])(g: Date => T)(zero: T)(f: T => Article): Vector[(Article, Vector[Article])] =
-      as.groupBy { a => if (a.date == null) zero else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
-
     val (links, archivePages) = timer("group archive", blog) {
+
+      def chunk(as: Vector[Article])(g: Date => (Int, Int))(f: ((Int, Int)) => Article): Vector[(Article, Vector[Article])] =
+        as.groupBy { a => if (a.date == null) (0,0) else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
       def mkDate(y: Int, m: Int) = if (y == 0) Seq() else Seq(new GregorianCalendar(y, m-1, 1).getTime)
+
       val title = blog.translation("archive")
-      (blog.groupArchiveBy match {
-        case "month" => chunk(rest)(yearmonth)((0,0)) { case (y, m) => Article(title+s" $m/$y", s"index-$y-$m", dates = mkDate(y, m)) }
-        case "year"  => chunk(rest)(year)     (0)     { case y      => Article(title+s" $y", s"index-$y", dates = mkDate(y, 1)) }
-        case num if num.trim.matches("\\d+") =>
+      val undated = blog.translation("undated")
+
+      blog.groupArchiveBy match {
+        case "month" =>
+          val grouping = chunk(base.feed)(yearmonth) { case (y, m) =>
+            Article(if (y > 0) s"$title $m/$y" else s"$title ($undated)", s"index-$y-$m", dates = mkDate(y, m))
+          }
+          (grouping.headOption.map(_._2).getOrElse(Seq()).drop(blog.articlesOnIndex), grouping)
+
+        case "year" =>
+          val grouping = chunk(rest)(yearJanuary) { case (y, _) =>
+            Article(if (y > 0) s"$title $y" else s"$title ($undated)", s"index-$y", dates = mkDate(y, 1))
+          }
+          (grouping.headOption.map(_._2).getOrElse(Seq()), grouping)
+
+        case "none"  =>
+          (rest, Vector())
+
+        case num if num.matches("\\d+") =>
           val len = num.toInt
-          rest.reverse.grouped(len).toVector.zipWithIndex.map { case (as, i) =>
-            (Article(title+s" #${i*len+1}-${(i+1)*len}", "index-"+(i+1)), as.reverse)
+          val grouping = rest.reverse.grouped(len).toVector.zipWithIndex.map { case (as, i) =>
+            (Article(s"$title #${i*len+1}-${(i+1)*len}", "index-"+(i+1)), as.reverse)
           }.reverse
-        case _ => Vector((null, rest))
-      }) match {
-        case (_, links) +: archivePages => (links, archivePages)
-        case _ => (Vector(), Vector())
+
+          (grouping.head._2, grouping.tail)
       }
     }
 
@@ -1388,7 +1408,7 @@ object MakeFiles {
     save(null, path) {
       val l = layout.make(blog.absUrlFromPath(path))
       val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month", tagsToShow = lastYearTags)
-      l.makePage(body, containImages = isIndexGallery)
+      l.makePage(body, containImages = fulls.exists(_.images.nonEmpty))
     }
     }
 
