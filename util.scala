@@ -260,6 +260,11 @@ class XMLSW(sb: java.lang.StringBuilder, val html5: Boolean = false) {
 
 object util {
 
+  implicit class SeqOps[T](val seq: Seq[T]) extends AnyVal {
+    def groupBySorted[U: Ordering](f: T => U): Seq[(U, Seq[T])] =
+      seq.groupBy(f).toSeq.sortBy(_._1)
+  }
+
   def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] = {
     val res = mutable.Map[B, mutable.ArrayBuffer[A]]()
     for ((a, bs) <- m; b <- bs) { res.getOrElseUpdate(b, new mutable.ArrayBuffer[A]) += a }
