@@ -1,7 +1,7 @@
 package asciiblog
 
-import MakeFiles. { year, month, galleryScript }
-import AsciiText. { ahrefRegex }
+import MakeFiles.{ year, month, galleryScript }
+import AsciiRegexes.ahrefRegex
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.net.URLEncoder

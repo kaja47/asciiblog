@@ -1,11 +1,11 @@
 package asciiblog
 
-import MakeFiles. { licenses, peelOffTags, isAbsolute }
-import AsciiMarkup._
+import java.lang.StringBuilder
 import scala.util.matching.Regex
 import scala.collection.mutable
-import java.lang.StringBuilder
+import MakeFiles.{ licenses, peelOffTags, isAbsolute }
 import MarkupParser.{ findMods, mkMods }
+import AsciiRegexes._
 
 
 trait Markup {
@@ -48,7 +48,7 @@ class HTMLText(text: String, resolver: String => String, imageRoot: String, mark
 
 // ASCII markup
 
-object AsciiText {
+object AsciiRegexes {
   val linkRegex   = """(?x)  " ([^"]+?) " : \[ ([^\]\n]+?) \]""".r
   val ahrefRegex  = """(?x) (?<= href=") (.*?) (?=") """.r
   val imgsrcRegex = """(?x) (?<= src=") (.*?) (?=") """.r
@@ -57,6 +57,38 @@ object AsciiText {
   val ahrefCheck = "href=\""
   val imgsrcCheck = "src=\""
 
+  val codeRegex     = """(?xs) `    (.+?) `    """.r
+  val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
+  val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*)    ((?:.(?!`))+?) (?<!\*)  \*  (?!\*) """.r
+  val italic2Regex  = """(?xsUu) (?<!:)  // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) //         """.r
+  val altRegex      = """(?xs) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
+  val emRegex       = """---""".r
+  val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
+  val noteRegex     = """(?x) \[\[ (\d++) \]\]""".r
+  val preposRegex   = """(?xuUms) ((?:^|\s|\>)[ksvzouiKSVZOUIA])\s++(?=\w)""".r // for unbreakable space between preposition and word (czech)
+
+  val preposCharsLen = 123
+  val preposChars = Array.tabulate[Boolean](preposCharsLen) { i => "ksvzouiaKSVZOUIA".indexOf(i) != -1 }
+  def isPreposChar(ch: Char) = ch < preposCharsLen && preposChars(ch)
+
+  val codeCheck     = """`"""
+  val boldCheck     = """**"""
+  val italicCheck   = """*"""
+  val italic2Check  = """//"""
+  val altCheck      = """.("""
+  val emCheck       = """---"""
+  val blackoutCheck = """[|"""
+  val noteCheck     = """[["""
+
+  val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
+  val hrRegex       = """(?xm) ---+|\*\*\*+ """.r
+  val blockRegex    = """(?xs) /---(\w+)[^\n]*\n (.*?) \\--- """.r
+  val commentRegex          = """(?xs) \<!--.*?--\>""".r
+
+  val commentCheck          = """<!--"""
+}
+
+object AsciiText {
   val linkUntil = Slurp { _.until('"') }
   val linkSlurp = Slurp { _.groupStart(0).quoted('"').asGroup(1, 1, -1).char(':').ignore().delimited('[', ']').asGroup(2, 1, -1).groupEnd(0) }
 
@@ -305,72 +337,6 @@ case class Cell(txt: String, span: Int = 1)
 object AsciiMarkup extends Markup {
   def process(text: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): AsciiText = segmentText(text, resolver, imageRoot)
 
-  val codeRegex     = """(?xs) `    (.+?) `    """.r
-  val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
-  val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*)    ((?:.(?!`))+?) (?<!\*)  \*  (?!\*) """.r
-  val italic2Regex  = """(?xsUu) (?<!:)  // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) //         """.r
-  val altRegex      = """(?xs) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
-  val emRegex       = """---""".r
-  val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
-  val noteRegex     = """(?x) \[\[ (\d++) \]\]""".r
-  val preposRegex   = """(?xuUms) ((?:^|\s|\>)[ksvzouiKSVZOUIA])\s++(?=\w)""".r // for unbreakable space between preposition and word (czech)
-
-  val preposCharsLen = 123
-  val preposChars = Array.tabulate[Boolean](preposCharsLen) { i => "ksvzouiaKSVZOUIA".indexOf(i) != -1 }
-  def isPreposChar(ch: Char) = ch < preposCharsLen && preposChars(ch)
-
-  val codeCheck     = """`"""
-  val boldCheck     = """**"""
-  val italicCheck   = """*"""
-  val italic2Check  = """//"""
-  val altCheck      = """.("""
-  val emCheck       = """---"""
-  val blackoutCheck = """[|"""
-  val noteCheck     = """[["""
-
-  private val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
-  private val hrRegex       = """(?xm) ---+|\*\*\*+ """.r
-  private val blockRegex    = """(?xs) /---(\w+)[^\n]*\n (.*?) \\--- """.r
-  val commentRegex          = """(?xs) \<!--.*?--\>""".r
-
-  val commentCheck          = """<!--"""
-
-  // .(title)  .[class1 class2 #id]  .{color:blue}  .<  .>  .<>  .=
-  def findMods(line: String): Option[(Mods, Int)] = {
-    val s = Slurp(line)
-    while (s.to('.').matches && !s.touchesEnd) {
-      s.ignore()
-      var mods = Mods()
-      val start = s.pos
-      var ok = true
-      while (ok && !s.touchesEnd) {
-        ok = modAlternatives.exists { case (f, ex) =>
-          f(s)
-          if (s.matches) {
-            val x = ex(s)
-            s.ignore()
-            mods = mods.merge(x)
-            true
-          } else {
-            s.unmatch().tryAgain()
-            false
-          }
-        }
-      }
-      if (ok) return Some((mods, start-1))
-    }
-    None
-  }
-
-  private val modAlternatives = Seq[(Slurp => Unit, Slurp => Mods)](
-    (_.quoted('(', ')'), s => Mods(title   = s.asString(1, -1))),
-    (_.quoted('[', ']'), s => Mods(classes = s.asString(1, -1))),
-    (_.quoted('{', '}'), s => Mods(styles  = s.asString(1, -1))),
-    (_.string("<>"),     s => Mods(styles = "text-align:center")),
-    (_.string(">"),      s => Mods(styles = "text-align:right")),
-    (_.string("<"),      s => Mods(styles = "text-align:left")),
-    (_.string("="),      s => Mods(styles = "text-align:justify"))
-  )
 
   private def segmentText(lines: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): AsciiText = {
     def matchAllLines[T](ls: Seq[String], prefix: String)(f: PartialFunction[String, T]): Option[Seq[T]] = {
