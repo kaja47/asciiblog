@@ -39,6 +39,8 @@ class LispyHooks(scriptFile: String) extends Hooks {
   def call[T](method: String, args: List[Any]): T =
     (resEnv.get(method) match {
       case Some(f: Func) => f(args.toList)
+      case Some(Str(s)) => s
+      case Some(x) => sys.error(s"hook $method must be function or string, $x given")
       case None =>
         method match {
           case "@index-prepend" | "@after-first-article" | "@full-article-bottom" => ""
