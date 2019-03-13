@@ -448,7 +448,7 @@ object MakeFiles {
   def keyValuesIterator(f: File, enc: String) = io.Source.fromFile(f, enc).getLines.collect(keyVal)
   def keyValuesMap(f: File) = keyValuesIterator(f, "utf-8").toMap // TODO
 
-  lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js")).mkString)
+  lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js"), "utf8").mkString)
   lazy val commentsScript = io.Source.fromFile(file("comments.php")).mkString
   lazy val outScript      = io.Source.fromFile(file("out.php")).mkString
 
