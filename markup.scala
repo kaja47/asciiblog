@@ -100,7 +100,7 @@ object AsciiText {
   def empty = AsciiText(Seq(), null)
 }
 
-case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc) extends Text { self =>
+case class AsciiText(segments: Seq[Segment], resolver: String => String) extends Text { self =>
   import AsciiText._
 
   def render(l: ImageLayout, relativize: String => String): String = mkText(segments, l, resolvedLinks, relativize)
@@ -337,7 +337,7 @@ final case class Table(rows: Seq[Seq[Cell]], columns: Int) extends Segment
 case class Cell(txt: String, span: Int = 1)
 
 
-object AsciiMarkup extends Markup {
+class AsciiMarkup extends Markup {
   def process(text: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): AsciiText = segmentText(text, resolver, imageRoot)
 
 

@@ -24,8 +24,8 @@ object Make extends App {
   }
 
   try {
-    val (blog, markup, base, resolver, changed) = MakeFiles.init(args)
-    MakeFiles.makeFiles(blog, base, markup, resolver, changed)
+    val (blog, base, resolver, changed) = MakeFiles.init(args)
+    MakeFiles.makeFiles(blog, base, resolver, changed)
 
     timer.end()
     println("total: "+timer.ms)
@@ -86,6 +86,7 @@ case class Blog (
   val args: Array[String],
   val translation: Map[String, String],
   val hooks: Hooks = null,
+  val markup: Markup = null,
 
   val printTiming: Boolean  = false,
   val printErrors: Boolean = true,
@@ -123,13 +124,14 @@ object Blog {
       }
     }
 
-    def initHooks = {
-      val line = cfgStr("hooks", "asciiblog.NoHooks")
-      val parts = line.split(" ")
-      val clazz = parts.head
-      val args  = parts.tail
-      Class.forName(clazz).getDeclaredConstructor(args.map(_.getClass): _*).newInstance(args: _*).asInstanceOf[Hooks],
+    def initClass[T](line: String): T = {
+      val Array(clazz, args @ _*) = line.split(" ")
+      Class.forName(clazz)
+        .getDeclaredConstructor(args.map(_.getClass): _*)
+        .newInstance(args: _*).asInstanceOf[T],
     }
+
+    def alts(str: String, alternatives: Map[String, String]) = alternatives.getOrElse(str, str)
 
     val b = new Blog(
       title                  = cfgStr_!("title"),
@@ -179,7 +181,10 @@ object Blog {
       args                   = args,
       translation            = translation ++ cfg.collect { case (k, v) if k.startsWith("translation.") => k.split("\\.", 2)(1) -> v } ,
 
-      hooks                  = initHooks,
+      hooks                  = initClass[Hooks](cfgStr("hooks", "asciiblog.NoHooks")),
+      markup                 = initClass[Markup](alts(cfgStr("markup", "asciiblog.AsciiMarkup"), Map(
+        "html" -> "asciiblog.HTMLMarkup", "ascii" -> "asciiblog.AsciiMarkup",
+        "HTML" -> "asciiblog.HTMLMarkup", "ASCII" -> "asciiblog.AsciiMarkup"))),
 
       printTiming            = cfgBool("printTiming", false),
       printErrors            = cfgBool("printErrors", true),
@@ -218,6 +223,7 @@ object Blog {
       s +: spaceSeparatedStrings(rest.trim)
   }
 }
+
 
 case class Article(
   title: String,
@@ -483,15 +489,15 @@ object MakeFiles {
     _cfg.toMap
   }
 
-  def init(args: Array[String], f: Blog => Blog = identity) = {
+  def initBlog(args: Array[String]): Blog = {
     val cfgFile = new File(args(0))
     val cfg = readConfig(cfgFile)
     val txl = keyValuesMap(file("lang."+cfg.getOrElse("language", "en")))
-    val blog = f(Blog.populate(cfg, args, txl, cfgFile))
-    val markup = AsciiMarkup
-    val (newBlog, base, resolver, changed) = makeBase(blog, markup)
-    (newBlog, markup, base, resolver, changed)
+    Blog.populate(cfg, args, txl, cfgFile)
   }
+
+  def init(args: Array[String], f: Blog => Blog = identity): (Blog, Base, String => String, Set[Slug]) =
+    makeBase(f(initBlog(args)))
 
   def isAbsolute(url: String) = url.startsWith("http") && new URI(url).isAbsolute
   def addParam(url: String, param: String) =
@@ -904,7 +910,8 @@ object MakeFiles {
 
 
 
-  def makeBase(implicit blog: Blog, markup: Markup): (Blog, Base, String => String, Set[Slug]) = {
+  def makeBase(blog: Blog, fast: Boolean = false): (Blog, Base, String => String, Set[Slug]) = {
+    implicit val _blog = blog
     var articles: Vector[Article] = timer("readfiles", blog)(readGallery(blog) ++ readPosts(blog))
 
     articles = blog.hooks.prepareArticles(articles).toVector
@@ -1058,7 +1065,7 @@ object MakeFiles {
 
     timer("parse text", blog) {
     articles = articles.map { a =>
-      val txt = markup.process(a.rawText, link => resolveLink(link, globalNames, a), blog.imageRoot)
+      val txt = blog.markup.process(a.rawText, link => resolveLink(link, globalNames, a), blog.imageRoot)
       a.copy(
         text = txt,
         images = (a.images ++ txt.images) // images might be already populated from readGallery()
@@ -1138,6 +1145,9 @@ object MakeFiles {
     if (blog.sortByDate) {
       articles = articles.sortBy(byDate)
     }
+
+    // TODO hack
+    if (fast) return (blog, Base(articles, Map()), x => x, null)
 
     articles = timer("populate similarities", blog) {
       val sim = new Similarities(articles, blog.similarLimit)
@@ -1323,7 +1333,7 @@ object MakeFiles {
 
 
 
-  def makeFiles(blog: Blog, base: Base, markup: Markup, resolver: String => String, changedSlugs: Set[Slug]) = try {
+  def makeFiles(blog: Blog, base: Base, resolver: String => String, changedSlugs: Set[Slug]) = try {
     implicit val _blog = blog
 
     val save = new Saver(blog, changedSlugs, {
@@ -1375,7 +1385,7 @@ object MakeFiles {
       }
     }
 
-    val layout: LayoutMill = new FlowLayoutMill(base, blog, markup, resolver)
+    val layout: LayoutMill = new FlowLayoutMill(base, blog, blog.markup, resolver)
 
     timer("generate and save files", blog) {
     timer("generate and save files - archive", blog) {
