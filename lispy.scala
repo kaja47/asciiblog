@@ -3,8 +3,18 @@ package asciiblog
 object RunLispy extends App {
   import Lispy._
 
-  val src = io.Source.fromFile(args(0)).mkString
-  val (res, resEnv) = evalMain(parse(src), env)
+  val script = args match {
+    case Array() => ""
+    case Array("s", rest @ _*) =>
+      rest.mkString(" ")
+    case Array("t", rest @ _*) =>
+      println(tokenize(rest.mkString(" ")).mkString(" "))
+      ""
+    case Array(f) =>
+      io.Source.fromFile(f).mkString
+  }
+
+  val (res, resEnv) = evalMain(parse(script), env)
   println(res)
   resEnv.toSeq.sortBy(_._1) foreach println
 }
@@ -12,69 +22,73 @@ object RunLispy extends App {
 
 object Lispy {
 
-  val tokensRegex = """(?x) \G  (  \( | \) | \s+ | \d+ | "((?:\\"|[^"])*+)" | [\S&&[^()]]+  )  """.r
+  val tokensRegex = """(?x) \G  ( ' |  \( | \) | \s+ | \d+ | "((?:\\"|[^"])*+)" | [\S&&[^()]]+  )  """.r
 
   sealed trait Token
   sealed trait AST
 
   case object Beg extends Token
   case object End extends Token
+  case object Quo extends Token
   case class Num(value: Int) extends Token with AST { override def toString = value.toString }
   case class Str(value: String) extends Token with AST { override def toString = s""""$value"""" }
-  case class Sym(value: String) extends Token with AST { override def toString = value }
+  case class Sym(value: String) extends Token with AST { override def toString = s"Sym($value)" }
   case class Lst(values: List[AST]) extends AST { override def toString = values.mkString("Lst(", ", ", ")") }
   case class ASTSeq(asts: List[AST]) extends AST
+
+  case class Func(f: PartialFunction[List[Any], Any]) extends (List[Any] => Any) with AST {
+    def apply(args: List[Any]): Any = f(args)
+  }
 
   def tokenize(txt: String): Vector[Token] =
     tokensRegex.findAllIn(txt)
       .filter(t => !Character.isWhitespace(t(0)))
       .map { t =>
         t.head match {
-          case '(' => Beg
-          case ')' => End
+          case '('  => Beg
+          case ')'  => End
+          case '\'' => Quo
           case x if Character.isDigit(x) => Num(t.toInt)
-          case '"' => Str(t.tail.init.replaceAll("""\\"""", """""""))
-          case _   => Sym(t)
+          case '"'  => Str(t.tail.init.replaceAll("\\\"", "\""))
+          case _    => Sym(t)
         }
       }.toVector
 
   def _parse(tokens: Vector[Token]): List[AST] = {
 
-    def parseList(tokens: Vector[Token], _pos: Int = 0): (Int, Lst) = {
+    def parseList(tokens: Vector[Token], _pos: Int): (Int, Lst) = {
       var pos = _pos
       var xs = Vector[AST]()
 
       while (true) {
         tokens(pos) match {
-          case Beg =>
-            val (newpos, ys) = parseList(tokens, pos+1)
-            pos = newpos
-            xs :+= ys
           case End =>
             return (pos+1, Lst(xs.toList))
+
           case t =>
-            pos += 1
-            xs :+= t.asInstanceOf[AST]
+            val (newpos, res) = parseAny(tokens, pos)
+            pos = newpos
+            xs :+= res
         }
       }
 
       sys.error("this is imposible")
     }
 
-    tokens match {
-      case Vector(Beg, rest @ _*) =>
-        val (endPos, list) = parseList(rest.toVector, 0)
-        list :: _parse(tokens.drop(endPos+1))
+    def parseAny(tokens: Vector[Token], pos: Int): (Int, AST) =
+      tokens(pos) match {
+        case Beg => parseList(tokens, pos+1)
+        case End => sys.error("unexpected END")
+        case Quo =>
+          val (newpos, ys) = parseAny(tokens, pos+1)
+          return (newpos, Lst(Sym("quote") :: ys :: Nil))
+        case t => (pos+1, t.asInstanceOf[AST])
+      }
 
-      case Vector(End, rest @ _*) => sys.error(") given, expected anything else")
+    if (tokens.isEmpty) return Nil
 
-      case Vector(t, rest @ _*) =>
-        t.asInstanceOf[AST] :: _parse(tokens.drop(1))
-
-      case Vector() =>
-        Nil
-    }
-
+    val (newpos, res) = parseAny(tokens, 0)
+    res :: (if (newpos < tokens.length) _parse(tokens.drop(newpos)) else Nil)
   }
 
 
@@ -130,7 +144,7 @@ object Lispy {
     "vec"    -> Func { case rest => rest.toVector },
     "map"    -> Func { case seq :: (f: Func) :: args => seq.asInstanceOf[collection.Seq[Any]].map { x => f(x :: args) } },
     "filter" -> Func { case seq :: (f: Func) :: args => seq.asInstanceOf[collection.Seq[Any]].filter { x => truthy(f(x :: args)) } },
-    "size"   -> Func { case seq :: Nil => 
+    "size"   -> Func { case seq :: Nil =>
       seq match {
         case s: String => s.length
         case s: Seq[_] => s.size
@@ -138,7 +152,7 @@ object Lispy {
         case s => s.asInstanceOf[{ def size: Int }].size
       }
     },
-    
+
 
     "javacall" -> Func{
       case (method: String) :: obj :: args => javacall(method, obj, args)
@@ -157,11 +171,8 @@ object Lispy {
   )
 
 
-  def javacall(method: String, obj: Any, args: Seq[Any]) = {
-//    obj.getClass.getMethod(method, args.map(_.getClass): _*)
-//      .invoke(obj, args.asInstanceOf[Seq[Object]]: _*)
+  def javacall(method: String, obj: Any, args: Seq[Any]) =
     new java.beans.Expression(obj, method, args.toArray.asInstanceOf[Array[Object]]).getValue
-  }
 
 
   type Env = Map[String, Any]
@@ -196,6 +207,7 @@ object Lispy {
     ast match {
       case Num(value) => value
       case Str(value) => value
+      case Lst(Sym("quote") :: args) => args
       case Lst(Sym("if") :: cond :: thn :: els :: Nil) =>
         if (truthy(evalExpr(cond, env))) evalExpr(thn, env) else evalExpr(els, env)
       case Lst(Sym("if") :: cond :: thn :: Nil) =>
@@ -238,11 +250,6 @@ object Lispy {
     case _ => sys.error(s"$x is not a number")
   }
 
-  case class Func(f: PartialFunction[List[Any], Any]) extends (List[Any] => Any) with AST {
-    def apply(args: List[Any]): Any = f(args)
-    def apply1(a: Any) = f(List(a))
-    def apply2(a: Any, b: Any) = f(List(a, b))
-  }
 
   def numfun2(f: (Int, Int) => Any) = Func{ case a :: b :: Nil => f(number(a), number(b)) }
 }
