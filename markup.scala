@@ -21,6 +21,30 @@ trait Text {
 }
 
 
+
+// html markup
+
+class HTMLMarkup extends Markup {
+  val ahrefRegex  = """(?x) (?<= \<a   [^>]* href=") (.*?) (?=") """.r
+  val imgsrcRegex = """(?x) (?<= \<img [^>]* src=")  (.*?) (?=") """.r
+
+  def process(text: Seq[String], resolver: String => String, imageRoot: String): HTMLText =
+    new HTMLText(text.mkString("\n"), resolver, imageRoot, this)
+}
+
+class HTMLText(text: String, resolver: String => String, imageRoot: String, markup: HTMLMarkup) extends Text {
+  def render(l: ImageLayout, relativize: String => String): String =
+    markup.ahrefRegex.replaceAllIn(text, m => relativize(resolver(m.group(0))))
+
+  def firstParagraph: String = ""
+  def paragraph(text: String): String = text
+  def images: Seq[Image] = markup.imgsrcRegex.findAllIn(text).toVector
+    .map(url => Image(if (isAbsolute(url)) url else imageRoot + url))
+  def links: Seq[String] = markup.ahrefRegex.findAllIn(text).map(resolver).toVector
+}
+
+
+
 // ASCII markup
 
 object AsciiText {
