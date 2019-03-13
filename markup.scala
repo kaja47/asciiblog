@@ -263,12 +263,15 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc) extends 
       case Heading(txt)         => sb.append("<h3>").append(mkParagraph(txt, aliases, relativize)).append("</h3>")
       case Hr()                 => sb.append("<hr/>\n")
       case Linkref(_)           =>
-      case Block("html", txt)   => sb.append(txt)
-      case Block("div",  txt)   => sb.append("<div>").append(txt).append("</div>")
-      case Block("code", txt)   => sb.append("<pre>").append(util.escape(txt)).append("</pre>")
-      case Block("pre",  txt)   => sb.append("<pre>").append(util.escape(txt)).append("</pre>")
-      case Block("comment",_)   =>
-      case Block(tpe, _)        => sys.error(s"unknown block type '$tpe'")
+      case Block("html", txt, mods) => sb.append(txt) // TODO mods
+      case Block("div",  txt, mods) => sb.append("<div").append(mkMods(mods)).append(">").append(txt).append("</div>")
+      case Block("code", txt, mods) =>
+        sb.append("<pre").append(mkMods(mods)).append(">")
+            sb.append(util.escape(txt))
+        sb.append("</pre>")
+      case Block("pre",  txt, mods) => sb.append("<pre").append(mkMods(mods)).append(">").append(util.escape(txt)).append("</pre>")
+      case Block("comment", _, _)   =>
+      case Block(tpe, _, _)        => sys.error(s"unknown block type '$tpe'")
       case Images(images)       => images.foreach { img => sb.append(l.imgTag(img, this)).append(" ") }
       case Paragraph(txt, mods) => sb.append("<p").append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize)).append("</p>")
       case Blockquote(sx)       => sb.append("<blockquote>"); _mkText(sx, l, aliases, relativize, sb); sb.append("</blockquote>")
@@ -324,7 +327,7 @@ final case class ByLine(txt: String) extends Segment with Textual
 final case class Hr() extends Segment
 final case class Linkref(linkMap: Seq[(String, String)]) extends Segment
 final case class Images(images: Seq[Image]) extends Segment
-final case class Block(tpe: String, txt: String) extends Segment
+final case class Block(tpe: String, txt: String, mods: Mods = Mods()) extends Segment
 final case class Blockquote(segments: Seq[Segment]) extends Segment
 final case class SegmentSeq(segments: Seq[Segment]) extends Segment
 final case class BulletList(items: Seq[Segment]) extends Segment
@@ -452,7 +455,12 @@ object AsciiMarkup extends Markup {
       util.splitByInterval[String](ls, (_: String).startsWith("/---"), (_: String).startsWith("\\---"))
         .flatMap { ls =>
           if (ls.head.startsWith("/---")) {
-            Seq(Block(ls.head.drop(4).split(" ").head, ls.drop(1).dropRight(1).mkString("\n")+"\n"))
+            val Array(tpe, mods) = ls.head.drop(4).split(" ", 2).padTo(2, "")
+            Seq(Block(
+              tpe,
+              ls.drop(1).dropRight(1).mkString("\n")+"\n",
+              findMods(mods).map(_._1).getOrElse(Mods())
+            ))
           } else {
             splitBlocks(ls)
           }
