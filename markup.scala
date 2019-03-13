@@ -5,6 +5,7 @@ import AsciiMarkup._
 import scala.util.matching.Regex
 import scala.collection.mutable
 import java.lang.StringBuilder
+import MarkupParser.{ findMods, mkMods }
 
 
 trait Markup {
@@ -222,19 +223,6 @@ case class AsciiText(segments: Seq[Segment], resolver: ResolveLinkFunc) extends 
     txt
   }
 
-  def mkMods(m: Mods): String = {
-    if (m.isEmpty) return "" // the most mods are always empty
-
-    val (ids, classes) =
-      if (m.classes.isEmpty) (Array[String](), Array[String]())
-      else m.classes.split(" ").partition(_.startsWith("#"))
-
-    (if (m.title.nonEmpty)  " title="+util.quoteHTMLAttribute(m.title)                       else "")+
-    (if (classes.nonEmpty)  " class="+util.quoteHTMLAttribute(classes.mkString(" "))         else "")+
-    (if (ids.nonEmpty)      " id="   +util.quoteHTMLAttribute(ids.map(_.tail).mkString(" ")) else "")+
-    (if (m.styles.nonEmpty) " style="+util.quoteHTMLAttribute(m.styles)                      else "")
-  }
-
   def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String): String =
     _mkText(segments, l, aliases, relativize, new StringBuilder(1024))
 
@@ -312,13 +300,6 @@ final case class NumberedList(items: Seq[(Int, Segment)]) extends Segment
 final case class Table(rows: Seq[Seq[Cell]], columns: Int) extends Segment
 
 case class Cell(txt: String, span: Int = 1)
-
-case class Mods(title: String = "", classes: String = "", styles: String = "") {
-  def join(a: String, b: String, delim: String) = if (a.isEmpty || b.isEmpty) a+b else a+delim+b
-  def merge(m: Mods) = Mods(join(title, m.title, " "), join(classes, m.classes, " "), join(styles, m.styles, ";"))
-  def isEmpty = title.isEmpty && classes.isEmpty && styles.isEmpty
-}
-
 
 
 object AsciiMarkup extends Markup {
