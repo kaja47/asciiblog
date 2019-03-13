@@ -282,6 +282,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
       ifs(a.similar.nonEmpty,      "<p>"+(if (a.isTag) txl("similarTags") else txl("similar"))+
                                                             " "   +a.similar.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString(", ")  +"</p>")+
       ifs(a.backlinks.nonEmpty,    "<p>"+txl("backlinks")  +" "   +a.backlinks.map(s => articleLink(s, s.title, allowImageMarker = true)).mkString(", ")+"</p>")+
+      ifs(a.foreighBacklinks.nonEmpty,"<p>"+txl("foreignBacklinks")+" "  +a.foreighBacklinks.map(b => aTag(b.title, b.url)+" ("+b.site+")").mkString(", ")+"</p>")+ // ???
       //ifs(a.license, a.license+"<br>")+
       "</footer>"
     )
@@ -327,6 +328,9 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     (if (prev == null) "«««" else s"""<a href=${util.quoteHTMLAttribute(rel(blog.absUrl(prev)))}>«««</a>""")+" "+
     (if (next == null) "»»»" else s"""<a href=${util.quoteHTMLAttribute(rel(blog.absUrl(next)))}>»»»</a>""")+
     "</span>"
+
+  def aTag(title: String, href: String) = 
+    "<a href="+util.quoteHTMLAttribute(rel(href))+">"+title+"</a>"
 
   def makeTagLinks(tags: Seq[Article]) = tags.map(makeTagLink).mkString(" ")
 

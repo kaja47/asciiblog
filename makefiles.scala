@@ -242,7 +242,8 @@ case class Article(
   pubBy: Article = null,
   inFeed: Boolean = true,
   next: Article = null,
-  prev: Article = null
+  prev: Article = null,
+  foreighBacklinks: Seq[ForeignBacklink] = Seq()
 ) {
   val date = if (dates.isEmpty) null else dates.head
   private def prettyDate = if (date == null) "" else "<"+new SimpleDateFormat("MM-dd-yyyy").format(date)+">"
@@ -290,6 +291,8 @@ case class Article(
 
   override def hashCode: Int = sys.error("articles should not be used as hashmap keys")
 }
+
+case class ForeignBacklink(url: String, title: String, site: String)
 
 case class Meta(values: Seq[String] = Seq()) {
   val kvPairs: Map[String, String] = values.filter(_.indexOf(':') >= 0).map { x => val Array(k, v) = x.split(":", 2); (k, v) }.toMap

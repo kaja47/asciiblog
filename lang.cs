@@ -4,6 +4,7 @@ source zdroj
 similar příbuzné články:
 similarTags příbuzné štítky:
 backlinks sem odkazují:
+foreignBacklinks odkazy odjinud:
 archive archiv
 tagged texty označené
 tags štítky:
