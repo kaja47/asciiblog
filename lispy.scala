@@ -113,9 +113,6 @@ object Lispy {
   def parse(code: String): ASTSeq = ASTSeq(_parse(tokenize(code)) map rewrite)
 
 
-  import java.text.SimpleDateFormat
-  import java.util.Date
-
   val env = Map[String, Any](
     "+"  -> Func { case args => args.map(number).sum },
     "*"  -> Func { case args => args.map(number).product },
@@ -166,7 +163,6 @@ object Lispy {
     "not-null?" -> Func { case a :: Nil => a != null },
 
     "join"  -> Func { case args => args.mkString },
-    "format-date" -> Func { case (d: Date) :: (f: String) :: Nil => new SimpleDateFormat(f).format(d) },
     "println"  -> Func { case args => args.foreach(a => print(a)); println(); args.last }
   )
 

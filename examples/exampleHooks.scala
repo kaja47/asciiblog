@@ -1,13 +1,16 @@
 package asciiblog.example
 
 import asciiblog._
-import java.text.SimpleDateFormat
+import util.localDateTimeOrdering
+import java.time.format.DateTimeFormatter
 
 class CustomHooks extends NoHooks {
 
+  val dateFormat = DateTimeFormatter.ofPattern("d. M. yyyy")
+
   private def plusArticles(drop: Int, base: Base) = {
     def plus(a: Article): Int = { val p = a.meta.value("+"); if (p == null) 0 else p.toInt }
-    base.feed.slice(drop, 60+drop).filter(a => plus(a) > 0).sortBy{ a => (plus(a), a.date.getTime) }.reverse.take(14)
+    base.feed.slice(drop, 60+drop).filter(a => plus(a) > 0).sortBy{ a => (plus(a), a.date) }.reverse.take(14)
   }
 
   override def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = {
@@ -25,7 +28,6 @@ class CustomHooks extends NoHooks {
 
   // nicer title
   override def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String = {
-    val dateFormat = new SimpleDateFormat("d. M. yyyy")
     val formattedDate = if (article.date != null) dateFormat.format(article.date) else ""
     val pubByLink = if (!compact && article.pubBy != null) layout.articleLink(article.pubBy, formattedDate, true, false) else formattedDate
 

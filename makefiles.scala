@@ -5,7 +5,8 @@ import java.io.{ File, BufferedWriter, OutputStreamWriter, FileOutputStream }
 import java.net.{ URL, URI, URLDecoder }
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
-import java.util.{ Date, GregorianCalendar, Calendar, Locale }
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.regex.Matcher
 import javax.imageio.{ ImageIO, IIOException }
 import scala.collection.mutable
@@ -229,7 +230,7 @@ case class Article(
   title: String,
   slug: String,
   author: String = null,
-  dates: Seq[Date] = Seq(), // publishing date + dates of updates
+  dates: Seq[LocalDateTime] = Seq(), // publishing date + dates of updates
   tags: Tags = Tags(),
   meta: Meta = Meta(),
   rel: Seq[String] = Seq(),
@@ -252,7 +253,7 @@ case class Article(
   foreighBacklinks: Seq[ForeignBacklink] = Seq()
 ) {
   val date = if (dates.isEmpty) null else dates.head
-  private def prettyDate = if (date == null) "" else "<"+new SimpleDateFormat("MM-dd-yyyy").format(date)+">"
+  private def prettyDate = if (date == null) "" else "<"+ DateTimeFormatter.ISO_LOCAL_DATE.format(date)+">"
   override def toString = (if (isTag) "Article[Tag]" else "Article")+s"($prettyDate$title)"
   def asSlug: Slug = Slug(slug)
   def isSupertag = meta.isSupertag
@@ -612,18 +613,18 @@ object MakeFiles {
   private val dateRegex = """^(\d++)-(\d++)-(\d++)(?: (\d++):(\d++)(?::(\d++))?)?""".r
   val licenses = Set("CC by", "CC by-nc", "CC by-nd", "CC by-sa", "CC by-nc-nd", "CC by-nc-sa")
 
-  def parseDates(l: String): Seq[Date] = {
+  def parseDates(l: String): Seq[LocalDateTime] = {
     if (!l.charAt(0).isDigit) return null
     val dates = l.split(",").map(l => parseDate(l.trim))
     if (dates.nonEmpty && dates.forall(_ != null)) dates else null
   }
 
-  private def parseDate(l: String): Date = {
+  private def parseDate(l: String): LocalDateTime = {
     val matcher = dateRegex.pattern.matcher(l)
     if (!matcher.matches()) null else _parseDate(matcher)
   }
 
-  private def parseDatePrefix(l: String): (Date, String) = {
+  private def parseDatePrefix(l: String): (LocalDateTime, String) = {
     val matcher = dateRegex.pattern.matcher(l)
     if (!matcher.lookingAt()) (null, l) else (_parseDate(matcher), l.substring(matcher.end))
   }
@@ -631,12 +632,12 @@ object MakeFiles {
   private def _parseDate(matcher: Matcher) = {
     def toInt(s: String) = if (s == null) 0 else s.toInt
     val y  = toInt(matcher.group(1))
-    val m  = toInt(matcher.group(2))-1
+    val m  = toInt(matcher.group(2))
     val d  = toInt(matcher.group(3))
     val h  = toInt(matcher.group(4))
     val mi = toInt(matcher.group(5))
     val s  = toInt(matcher.group(6))
-    new GregorianCalendar(y, m, d, h, mi, s).getTime
+    LocalDateTime.of(y, m, d, h, mi, s)
   }
 
   def parseLicense(l: String): String =
@@ -819,21 +820,17 @@ object MakeFiles {
 
 
 
-  private def calendar(d: Date, field: Int) = {
-    val cal = new GregorianCalendar()
-    cal.setTime(d)
-    cal.get(field)
-  }
-
-  def year(d: Date): Int = calendar(d, Calendar.YEAR)
-  def month(d: Date): Int = calendar(d, Calendar.MONTH)+1
-  def yearmonth(d: Date) = (year(d), month(d))
-  def yearJanuary(d: Date) = (year(d), 1)
+  // TODO remove
+  def year(d: LocalDateTime): Int = d.getYear
+  def month(d: LocalDateTime): Int = d.getMonthValue
+  def yearmonth(d: LocalDateTime) = (year(d), month(d))
+  def yearJanuary(d: LocalDateTime) = (year(d), 1)
 
 
   def makeRSS(articles: Seq[Article], mkBody: Article => String, selfUrl: String)(implicit blog: Blog): String = {
-    val format = new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US)
-    def rssdate(date: Date) = if (date == null) "" else format.format(date)
+    //val format = new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US)
+    val format = DateTimeFormatter.RFC_1123_DATE_TIME
+    def rssdate(date: LocalDateTime) = if (date == null) "" else format.format(date.atZone(java.time.ZoneId.systemDefault))
 
     XMLSW.document { w =>
       w.element("rss", Seq("version" -> "2.0")) { w =>
@@ -874,7 +871,7 @@ object MakeFiles {
       val dateTitle(y, m, d, t) = albumDir.getName
       val (date, title) =
         if (y == null) (null, t)
-        else (new GregorianCalendar(y.toInt, m.toInt-1, d.toInt).getTime, t)
+        else (LocalDateTime.of(y.toInt, m.toInt-1, d.toInt, 0, 0, 0), t)
 
       def validSuffix(f: String) = {
         val ff = f.toLowerCase
@@ -931,9 +928,9 @@ object MakeFiles {
         sys.error(s"hidden and dated article are sharing the same slug '${a.slug}', this is most likely an error")
     }
 
-    val now = new Date
+    val now = LocalDateTime.now()
     articles = articles.filter { a =>
-      val isInPast = a.date == null || a.date.before(now)
+      val isInPast = a.date == null || a.date.isBefore(now)
       !blog.excludeFutureArticles || (!hiddenSlugs.contains(a.slug) && isInPast)
     }
     }
@@ -985,7 +982,7 @@ object MakeFiles {
     if (blog.articlesMustBeSorted) { // ordered by date
     timer("articlesMustBeSorted", blog) {
       val dated = articles.filter(_.date != null)
-      val ordered = dated == dated.sortBy(~_.date.getTime)
+      val ordered = dated == dated.sortBy(_.date).reverse
       if (!ordered) sys.error("articles are not ordered by date")
     }
     }
@@ -1124,7 +1121,7 @@ object MakeFiles {
     }
 
     // newest first, articles without date last
-    val byDate = (a: Article) => ~(if (a.date == null) 0 else a.date.getTime)
+    val byDate = (a: Article) => (if (a.date == null) LocalDateTime.MIN else a.date)
 
     articles = timer("populate backlinks and pubBy", blog) {
       val base = Base(articles, null)
@@ -1135,7 +1132,7 @@ object MakeFiles {
 
         a.copy(
           dates = if (a.dates.isEmpty && pubBy != null) pubBy.dates.take(1) else a.dates,
-          backlinks = bs.sortBy(byDate),
+          backlinks = bs.sortBy(byDate).reverse,
           pubArticles = a.pub.map(base.bySlug),
           pubBy = pubBy
         )
@@ -1143,7 +1140,7 @@ object MakeFiles {
     }
 
     if (blog.sortByDate) {
-      articles = articles.sortBy(byDate)
+      articles = articles.sortBy(byDate).reverse
     }
 
     // TODO hack
@@ -1176,7 +1173,7 @@ object MakeFiles {
         val key = tagArticle(t).meta.value("sortby")
 
         if (key == null) { // sort by order linked in article (order for << >> navigation)
-          val sortedAs = if (blog.sortByDate) as.sortBy(byDate) else as
+          val sortedAs = if (blog.sortByDate) as.sortBy(byDate).reverse else as
           val linked = tagArticle(t).slugsOfLinkedArticles.distinct
           val tagged = sortedAs.map(_.asSlug)
           val artMap = sortedAs.map(a => (a.asSlug, a)).toMap
@@ -1352,9 +1349,9 @@ object MakeFiles {
     val (fulls, rest) = base.feed.splitAt(blog.articlesOnIndex)
     val (links, archivePages) = timer("group archive", blog) {
 
-      def chunk(as: Vector[Article])(g: Date => (Int, Int))(f: ((Int, Int)) => Article): Vector[(Article, Vector[Article])] =
+      def chunk(as: Vector[Article])(g: LocalDateTime => (Int, Int))(f: ((Int, Int)) => Article): Vector[(Article, Vector[Article])] =
         as.groupBy { a => if (a.date == null) (0,0) else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
-      def mkDate(y: Int, m: Int) = if (y == 0) Seq() else Seq(new GregorianCalendar(y, m-1, 1).getTime)
+      def mkDate(y: Int, m: Int) = if (y == 0) Seq() else Seq(LocalDateTime.of(y, m, 1, 0, 0, 0))
 
       val title = blog.translation("archive")
       val undated = blog.translation("undated")
@@ -1401,11 +1398,8 @@ object MakeFiles {
     }
 
     def lastYearTags = {
-      val cal = Calendar.getInstance()
-      cal.add(Calendar.YEAR, -1)
-      val yearAgo = cal.getTime()
-
-      val thisYearArticles = base.all.filter(a => a.date != null && a.date.after(yearAgo))
+      val yearAgo = LocalDateTime.now().minusYears(1)
+      val thisYearArticles = base.all.filter(a => a.date != null && a.date.isAfter(yearAgo))
       val articles = if (thisYearArticles.size >= 30) thisYearArticles else base.feed.take(30)
 
       articles

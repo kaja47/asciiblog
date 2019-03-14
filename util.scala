@@ -259,6 +259,10 @@ class XMLSW(sb: java.lang.StringBuilder, val html5: Boolean = false) {
 
 
 object util {
+  import java.time.LocalDateTime
+
+  implicit val localDateTimeOrdering =
+    math.Ordering.ordered[LocalDateTime](t => t.asInstanceOf[Comparable[LocalDateTime]])
 
   implicit class SeqOps[T](val seq: Seq[T]) extends AnyVal {
     def groupBySorted[U: Ordering](f: T => U): Seq[(U, Seq[T])] =

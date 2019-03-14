@@ -27,8 +27,8 @@ class Similarities(_articles: Seq[Article], count: Int) {
     invert(_articles.collect { case a if a.rel.nonEmpty => (a.asSlug, a.rel.map(Slug)) })
 
   private def dateDiff(a: Article, b: Article): Int = {
-    val ta = if (a.date == null) 0 else (a.date.getTime/(1000*3600)).toInt
-    val tb = if (b.date == null) 0 else (b.date.getTime/(1000*3600)).toInt
+    val ta = if (a.date == null) 0 else (a.date.toLocalDate.toEpochDay).toInt
+    val tb = if (b.date == null) 0 else (b.date.toLocalDate.toEpochDay).toInt
     Math.abs(ta - tb)
   }
 

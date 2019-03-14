@@ -2,8 +2,8 @@ package asciiblog
 
 import MakeFiles.{ year, month, galleryScript }
 import AsciiRegexes.ahrefRegex
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.net.URLEncoder
 import scala.util.matching.Regex
 import util.escape
@@ -202,7 +202,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     val (undated, dated) = archiveLinks.partition(_.date == null)
     "<div style='clear:both'>"+
     dated.groupBy(a => year(a.date)).toSeq.sortBy(_._1).reverse.map { case (y, as) =>
-      val mas = if (y < year(new Date)) {
+      val mas = if (y < year(LocalDateTime.now())) {
         (1 to 12).map { m => (m, as.find(a => month(a.date) == m)) }
       } else {
         as.reverse.map { a => (month(a.date), Some(a)) }
@@ -334,12 +334,15 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
 
   def makeTagLinks(tags: Seq[Article]) = tags.map(makeTagLink).mkString(" ")
 
+  private val shortDate = DateTimeFormatter.ofPattern("d. M.")
+  private val longDate  = DateTimeFormatter.ofPattern("d. M. yyyy")
+
   def makeDate(a: Article) = a.date match {
     case null => ""
-    case d if year(a.date) == year(new Date) =>
-      new SimpleDateFormat("d. M.").format(d)
+    case d if year(a.date) == year(LocalDateTime.now()) =>
+      shortDate.format(d)
     case d =>
-      new SimpleDateFormat("d. M. yyyy").format(d)
+      longDate.format(d)
   }
 }
 
