@@ -244,7 +244,7 @@ case class Article(
   text: Text = null,
   images: Seq[Image] = Seq(),
   backlinks: Seq[Article] = Seq(),
-  similar: Seq[Article] = Seq(),
+  similar: Seq[Similar] = Seq(),
   pubArticles: Seq[Article] = Seq(),
   pubBy: Article = null,
   inFeed: Boolean = true,
@@ -300,6 +300,7 @@ case class Article(
 }
 
 case class ForeignBacklink(url: String, title: String, site: String)
+case class Similar(article: Article, commonTags: Double, dateDiff: Int)
 
 case class Meta(values: Seq[String] = Seq()) {
   val kvPairs: Map[String, String] = values.filter(_.indexOf(':') >= 0).map { x => val Array(k, v) = x.split(":", 2); (k, v) }.toMap
@@ -1016,7 +1017,7 @@ object MakeFiles {
       articles = articles.map { a =>
         a.copy(tags = a.tags.copy(
           visible = a.tags.visible.map(caseCanonization),
-          hidden  = a.tags.visible.map(caseCanonization)
+          hidden  = a.tags.hidden.map(caseCanonization)
         ))
       }
     }
@@ -1214,7 +1215,7 @@ object MakeFiles {
       //h = mix(h, a.text.##) // contains reference to globalNames
       //h = mix(h, a.images.##)
       h = skeletonHashCodes(a.backlinks, h)
-      h = skeletonHashCodes(a.similar, h)
+      h = skeletonHashCodes(a.similar.map(_.article), h)
       h = skeletonHashCodes(a.pubArticles, h)
       h = mix(h, a.pubBy.##)
       h = mix(h, a.inFeed.##)

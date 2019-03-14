@@ -32,7 +32,7 @@ class Similarities(_articles: Seq[Article], count: Int) {
     Math.abs(ta - tb)
   }
 
-  private[this] val similarities: Array[Seq[Article]] = {
+  private[this] val similarities: Array[Seq[Similar]] = {
     val sims = arts.map {
       case a if a.isTag => similarTags(a.asTag, count)
       case a            => similarArticles(a, count, a.backlinks)
@@ -42,11 +42,11 @@ class Similarities(_articles: Seq[Article], count: Int) {
       arts(i) match {
         case a if !a.isTag && a.tags.isEmpty && a.rel.nonEmpty =>
           // not terribly optimized, but it's called only few times
-          val slugs = sims(i).map(_.slug).toSet
+          val slugs = sims(i).map(_.article.slug).toSet
           val extraSims = sims(i)
-            .flatMap(a => sims(slugMap(a.asSlug)))
-            .filter(a => !slugs.contains(a.slug))
-            .groupBy(a => a.slug)
+            .flatMap(a => sims(slugMap(a.article.asSlug)))
+            .filter(a => !slugs.contains(a.article.slug))
+            .groupBy(a => a.article.slug)
             .toSeq
             .map { case (_, as) => (as.head, as.size) }
             .sortBy(~_._2)
@@ -59,9 +59,9 @@ class Similarities(_articles: Seq[Article], count: Int) {
     }
   }
 
-  def apply(a: Article) = similarities(slugMap(a.asSlug))
+  def apply(a: Article): Seq[Similar] = similarities(slugMap(a.asSlug))
 
-  def similarArticles(a: Article, count: Int, without: Seq[Article]): Seq[Article] = {
+  def similarArticles(a: Article, count: Int, without: Seq[Article]): Seq[Similar] = {
     if (a.tags.isEmpty && a.rel.isEmpty) return Seq()
     val arrs = (a.tags.visible ++ a.tags.hidden).map(tagMap)
 
@@ -94,6 +94,8 @@ class Similarities(_articles: Seq[Article], count: Int) {
       commonTags.toLong << 56 | ((~dateDiff).toLong & 0xffffffffL) << 24 | idx
     }
     def unpack(x: Long) = x.toInt & ((1 << 24) - 1)
+    def unpackCT(x: Long) = (x >> 56).toInt
+    def unpackDD(x: Long) = (~(x >> 24) & 0xffffffffL).toInt
 
     var i = 0; while (i < arts.length) {
       if (freq(i) >= 1) {
@@ -102,11 +104,11 @@ class Similarities(_articles: Seq[Article], count: Int) {
       }
       i += 1
     }
-    topk.getAll.map(key => arts(unpack(key)))
+    topk.getAll.map { key => Similar(arts(unpack(key)), unpackCT(key), unpackDD(key)) }
   }
 
 
-  def similarTags(t: Tag, count: Int): Seq[Article] = {
+  def similarTags(t: Tag, count: Int): Seq[Similar] = {
     if (!tagMap.contains(t)) return Seq()
 
     case class Key(sim: Double, tag: Tag)
@@ -135,6 +137,6 @@ class Similarities(_articles: Seq[Article], count: Int) {
       }
     }
 
-    topk.getAll.map { p => tags(p.tag) }
+    topk.getAll.map { p => Similar(tags(p.tag), p.sim, 0) }
   }
 }
