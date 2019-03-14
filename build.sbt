@@ -6,6 +6,18 @@ scalaVersion := "2.12.8"
 
 assemblyJarName in assembly := "../../asciiblog.jar"
 
+assemblyMergeStrategy in assembly := {
+  case PathList("scala", "concurrent", xs @ _*)               => MergeStrategy.discard
+  case PathList("scala", "text", xs @ _*)                     => MergeStrategy.discard
+  case PathList("scala", "sys", "process", xs @ _*)           => MergeStrategy.discard
+  case PathList("scala", "ref", xs @ _*)                      => MergeStrategy.discard
+  case PathList("scala", "beans", xs @ _*)                    => MergeStrategy.discard
+//case PathList("scala", "collection", "script", xs @ _*)     => MergeStrategy.discard
+  case PathList("scala", "collection", "parallel", xs @ _*)   => MergeStrategy.discard
+//case PathList("scala", "collection", "concurrent", xs @ _*) => MergeStrategy.discard
+  case x => ((assemblyMergeStrategy in assembly).value)(x)
+}
+
 sources in Compile ++= (baseDirectory.value / "examples" * "*.scala").get
 
 libraryDependencies ++= Seq(
