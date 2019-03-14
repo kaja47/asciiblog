@@ -819,16 +819,7 @@ object MakeFiles {
 
 
 
-
-  // TODO remove
-  def year(d: LocalDateTime): Int = d.getYear
-  def month(d: LocalDateTime): Int = d.getMonthValue
-  def yearmonth(d: LocalDateTime) = (year(d), month(d))
-  def yearJanuary(d: LocalDateTime) = (year(d), 1)
-
-
   def makeRSS(articles: Seq[Article], mkBody: Article => String, selfUrl: String)(implicit blog: Blog): String = {
-    //val format = new SimpleDateFormat("EEE', 'dd' 'MMM' 'yyyy' 'HH:mm:ss' 'Z", Locale.US)
     val format = DateTimeFormatter.RFC_1123_DATE_TIME
     def rssdate(date: LocalDateTime) = if (date == null) "" else format.format(date.atZone(java.time.ZoneId.systemDefault))
 
@@ -1355,6 +1346,9 @@ object MakeFiles {
 
       val title = blog.translation("archive")
       val undated = blog.translation("undated")
+
+      def yearmonth(d: LocalDateTime) = (d.getYear, d.getMonthValue)
+      def yearJanuary(d: LocalDateTime) = (d.getYear, 1)
 
       blog.groupArchiveBy match {
         case "month" =>

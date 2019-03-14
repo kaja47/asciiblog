@@ -1,6 +1,6 @@
 package asciiblog
 
-import MakeFiles.{ year, month, galleryScript }
+import MakeFiles.galleryScript
 import AsciiRegexes.ahrefRegex
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -201,11 +201,11 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
   private def groupArchive(archiveLinks: Seq[Article]) = {
     val (undated, dated) = archiveLinks.partition(_.date == null)
     "<div style='clear:both'>"+
-    dated.groupBy(a => year(a.date)).toSeq.sortBy(_._1).reverse.map { case (y, as) =>
-      val mas = if (y < year(LocalDateTime.now())) {
-        (1 to 12).map { m => (m, as.find(a => month(a.date) == m)) }
+    dated.groupBy(a => a.date.getYear).toSeq.sortBy(_._1).reverse.map { case (y, as) =>
+      val mas = if (y < LocalDateTime.now().getYear) {
+        (1 to 12).map { m => (m, as.find(a => a.date.getMonthValue == m)) }
       } else {
-        as.reverse.map { a => (month(a.date), Some(a)) }
+        as.reverse.map { a => (a.date.getMonthValue, Some(a)) }
       }
       y+" "+mas.map {
         case (m, Some(a)) => articleLink(a, "\u00A0"+m+"\u00A0")
@@ -339,7 +339,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
 
   def makeDate(a: Article) = a.date match {
     case null => ""
-    case d if year(a.date) == year(LocalDateTime.now()) =>
+    case d if a.date.getYear == LocalDateTime.now().getYear =>
       shortDate.format(d)
     case d =>
       longDate.format(d)
