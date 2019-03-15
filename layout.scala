@@ -20,7 +20,7 @@ trait Layout extends ImageLayout {
   def makeIndexArchive(articles: Seq[Article]): String
   def makeFullArticle(a: Article): String
   def makeArticleBody(a: Article): String
-  def makeTagIndex(base: Base): String
+  def makeTagIndex(tags: Seq[(Article, Seq[Article])]): String
   def addArrows(content: String, next: Article, prev: Article): String
 
   def articleUrl(a: Article): String
@@ -292,11 +292,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     )
   }
 
-  def makeTagIndex(base: Base) =
-    base.allTags.toSeq
-      .filter { case (_, (t, as)) => t.images.size > 0 || as.size > 0 }
-      .sortBy { case (_, (t, as)) => (~as.size, t.slug) }
-      .map { case (_, (t, as)) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
+  def makeTagIndex(tags: Seq[(Article, Seq[Article])]) =
+    tags.map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
 
   def addArrows(content: String, next: Article, prev: Article) =
     makeNextPrevArrows(next, prev)+content+makeNextPrevArrows(next, prev)

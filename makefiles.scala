@@ -1455,7 +1455,10 @@ object MakeFiles {
     {
       val path = blog.relUrlFromSlug("tags")
       val l = layout.make(blog.absUrlFromPath(path))
-      save(null, path)(l.makePage(l.makeTagIndex(base)))
+      val tags: Seq[(Article, Seq[Article])] = base.allTags.values.toVector
+        .filter { case (t, as) => t.images.size > 0 || as.size > 0 }
+        .sortBy { case (t, as) => (~as.size, t.slug) }
+      save(null, path)(l.makePage(l.makeTagIndex(tags)))
     }
     }
 
