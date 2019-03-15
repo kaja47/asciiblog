@@ -1386,7 +1386,7 @@ object MakeFiles {
         val l = layout.make(blog.absUrl(a))
         val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
         val next = archivePages.lift(idx+1).map(_._1).getOrElse(null)
-        val body = l.addArrows(l.makeIndexArchive(as), prev, next)
+        val body = l.addArrows(l.makeIndexArchive(a, as), prev, next)
         l.makePage(body, containImages = as.exists(_.hasImageMarker))
       }
       a
@@ -1409,7 +1409,7 @@ object MakeFiles {
     val path = blog.relUrlFromSlug("index")
     save(null, path) {
       val l = layout.make(blog.absUrlFromPath(path))
-      val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy == "month", tagsToShow = lastYearTags)
+      val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy, tagsToShow = lastYearTags)
       l.makePage(body, containImages = fulls.exists(_.images.nonEmpty))
     }
     }
