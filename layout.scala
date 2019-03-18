@@ -355,13 +355,15 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
 
 
 class PrepatedText(html: String, resolver: String => String) {
+  val ahrefRegex  = """(?x) (?<= href=) ("|') (.*?) \1 """.r
+
   private val arr = {
     val res = new collection.mutable.ArrayBuffer[String]
     val m = ahrefRegex.pattern.matcher(html)
     var pos = 0
     while (m.find()) {
       res += html.substring(pos, m.start)
-      res += resolver(m.group)
+      res += resolver(m.group(2))
       pos = m.end
     }
     res += html.substring(pos)
@@ -372,7 +374,7 @@ class PrepatedText(html: String, resolver: String => String) {
     val sb = new StringBuilder()
     var i = 0; while (i < arr.length-1) {
       sb.append(arr(i))
-      sb.append(rel(arr(i+1)))
+      sb.append(util.quoteHTMLAttribute(rel(arr(i+1))))
       i += 2
     }
     sb.append(arr.last)
