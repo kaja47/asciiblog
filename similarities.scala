@@ -20,7 +20,7 @@ class Similarities(_articles: Seq[Article], count: Int) {
   // - are associated with only one article
   private[this] val tagsToRecommend: Seq[(Tag, Array[Int])] = {
     val visibleTags = arts.iterator.flatMap(a => a.tags.visible).toSet
-    tagMap.iterator.filter { case (t, as) => visibleTags.contains(t) && as.length > 1 }.toVector
+    tagMap.iterator.filter { case (t, as) => visibleTags.contains(t) /*&& as.length > 1*/ }.toVector
   }
 
   private[this] val reverseRels: Map[Slug, Seq[Slug]] =
@@ -121,15 +121,19 @@ class Similarities(_articles: Seq[Article], count: Int) {
     val fst = idxs(0)
     val lst = idxs(idxs.length-1)
 
+    val rels = tags(t).rel.map(r => arts(slugMap(Slug(r))).asTag).toSet
+
     for ((t2, idxs2) <- tagsToRecommend if t2 != t) {
+      val inRels = rels.contains(t2)
+
       // overlap check
-      if (!(fst > idxs2(idxs2.length-1) || lst < idxs2(0))) {
+      if (!(fst > idxs2(idxs2.length-1) || lst < idxs2(0)) || inRels) {
         // maximum possible similarity
         val maxSim = 1.0 * Math.min(idxs.length, idxs2.length) / Math.max(idxs.length, idxs2.length)
-        if (topk.size < count || maxSim >= topk.head.sim) {
+        if (topk.size < count || maxSim >= topk.head.sim || inRels) {
           val in = intersectionSize(idxs, idxs2)
           val un = idxs.size + idxs2.size - in
-          val sim = in.toDouble / un
+          val sim = in.toDouble / un + (if (inRels) 0.5 else 0)
           if (sim > 0) {
             topk.add(Key(sim, t2))
           }
