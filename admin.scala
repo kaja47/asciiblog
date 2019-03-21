@@ -5,7 +5,8 @@ import jawn.ast._
 
 object Admin extends App {
 
-  val commentsDir = MakeFiles.keyValuesMap(new File(args(0)))("remoteDir")+".comments"
+  val cfgMap = MakeFiles.keyValuesIterator(new File(args(0)), "utf-8").toMap
+  val commentsDir = cfgMap("remoteDir")+".comments"
 
   def mangle(f: String) = f.replaceAll("/", "_")
   def jsons(f: File): Seq[JValue] = io.Source.fromFile(f).getLines.toVector.map(l => JParser.parseFromString(l).get) 
