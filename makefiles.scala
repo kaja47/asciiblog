@@ -910,7 +910,7 @@ object MakeFiles {
 
     articles = blog.hooks.prepareArticles(articles).toVector
 
-    timer("checks", blog) {
+    //timer("checks", blog) {
     if (blog.articlesMustNotBeMixed) {
       val (hidden, rest1) = articles.span { a => a.title.startsWith("?") }
       val (visible, rest) = rest1.span { a => !a.title.startsWith("?") }
@@ -924,13 +924,7 @@ object MakeFiles {
       if (a.dates.nonEmpty && hiddenSlugs.contains(a.slug)) // dated article has hidden counterpart
         sys.error(s"hidden and dated article are sharing the same slug '${a.slug}', this is most likely an error")
     }
-
-    val now = LocalDateTime.now()
-    articles = articles.filter { a =>
-      val isInPast = a.date == null || a.date.isBefore(now)
-      !blog.excludeFutureArticles || (!hiddenSlugs.contains(a.slug) && isInPast)
-    }
-    }
+    //}
 
     timer("merge", blog) {
     // slug dupes and article merging
@@ -975,6 +969,11 @@ object MakeFiles {
 
     articles = slugOrder.map(articleMap).toVector
     }
+
+    val now = LocalDateTime.now()
+    articles = articles
+      .filter { a => !hiddenSlugs.contains(a.slug) }
+      .filter { a => !blog.excludeFutureArticles || (a.date == null || a.date.isBefore(now)) }
 
     if (blog.articlesMustBeSorted) { // ordered by date
     timer("articlesMustBeSorted", blog) {
