@@ -9,7 +9,7 @@ object Admin extends App {
   val commentsDir = cfgMap("remoteDir")+".comments"
 
   def mangle(f: String) = f.replaceAll("/", "_")
-  def jsons(f: File): Seq[JValue] = io.Source.fromFile(f).getLines.toVector.map(l => JParser.parseFromString(l).get) 
+  def jsons(f: File): Seq[JValue] = io.Source.fromFile(f).getLines.toVector.map(l => JParser.parseFromString(l).get)
 
   val globalFile = new File(commentsDir, "global.rss.html")
   val ipBlacklistFile = new File(commentsDir, "ip-blacklist")
