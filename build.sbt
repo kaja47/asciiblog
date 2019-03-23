@@ -19,6 +19,7 @@ assemblyMergeStrategy in assembly := {
 }
 
 sources in Compile ++= (baseDirectory.value / "examples" * "*.scala").get
+sources in Compile ++= (baseDirectory.value / "scripts" * "*.scala").get
 
 libraryDependencies ++= Seq(
   "org.scala-lang.modules"    %% "scala-xml" % "1.0.6",
