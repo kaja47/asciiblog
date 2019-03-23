@@ -1,13 +1,12 @@
 package asciiblog
 
 trait Hooks {
-  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String
-  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String
   def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String
   def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String
   def list(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String
   def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String
+  def makePagePart(base: Base, blog: Blog, layout: Layout, name: String, args: String): PagePart
 
   /** This hook is called after all articles are parsed, but before any processing and checks on them. */
   def prepareArticles(articles: Seq[Article]): Seq[Article]
@@ -18,13 +17,13 @@ trait Hooks {
 }
 
 class NoHooks extends Hooks {
-  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = ""
-  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = ""
   def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String = ""
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String = null
   def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String = null
   def list(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = null
   def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String = null
+  def makePagePart(base: Base, blog: Blog, layout: Layout, name: String, args: String): PagePart = sys.error(s"unknown part $name")
+
   def prepareArticles(articles: Seq[Article]): Seq[Article] = articles
   def updateBase(base: Base, blog: Blog): Base = base
   def afterGenerate(base: Base, blog: Blog): Unit = ()
@@ -49,10 +48,6 @@ class LispyHooks(scriptFile: String) extends Hooks {
         }
     }).asInstanceOf[T]
 
-  def indexPrepend(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String =
-    call[String]("@index-prepend", List(base, blog, layout, articles))
-  def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String =
-    call[String]("@after-first-article", List(base, blog, layout, articles))
   def fullArticleBottom(base: Base, blog: Blog, layout: Layout, article: Article): String =
     call[String]("@full-article-bottom", List(base, blog, layout, article))
   def title(base: Base, blog: Blog, layout: Layout, article: Article, compact: Boolean): String =
@@ -63,6 +58,8 @@ class LispyHooks(scriptFile: String) extends Hooks {
     call[String]("@list", List(base, blog, layout, articles))
   def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String =
     call[String]("@header", List(base, blog, layout, article))
+  def makePagePart(base: Base, blog: Blog, layout: Layout, name: String, args: String): PagePart =
+    ???
   def prepareArticles(articles: Seq[Article]): Seq[Article] =
     call[Seq[Article]]("@prepare-articles", List(articles))
   def updateBase(base: Base, blog: Blog): Base =

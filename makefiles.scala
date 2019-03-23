@@ -51,10 +51,12 @@ case class Blog (
   val localImages: Boolean,
   val encoding: String,
   val outDir: File,
-  val articlesOnIndex: Int,
   val groupArchiveBy: String,
-  val archiveFormat: String,
-  val tagFormat: String,
+  val indexCfg: Seq[String],
+  val archiveCfg: Seq[String],
+  val tagsCfg: Seq[String],
+  val rssCfg: Seq[String],
+  val rssTagsCfg: Seq[String],
   val cssStyle: String,
   val cssFile: File,
   val header: String,
@@ -62,8 +64,6 @@ case class Blog (
   val thumbWidth: Int,
   val thumbHeight: Int,
   val bigThumbWidth: Int,
-  val rssLimit: Int,
-  val articlesInRss: Boolean,
   val similarLimit: Int,
   val sortByDate: Boolean,
   val articlesMustBeSorted: Boolean,
@@ -110,13 +110,12 @@ object Blog {
       cfg(key).trim
     }
     def cfgStr (key: String, default: String) = cfg.getOrElse(key, default).trim
-    def cfgBool(key: String, default: Boolean) = {
-      val str = cfgStr(key, default.toString)
-      try str.toBoolean catch {
-        case e: java.lang.IllegalArgumentException =>
-          throw new ConfigurationException(s"$key: expected boolean, '$str' given")
+    def cfgBool(key: String, default: Boolean) =
+      cfgStr(key, default.toString).toLowerCase match {
+        case "true"  | "on"  | "yes" | "1" => true
+        case "false" | "off" | "no"  | "0" => false
+        case str => throw new ConfigurationException(s"$key: expected boolean, '$str' given")
       }
-    }
     def cfgInt (key: String, default: Int) = {
       val str = cfgStr(key, default.toString)
       try str.toInt catch {
@@ -125,6 +124,8 @@ object Blog {
       }
     }
 
+    def check[T](x: T)(f: T => Boolean)(message: T => String) = { require(f(x), message(x)); x }
+    def alts(str: String, alternatives: Map[String, String]) = alternatives.getOrElse(str, str)
     def initClass[T](line: String): T = {
       val Array(clazz, args @ _*) = line.split(" ")
       Class.forName(clazz)
@@ -132,38 +133,44 @@ object Blog {
         .newInstance(args: _*).asInstanceOf[T],
     }
 
-    def alts(str: String, alternatives: Map[String, String]) = alternatives.getOrElse(str, str)
+    val hooks                  = initClass[Hooks](cfgStr("hooks", "asciiblog.NoHooks"))
+    val markup                 = initClass[Markup](alts(cfgStr("markup", "asciiblog.AsciiMarkup"), Map(
+        "html" -> "asciiblog.HTMLMarkup", "ascii" -> "asciiblog.AsciiMarkup",
+        "HTML" -> "asciiblog.HTMLMarkup", "ASCII" -> "asciiblog.AsciiMarkup")))
+
 
     val b = new Blog(
       title                  = cfgStr_!("title"),
       baseUrl                = cfgStr_!("baseUrl"),
       imageRoot              = cfgStr ("imageRoot", ""),
       files                  = inline ++ spaceSeparatedStrings(cfgStr("files", "")).flatMap(f => globFiles(f, cfgDirectory)), // relative paths are relative to config file
-      imageDir               = cfg.get("imageDir").fold(cfgDirectory)(f => if (f.isEmpty) cfgDirectory else newFile(f, cfgDirectory)),
+      imageDir               = cfg.get("imageDir").fold(cfgDirectory)(f => if (f.isEmpty) cfgDirectory else newFile(f.trim, cfgDirectory)),
       localImages            = cfgBool("localImages", true),
       encoding               = cfgStr ("encoding", "utf-8"),
-      outDir                 = cfg.get("outDir").map(f => newFile(f, cfgDirectory)).getOrElse(null),
-      articlesOnIndex        = cfgInt ("fullArticlesOnIndex", 5),
-      groupArchiveBy         = cfgStr ("groupArchiveBy", "year").ensuring(f => f == "year" || f == "month" || f == "none" || f.matches("\\d+"),
-        "groupArchiveBy must be set to 'year', 'month', 'none' or some integer"),
-      archiveFormat          = cfgStr ("archiveFormat", "link") .ensuring(f => f == "link" || f == "short",
-        "archiveFormat must be set to 'year' or 'month'"),
-      tagFormat              = cfgStr ("tagFormat", "link")     .ensuring(f => f == "link" || f == "short",
-        "tagFormat must be set to 'link' or 'short'"),
+      outDir                 = cfg.get("outDir").map(f => newFile(f.trim, cfgDirectory)).getOrElse(null),
+
+      groupArchiveBy         = check(cfgStr("groupArchiveBy", "year"))
+        (f => f == "year" || f == "month" || f == "none" || f.matches("\\d+"))
+        (f => s"groupArchiveBy must be set to 'year', 'month', 'none' or some integer, '$f' given"),
+
+      indexCfg               = cfgStr("index",   "full 5\narchive").lines.map(_.trim).toVector,
+      archiveCfg             = cfgStr("archive", "link").lines.map(_.trim).toVector,
+      tagsCfg                = cfgStr("tags",    "link").lines.map(_.trim).toVector,
+      rssCfg                 = cfgStr("rss",     "link").lines.map(_.trim).toVector,
+      rssTagsCfg             = cfgStr("rssTags", "link").lines.map(_.trim).toVector,
+
       cssStyle               = cfgStr ("style", ""),
-      cssFile                = cfg.get("cssFile").map(f => newFile(f, cfgDirectory)).getOrElse(null),
+      cssFile                = cfg.get("cssFile").map(f => newFile(f.trim, cfgDirectory)).getOrElse(null),
       header                 = cfgStr ("header", ""),
       footer                 = cfgStr ("footer", ""),
       thumbWidth             = cfgInt ("thumbnailWidth", 150),
       thumbHeight            = cfgInt ("thumbnailHeight", 100),
       bigThumbWidth          = cfgInt ("bigThumbnailWidth", 800),
-      rssLimit               = cfgInt ("rssLimit", Int.MaxValue),
-      articlesInRss          = cfgBool("fullArticlesInRss", false),
       similarLimit           = cfgInt ("similarLinksLimit", 5),
       sortByDate             = cfgBool("sortByDate", false),
       articlesMustBeSorted   = cfgBool("articlesMustBeSorted", false),
       articlesMustNotBeMixed = cfgBool("articlesMustNotBeMixed", false),
-      language               = cfgStr ("language", "en"),
+      language               = cfgStr ("language", "en").trim,
       fileSuffix             = cfgStr ("fileSuffix", ".html"),
       imageMarker            = cfgStr ("imageMarker", ""),
       albumsDir              = cfgStr ("albumsDir", ""),
@@ -182,10 +189,8 @@ object Blog {
       args                   = args,
       translation            = translation ++ cfg.collect { case (k, v) if k.startsWith("translation.") => k.split("\\.", 2)(1) -> v } ,
 
-      hooks                  = initClass[Hooks](cfgStr("hooks", "asciiblog.NoHooks")),
-      markup                 = initClass[Markup](alts(cfgStr("markup", "asciiblog.AsciiMarkup"), Map(
-        "html" -> "asciiblog.HTMLMarkup", "ascii" -> "asciiblog.AsciiMarkup",
-        "HTML" -> "asciiblog.HTMLMarkup", "ASCII" -> "asciiblog.AsciiMarkup"))),
+      hooks                  = hooks,
+      markup                 = markup,
 
       printTiming            = cfgBool("printTiming", false),
       printErrors            = cfgBool("printErrors", true),
@@ -220,7 +225,7 @@ object Blog {
       val (s, rest) = str.drop(1).span(_ != '"')
       s +: spaceSeparatedStrings(rest.drop(1).trim)
     case _ =>
-      val (s, rest) = str.span(_ != ' ')
+      val (s, rest) = str.span(!_.isWhitespace)
       s +: spaceSeparatedStrings(rest.trim)
   }
 }
@@ -423,8 +428,8 @@ case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
 object MakeFiles {
 
   private val keyVal: PartialFunction[String, (String, String)] = {
-    case s if s.split(" ", 2).length == 2 =>
-      val Array(k, v) = s.split(" ", 2); (k, v)
+    case s if s.split("\\s+", 2).length == 2 =>
+      val Array(k, v) = s.split("\\s+", 2); (k, v)
     case s if !s.contains(" ") && s.endsWith("!") =>
       (s, "")
   }
@@ -454,7 +459,6 @@ object MakeFiles {
     }
   }
   def keyValuesIterator(f: File, enc: String) = io.Source.fromFile(f, enc).getLines.collect(keyVal)
-  def keyValuesMap(f: File) = keyValuesIterator(f, "utf-8").toMap // TODO
 
   lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js"), "utf8").mkString)
   lazy val commentsScript = io.Source.fromFile(file("comments.php")).mkString
@@ -494,7 +498,7 @@ object MakeFiles {
   def initBlog(args: Array[String]): Blog = {
     val cfgFile = new File(args(0))
     val cfg = readConfig(cfgFile)
-    val txl = keyValuesMap(file("lang."+cfg.getOrElse("language", "en")))
+    val txl = keyValuesIterator(file("lang."+cfg.getOrElse("language", "en").trim), "utf-8").toMap
     Blog.populate(cfg, args, txl, cfgFile)
   }
 
@@ -836,8 +840,9 @@ object MakeFiles {
               val url = if (a.link == null || a.link.isEmpty) blog.addParamMediumFeed(blog.absUrlFromSlug(a.slug)) else a.link // TODO?
               w.element("guid", Seq(("isPermaLink", "true")), url)
               w.element("pubDate", rssdate(a.date))
-              if (mkBody != null) {
-                w.element("description", mkBody(a))
+              val body = mkBody(a)
+              if (body.nonEmpty) {
+                w.element("description", body)
               }
               for (t <- a.tags.visible) {
                 w.element("category", t.title)
@@ -1325,6 +1330,8 @@ object MakeFiles {
   def makeFiles(blog: Blog, base: Base, resolver: String => String, changedSlugs: Set[Slug]) = try {
     implicit val _blog = blog
 
+    val layoutMill: LayoutMill = new FlowLayoutMill(base, blog, resolver)
+
     val save = new Saver(blog, changedSlugs, {
       val f = new File(blog.outDir, ".files")
       if (!f.exists) Map()
@@ -1332,14 +1339,7 @@ object MakeFiles {
     })
 
 
-    // this madness split articles on feed into three groups
-    // - `fulls` - articles to display in full on index
-    // - `links` - articles to display in short form (either summary or link only)
-    // - `archivePages` - archive pages grouping articles by some criteria
-    //   (year, month, none, number). Those articles might or might not be
-    //   included in two previous groups.
-    val (fulls, rest) = base.feed.splitAt(blog.articlesOnIndex)
-    val (links, archivePages) = timer("group archive", blog) {
+    val archivePages: Seq[(Article, Seq[Article])] = timer("group archive", blog) {
 
       def chunk(as: Vector[Article])(g: LocalDateTime => (Int, Int))(f: ((Int, Int)) => Article): Vector[(Article, Vector[Article])] =
         as.groupBy { a => if (a.date == null) (0,0) else g(a.date) }.toVector.sortBy(_._1).reverse.map { case (t, as) => (f(t), as) }
@@ -1353,47 +1353,29 @@ object MakeFiles {
 
       blog.groupArchiveBy match {
         case "month" =>
-          val grouping = chunk(base.feed)(yearmonth) { case (y, m) =>
+          chunk(base.feed)(yearmonth) { case (y, m) =>
             Article(if (y > 0) s"$title $m/$y" else s"$title ($undated)", s"index-$y-$m", dates = mkDate(y, m))
           }
-          (grouping.headOption.map(_._2).getOrElse(Seq()).drop(blog.articlesOnIndex), grouping)
 
         case "year" =>
-          val grouping = chunk(rest)(yearJanuary) { case (y, _) =>
+          chunk(base.feed)(yearJanuary) { case (y, _) =>
             Article(if (y > 0) s"$title $y" else s"$title ($undated)", s"index-$y", dates = mkDate(y, 1))
           }
-          (grouping.headOption.map(_._2).getOrElse(Seq()), grouping)
 
-        case "none"  =>
-          (rest, Vector())
+        case "none" =>
+          Vector()
 
         case num if num.matches("\\d+") =>
           val len = num.toInt
-          val grouping = rest.reverse.grouped(len).toVector.zipWithIndex.map { case (as, i) =>
+          base.feed.reverse.grouped(len).toVector.zipWithIndex.map { case (as, i) =>
             (Article(s"$title #${i*len+1}-${(i+1)*len}", "index-"+(i+1)), as.reverse)
           }.reverse
-
-          (grouping.head._2, grouping.tail)
       }
     }
 
-    val layout: LayoutMill = new FlowLayoutMill(base, blog, blog.markup, resolver)
 
-    timer("generate and save files", blog) {
-    timer("generate and save files - archive", blog) {
-    val archiveLinks = archivePages.zipWithIndex.map { case ((a, as), idx) =>
-      save(as, blog.relUrl(a)) {
-        val l = layout.make(blog.absUrl(a))
-        val prev = archivePages.lift(idx-1).map(_._1).getOrElse(null)
-        val next = archivePages.lift(idx+1).map(_._1).getOrElse(null)
-        val body = l.addArrows(l.makeIndexArchive(a, as), prev, next)
-        l.makePage(body, containImages = as.exists(_.hasImageMarker))
-      }
-      a
-    }
-
-    def lastYearTags = {
-      val yearAgo = LocalDateTime.now().minusYears(1)
+    def lastTags(count: Int, days: Int) = {
+      val yearAgo = LocalDateTime.now().minusDays(days)
       val thisYearArticles = base.all.filter(a => a.date != null && a.date.isAfter(yearAgo))
       val articles = if (thisYearArticles.size >= 30) thisYearArticles else base.feed.take(30)
 
@@ -1402,31 +1384,77 @@ object MakeFiles {
         .groupBy(a => a).toSeq
         .filter { case (_, ts) => ts.size >= 3 }
         .sortBy { case (_, ts) => ~ts.size }
-        .take(25)
+        .take(count)
         .map { case (t, _) => base.allTags(t)._1 }
+    }
+
+
+    def mkPagePart(line: String, articles: Seq[Article], layout: Layout, base: Base) =
+      line.split("\\s+") match {
+        case Array(part @ ("full" | "fullArticles" | "summary" | "summaries" | "link" | "links"), args @ _*) =>
+
+          val (from, until) = args.map(_.toInt) match {
+            case Seq(f, u) => (f, u)
+            case Seq(u)    => (0, u)
+            case Seq()     => (0, Int.MaxValue/4)
+          }
+
+          part match {
+            case "full" | "fullArticles" => PagePart.FullArticles(articles.slice(from, until))
+            case "summary" | "summaries" => PagePart.Summaries(articles.slice(from, until))
+            case "link" | "links"        => PagePart.Links(articles.slice(from, until))
+          }
+
+        case Array("includeBody", slugs @ _*) =>
+          PagePart.Text(slugs.map(base.bySlug).map(layout.makeArticleBody).mkString("\n"))
+
+        case Array("includeFull", slugs @ _*) =>
+          PagePart.Text(slugs.map(base.bySlug).map(layout.makeArticle).mkString("\n"))
+
+        case Array("includeSummary", slugs @ _*) =>
+          PagePart.Text(slugs.map(base.bySlug).map(layout.makeSummary).mkString("\n"))
+
+        case Array("tags", args @ _*) =>
+          val Seq(cnt, days) = Seq.tabulate(2) { args.map(_.toInt).orElse(Seq(20, 365)) }
+          PagePart.Tags(lastTags(cnt, days))
+
+        case Array("archive") => PagePart.Archive(archivePages.map(_._1), blog.groupArchiveBy)
+
+        case Array(part, args @ _*) =>
+          blog.hooks.makePagePart(base, blog, layout, part, args.tail.mkString(" "))
+      }
+
+    def mkBody(cfg: Seq[String]) =
+      cfg.head.split("\\s+").head match {
+        case "full" | "fullArticles" => (a: Article) => FlowLayout.updateLinks(layoutMill.make(null).makeArticleBody(a), blog.addParamMediumFeed)
+        case "summary" | "summaries" => (a: Article) => FlowLayout.updateLinks(layoutMill.make(null).makeSummaryBody(a), blog.addParamMediumFeed)
+        case "link" | "links"        => (a: Article) => ""
+      }
+
+    val rssLimit = blog.rssCfg.head.split("\\s+").lift(1).getOrElse("10").toInt
+
+
+
+    timer("generate and save files", blog) {
+    timer("generate and save files - archive", blog) {
+    val archiveLinks = archivePages.zipWithIndex.map { case ((a, as), idx) =>
+      save(as, blog.relUrl(a)) {
+        val l = layoutMill.make(blog.absUrl(a))
+        val prev = archivePages.lift(idx+1).map(_._1).getOrElse(null)
+        val next = archivePages.lift(idx-1).map(_._1).getOrElse(null)
+        val parts = blog.archiveCfg.map(line => mkPagePart(line, as, l, base))
+        val body = l.makeArchive(a.copy(prev = prev, next = next), parts)
+        l.makePage(body, containImages = as.exists(_.hasImageMarker))
+      }
+      a
     }
 
     val path = blog.relUrlFromSlug("index")
     save(null, path) {
-      val l = layout.make(blog.absUrlFromPath(path))
-      val body = l.makeIndex(fulls, links, archiveLinks, blog.groupArchiveBy, tagsToShow = lastYearTags)
-      l.makePage(body, containImages = fulls.exists(_.images.nonEmpty))
-    }
-    }
-
-    timer("generate and save files - image pages", blog) {
-    val groupedImages = base.images.reverse.grouped(100).toVector.zipWithIndex.reverse
-    val imgsPages = groupedImages.map { case (images, idx) =>
-      val isFirst = idx == (groupedImages.size-1)
-      Article(s"imgs ${idx+1}", if (isFirst) "imgs" else s"imgs-${idx+1}", text = AsciiText.empty, images = images)
-    }
-
-    imgsPages.zipWithIndex foreach { case (a, idx) =>
-      var l = layout.make(blog.absUrl(a))
-      val prev = imgsPages.lift(idx-1).getOrElse(null)
-      val next = imgsPages.lift(idx+1).getOrElse(null)
-      val body = l.addArrows(l.makeFullArticle(a), prev, next)
-      save(null, blog.relUrl(a))(l.makePage(body, a.title, containImages = true))
+      val l = layoutMill.make(blog.absUrlFromPath(path))
+      val indexParts = blog.indexCfg.map(line => mkPagePart(line, base.feed, l, base))
+      val body = l.makeIndex(indexParts)
+      l.makePage(body, containImages = true) // TODO
     }
     }
 
@@ -1434,7 +1462,7 @@ object MakeFiles {
     base.articles foreach { a =>
       if (a.link == null || a.link.isEmpty) { // TODO?
         save(Seq(a), blog.relUrl(a)) {
-          var l = layout.make(blog.absUrl(a))
+          var l = layoutMill.make(blog.absUrl(a))
           val aa = a.imagesWithoutArticleTags
           val body = l.makeFullArticle(aa)
           l.makePage(body, aa.title, containImages = aa.images.exists(_.zoomable), headers = l.ogTags(aa))
@@ -1445,31 +1473,34 @@ object MakeFiles {
 
     timer("generate and save files - tags", blog) {
     base.allTags foreach { case (t, (a, as)) =>
-      var l = layout.make(blog.absUrl(a))
-      val body = l.makeFullArticle(a.imagesWithoutArticleTags)
+      var l = layoutMill.make(blog.absUrl(a))
+
+      val linked = a.slugsOfLinkedArticles(blog).toSet
+      val list = as.filter(a => !linked.contains(a.asSlug) && !a.isTag)
+      val parts = blog.tagsCfg.map(line => mkPagePart(line, list, l, base))
+
+      val body = l.makeFullArticle(a.imagesWithoutArticleTags, parts)
       val hasImages = a.images.nonEmpty || as.exists(_.images.nonEmpty)
+
       save(as :+ a, blog.relUrl(a))(l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")))
-      save(as :+ a, a.slug+".xml")(makeRSS(as.take(blog.rssLimit), null, blog.absUrlFromPath(a.slug+".xml")))
+      save(as :+ a, a.slug+".xml")(makeRSS(as.take(rssLimit), mkBody(blog.rssTagsCfg), blog.absUrlFromPath(a.slug+".xml")))
     }
 
     {
       val path = blog.relUrlFromSlug("tags")
-      val l = layout.make(blog.absUrlFromPath(path))
-      val tags: Seq[(Article, Seq[Article])] = base.allTags.values.toVector
+      val l = layoutMill.make(blog.absUrlFromPath(path))
+      val tags: Seq[(Article, Int)] = base.allTags.values.toVector
         .filter { case (t, as) => t.images.size > 0 || as.size > 0 }
-        .sortBy { case (t, as) => (~as.size, t.slug) }
+        .map    { case (t, as) => (t, as.size) }
+        .sortBy { case (t, c)  => (~c, t.slug) }
       save(null, path)(l.makePage(l.makeTagIndex(tags)))
     }
     }
 
-    def mkBody(a: Article) = {
-      val body = layout.make(null).makeArticleBody(a)
-      FlowLayout.updateLinks(body, url => blog.addParamMediumFeed(url))
-    }
-    save(null, "rss.xml")(makeRSS(base.feed.take(blog.rssLimit), if (blog.articlesInRss) mkBody else null, blog.absUrlFromPath("rss.xml")))
+    save(null, "rss.xml")(makeRSS(base.feed.take(rssLimit), mkBody(blog.rssCfg), blog.absUrlFromPath("rss.xml")))
 
     if (blog.allowComments) {
-      val l = layout.make(blog.absUrlFromPath("comments.php"))
+      val l = layoutMill.make(blog.absUrlFromPath("comments.php"))
       val p = l.makePage("{comments.body}", null, false,  null, includeCompleteStyle = true)
       val Array(pre, post) = p.split(Regex.quote("{comments.body}"))
 

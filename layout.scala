@@ -14,14 +14,24 @@ trait LayoutMill {
 }
 
 trait Layout extends ImageLayout {
-  val baseUrl: String
+  def baseUrl: String
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false, article: Option[Article] = None): String
-  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveBy: String, tagsToShow: Seq[Article] = Seq()): String
-  def makeIndexArchive(a: Article, articles: Seq[Article]): String
-  def makeFullArticle(a: Article): String
+
+  def makeIndex(parts: Seq[PagePart]): String
+  def makeArchive(a: Article, parts: Seq[PagePart]): String
+  def makeFullArticle(a: Article, parts: Seq[PagePart] = Seq()): String
+  def makeTagIndex(tags: Seq[(Article, Int)]): String
+
+  // Bare article body, no title, no links to related articles, no tags. This method is used in RSS feeds.
   def makeArticleBody(a: Article): String
-  def makeTagIndex(tags: Seq[(Article, Seq[Article])]): String
-  def addArrows(content: String, next: Article, prev: Article): String
+  def makeSummaryBody(a: Article): String
+
+  def makeArticle(a: Article): String = ???
+  def makeSummary(a: Article): String
+  def makeLink(a: Article): String = ???
+
+  def makeSummrayList(as: Seq[Article]) = ???
+  def makeLinkList(as: Seq[Article]) = ???
 
   def articleUrl(a: Article): String
   def articleLink(a: Article, title: String, asLink: Boolean = true, imgMarker: Boolean = false): String
@@ -35,9 +45,20 @@ trait ImageLayout {
 }
 
 
+sealed trait PagePart
+object PagePart {
+  case class FullArticles(articles: Seq[Article]) extends PagePart
+  case class Summaries(articles: Seq[Article]) extends PagePart
+  case class Links(articles: Seq[Article]) extends PagePart
+  case class Tags(tags: Seq[Article]) extends PagePart
+  case class Archive(archive: Seq[Article], groupedBy: String) extends PagePart
+  case class Text(txt: String) extends PagePart
+}
 
-class FlowLayoutMill(base: Base, blog: Blog, markup: Markup, val resolver: String => String) extends LayoutMill {
-  def make(baseUrl: String): FlowLayout = FlowLayout(baseUrl, base, blog, markup, this)
+
+
+class FlowLayoutMill(base: Base, blog: Blog, val resolver: String => String) extends LayoutMill {
+  def make(baseUrl: String): FlowLayout = FlowLayout(baseUrl, base, blog, this)
 
   private def inlineStyles = s"""
 a          { color: inherit; }
@@ -89,7 +110,7 @@ object FlowLayout {
 }
 
 
-case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, mill: FlowLayoutMill) extends Layout {
+case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutMill) extends Layout {
   import FlowLayout._
 
   def rel(url: String): String = blog.relativize(url, baseUrl)
@@ -190,27 +211,41 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     body
   }
 
-  def makeIndex(fullArticles: Seq[Article], links: Seq[Article], archiveLinks: Seq[Article] = Seq(), groupArchiveBy: String, tagsToShow: Seq[Article] = Seq()): String =
-    blog.hooks.indexPrepend(base, blog, this, fullArticles)+
-    fullArticles.take(1).map(_makeFullArticle(_, true)).mkString("\n")+
-    blog.hooks.afterFirstArticle(base, blog, this, fullArticles)+
-    (if (tagsToShow.nonEmpty) "<aside>"+tagsToShow.map(makeTagLink).mkString(" ")+"</aside>" else "")+
-    fullArticles.drop(1).map(_makeFullArticle(_, true)).mkString("\n")+
-    listOfLinks(links, blog.archiveFormat == "short")+"<br>"+
-    (
-      groupArchiveBy match {
-        case "year"  => "<div style=clear:both>"+archiveLinks.map(a => articleLink(a, a.title)).mkString("<br>")+"</div>"
-        case "month" => "<div style=clear:both>"+groupArchive(archiveLinks)+"</div>"
-        case _       => "<div style=clear:both>"+listOfLinks(archiveLinks, false)+"</div>"
-      }
-    )
+  def makeIndex(parts: Seq[PagePart]): String =
+    renderParts(parts)
 
-  def makeIndexArchive(a: Article, articles: Seq[Article]): String =
+
+
+
+  def makeArchive(a: Article, parts: Seq[PagePart]): String =
+    makeNextPrevArrows(a.next, a.prev)+
     "<article>"+
-    "<h2>"+a.title+"</h2><br><br>"+
-    listOfLinks(articles, blog.archiveFormat == "short")+"<br>"+
-    "</article>"
+    "<h2>"+util.escape(a.title)+"</h2><br><br>"+
+    renderParts(parts)+
+    "</article>"+
+    makeNextPrevArrows(a.next, a.prev)
 
+
+  private def renderParts(parts: Seq[PagePart]): String =
+    parts.map(renderPart).mkString("\n")
+
+  private def renderPart(part: PagePart): String =
+    part match {
+      case PagePart.FullArticles(articles) =>
+        articles.map(a => _makeFullArticle(a, true, Seq())).mkString("\n")
+      case PagePart.Summaries(articles) =>
+        listOfSummaries(articles)
+      case PagePart.Links(articles) =>
+        listOfLinks(articles)
+      case PagePart.Tags(tags) =>
+        "<aside>"+tags.map(makeTagLink).mkString(" ")+"</aside>"
+      case PagePart.Archive(archive, groupedBy) =>
+        groupedBy match {
+          case "year"  => "<div style=clear:both>"+archive.map(a => articleLink(a, a.title)).mkString("<br>")+"</div>"
+          case "month" => "<div style=clear:both>"+groupArchive(archive)+"</div>"
+        }
+      case PagePart.Text(txt) => txt
+    }
 
   private def groupArchive(archiveLinks: Seq[Article]) = {
     val (undated, dated) = archiveLinks.partition(_.date == null)
@@ -228,39 +263,32 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     undated.map { a => "<br>"+articleLink(a, txl("undated")) }.mkString
   }
 
-  def makeFullArticle(a: Article): String = _makeFullArticle(a, false)
+  def makeFullArticle(a: Article, parts: Seq[PagePart] = Seq()): String = _makeFullArticle(a, false, parts)
 
-  // Bare article body, no title, no links to related articles, no tags. This method is used in RSS feeds.
   def makeArticleBody(a: Article): String = {
     a.text.render(this, rel)+
-    ifs(a.isTag, {
-      val linked = a.slugsOfLinkedArticles(blog).toSet
-      listOfLinks(base.allTags(a.asTag)._2.filter(a => !linked.contains(a.asSlug) && !a.isTag), blog.tagFormat == "short")
-    })+
     a.extraImages.map { img => imgTag(img.asSmallThumbnail, if (img.localSource != null) img.localSource.text else a.text) }.mkString(" ")
   }
 
 
-  def listOfLinks(list: Seq[Article], shortArticles: Boolean) =
-    if (shortArticles) list.map(makeShortArticle).mkString+"<br>&nbsp;"
-    else {
-      val l = blog.hooks.list(base, blog, this, list)
-      if (l != null) l else list.map(makeLink).mkString("<br>")+"<br>"
-    }
+  def listOfLinks(list: Seq[Article]) = {
+    val l = blog.hooks.list(base, blog, this, list)
+    if (l != null) l else list.map(makeLink).mkString("<br>")+"<br>"
+  }
 
-  def rowOfLinks(list: Seq[Article]) =
-    list.map(a => articleLink(a, a.title)).mkString(", ")
+  def listOfSummaries(list: Seq[Article]) =
+    list.map(makeSummary).mkString("\n")+"\n"
 
-  def makeShortArticle(a: Article): String = "<div class=sh>"+makeTitle(a)+"<br>"+makeShortArticleBody(a)+"</div>"
+  def makeSummary(a: Article): String = "<div class=sh>"+makeTitle(a)+"<br>"+makeSummaryBody(a)+"</div>"
 
-  def makeShortArticleBody(a: Article): String = {
+  def makeSummaryBody(a: Article): String = {
     val img = a.images.find(_.mods == "main").map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
     val txt = truncate(plaintextDescription(a), 300)
 
     ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
   }
 
-  private def _makeFullArticle(a: Article, compact: Boolean): String = {
+  private def _makeFullArticle(a: Article, compact: Boolean, parts: Seq[PagePart]): String = {
     val title = blog.hooks.title(base, blog, this, a, compact)
 
     "<article>"+
@@ -271,13 +299,14 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
       val sub = base.allTags(a.asTag)._2.filter(_.isTag)
       ifs(sub.nonEmpty || sup.nonEmpty, {
         "<div style=font-size:0.85em>"+
-        ifs(sup.nonEmpty, txl("supersections")+" "+rowOfLinks(sup)+" ")+
-        ifs(sub.nonEmpty, txl("subsections")  +" "+rowOfLinks(sub))+
+        ifs(sup.nonEmpty, txl("supersections")+" "+sup.map(articleLink(_)).mkString(", ")+" ")+
+        ifs(sub.nonEmpty, txl("subsections")  +" "+sub.map(articleLink(_)).mkString(", "))+
         "</div>"
       })
     })+
     ifs(title == null, "<br>\n")+
     makeArticleBody(a)+
+    renderParts(parts)+
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
     "</article>"+
     ifs(!compact,
@@ -304,32 +333,33 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
     )
   }
 
-  def makeTagIndex(tags: Seq[(Article, Seq[Article])]) =
-    tags.map { case (t, as) => makeTagLink(t)+" ("+as.size+")" }.mkString(" ")
-
-  def addArrows(content: String, next: Article, prev: Article) =
-    makeNextPrevArrows(next, prev)+content+makeNextPrevArrows(next, prev)
+  def makeTagIndex(tags: Seq[(Article, Int)]) =
+    tags.map { case (t, count) => makeTagLink(t)+" ("+count+")" }.mkString(" ")
 
   private def makeDateWithLinkToPubBy(a: Article, asLink: Boolean) =
-    if (a.pubBy != null && !asLink) articleLink(a.pubBy, makeDate(a))
-    else makeDate(a)
+    if (a.pubBy != null && !asLink) articleLink(a.pubBy, makeDate(a)) else makeDate(a)
 
   def makeTitle(a: Article, asLink: Boolean = true) =
     makeDateWithLinkToPubBy(a, asLink)+" <h2>"+articleLink(a, a.title, asLink)+"</h2>"
 
-  def articleUrl(a: Article) = if (a.link != null) a.link else rel(blog.absUrl(a))
+  def articleUrl(a: Article) = rel(articleAbsUrl(a))
+  def articleAbsUrl(a: Article) = if (a.link != null) a.link else blog.absUrl(a)
 
-  def articleLink(a: Article, title: String, asLink: Boolean = true, imgMarker: Boolean = false) =
-    "<i>"+(if (a.link != null || asLink) aTag(title, articleUrl(a)) else title)+"</i>"+ifs(imgMarker && a.hasImageMarker, blog.imageMarker)
+  def articleLink(a: Article, title: String = null, asLink: Boolean = true, imgMarker: Boolean = false) = {
+    val _title = util.escape(if (title == null) a.title else title)
+    "<i>"+(if (a.link != null || asLink) aTag(_title, articleAbsUrl(a)) else _title)+"</i>"+ifs(imgMarker && a.hasImageMarker, blog.imageMarker)
+  }
 
-  def makeLink(a: Article) = {
+  override def makeLink(a: Article) = {
     val title = blog.hooks.listTitle(base, blog, this, a)
     if (title != null) title else makeDate(a)+" "+articleLink(a, a.title, imgMarker = true)
   }
 
   def makeTagLink(t: Article) =
-    if (!t.isSupertag) "#<i>"+aTag(t.title, blog.absUrl(t))+"</i>"
-    else            "<b>#<i>"+aTag(t.title, blog.absUrl(t))+"</i></b>"
+    if (!t.isSupertag) "#<i>"+aTag(util.escape(t.title), blog.absUrl(t))+"</i>"
+    else            "<b>#<i>"+aTag(util.escape(t.title), blog.absUrl(t))+"</i></b>"
+
+  def makeTagLinks(tags: Seq[Article]) = tags.map(makeTagLink).mkString(" ")
 
   def makeNextPrevArrows(prev: Article, next: Article) =
     "<span class=f>"+
@@ -339,8 +369,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, markup: Markup, m
 
   def aTag(title: String, href: String) = 
     "<a href="+util.quoteHTMLAttribute(rel(href))+">"+title+"</a>"
-
-  def makeTagLinks(tags: Seq[Article]) = tags.map(makeTagLink).mkString(" ")
 
   private val shortDate = DateTimeFormatter.ofPattern("d. M.")
   private val longDate  = DateTimeFormatter.ofPattern("d. M. yyyy")

@@ -13,9 +13,9 @@ class CustomHooks extends NoHooks {
     base.feed.slice(drop, 60+drop).filter(a => plus(a) > 0).sortBy{ a => (plus(a), a.date) }.reverse.take(14)
   }
 
-  override def afterFirstArticle(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = {
+  def makeHighlights(blog: Blog, base: Base, layout: Layout) = {
     val selection = plusArticles(7, base)
-    if (selection.nonEmpty) {
+    val html = (if (selection.nonEmpty) {
       "<style>@media screen and (max-width: 800px){ .side {display:none} }</style>"+
       "<div class=side style='padding:2em; font-size:0.85em'>"+
       "<div><b>"+blog.translation.getOrElse("dontOverlook", "nepřehlédněte")+"</b></div>"+
@@ -23,7 +23,12 @@ class CustomHooks extends NoHooks {
         "<span>"+layout.articleLink(a, a.title, true, false)+"</span> "
       }.mkString+
       "</div>"
-    } else ""
+    } else "")
+    PagePart.Text(html)
+  }
+
+  override def makePagePart(base: Base, blog: Blog, layout: Layout, name: String, args: String): PagePart = name match {
+    case "highlights" => makeHighlights(blog, base, layout)
   }
 
   // nicer title
