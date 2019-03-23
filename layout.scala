@@ -43,7 +43,7 @@ class FlowLayoutMill(base: Base, blog: Blog, markup: Markup, val resolver: Strin
 a          { color: inherit; }
 .r         { text-align: right; }
 .f         { float: right; }
-.b         { max-width: 46em; font-family: monospace; line-height: 1.3; }
+.b         { max-width: 46em; font-family: sans-serif; line-height: 1.3; margin: 0 auto; }
 blockquote { margin:0; padding:0; font-style:italic; }
 .about     { text-decoration: dotted underline; }
 .thz, .thr, .fr, .main
@@ -59,8 +59,8 @@ hr         { border: 0; border-top: 1px dotted gray; margin: .8em 4em; }
 p          { margin: 1.4em 0; }
 .sh        { float: left; clear: both; margin: .8em 0; }
 .shimg     { float: left; margin: 0 .5em 0 0; }
-footer     { font-size: 0.9em; border-top: 1px dashed gray; padding-top: 1em; color: #222; }
-article    { margin-bottom: 4em; }
+footer     { font-size: 0.9em; border-top: 1px dashed gray; padding-top: 1em; color: #222; clear: both; }
+article    { margin: 2em 0 2em 0; }
 aside      { clear:both; margin-bottom: 2em; font-size: .9em; }
 """.trim
 
