@@ -707,34 +707,29 @@ object MakeFiles {
     str.length > 0 && Character.isWhitespace(str.charAt(str.length-1))
 
   def parseArticle(lines: Seq[String])(implicit blog: Blog): Article = {
-    // 25 ms
     var ls = if (lines.exists(lastCharIsWhitespace)) lines.map(l => trailingWS.replaceAllIn(l, "")) else lines
     ls = ls.map{ l => if (l.startsWith("\\=")) l.tail else l }
 
-    // 35 ms
     val titleRegex(xxx, dateTitle, slug) = ls(0)
     val (dateInTitle, title) = parseDatePrefix(dateTitle)
 
-    // 40 ms
     val (metaLines, b) = ls.drop(2).span(l => l.nonEmpty)
     val body = b.slice(b.indexWhere(_.nonEmpty), b.lastIndexWhere(_.nonEmpty)+1)
 
     val _metaLines = metaLines.toArray
 
-    // 190 ms
-    val dates   = chompOne(_metaLines, parseDates, Seq.empty) /* 70 */
-    val tags    = chompMany(_metaLines, parseTags).fold(Tags()){ _ merge _ } /* 41 */
+    val dates   = chompOne(_metaLines, parseDates, Seq.empty)
+    val tags    = chompMany(_metaLines, parseTags).fold(Tags()){ _ merge _ }
     val license = chompOne(_metaLines, parseLicense)
     val links   = chompOne(_metaLines, prefixedLine("link:"))
     val authors = chompOne(_metaLines, prefixedLine("by:"), blog.defaultUser)
-    val meta    = Meta(chompOne(_metaLines, prefixedList("meta:"), Seq.empty)) /* 27 */
+    val meta    = Meta(chompOne(_metaLines, prefixedList("meta:"), Seq.empty))
     val rels    = chompOne(_metaLines, prefixedList("rel:"), Seq.empty)
     val pubs    = chompOne(_metaLines, prefixedList("pub:"), Seq.empty)
     val aliass  = chompOne(_metaLines, prefixedList("alias:"), Seq.empty)
     val implies = Option(chompOne(_metaLines, prefixedLine("implies:"))).map(x => parseTags(x).visible).getOrElse(Seq.empty)
     val imgtags = Option(chompOne(_metaLines, prefixedLine("imageTags:"))).map(x => parseTags(x).visible).getOrElse(Seq.empty)
 
-    // /--- 23ms
     if (unchompedLines(_metaLines) > 0)
       sys.error("some metainformation was not processed: "+_metaLines.toSeq)
 
@@ -753,7 +748,6 @@ object MakeFiles {
 
     if (links != null)
       require(isAbsolute(links), s"urls in link: field must be absolute ($realSlug)")
-    // \---
 
     new Article(
       title   = if (title.trim.nonEmpty) title.trim else dateTitle.trim,
