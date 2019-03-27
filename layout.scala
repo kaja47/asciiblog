@@ -11,6 +11,7 @@ import util.escape
 
 trait LayoutMill {
   def make(baseUrl: String): Layout
+  def basicStyle: String
 }
 
 trait Layout extends ImageLayout {
@@ -60,7 +61,7 @@ object PagePart {
 class FlowLayoutMill(base: Base, blog: Blog, val resolver: String => String) extends LayoutMill {
   def make(baseUrl: String): FlowLayout = FlowLayout(baseUrl, base, blog, this)
 
-  private def inlineStyles = s"""
+  def basicStyle = s"""
 a          { color: inherit; }
 .r         { text-align: right; }
 .f         { float: right; }
@@ -71,7 +72,7 @@ blockquote { margin:0; padding:0; font-style:italic; }
            { font-size: .8em }
 span.thz   { width: ${blog.thumbWidth}px; display: inline-block; vertical-align: top; }
 span.thr   { width: ${blog.thumbWidth}px; display: inline-block; vertical-align: top; float: right; }
-span.fr    { text-align: right; max-width: 45%; float: right; }
+span.fr    { text-align: right; max-width: 45%; float: right; padding-left: 0.5em; }
 span.main  { text-align: center; display: block; margin-bottom: .5em; }
 span.main img, span.fr img
            { max-width: 100%; }
@@ -81,11 +82,11 @@ p          { margin: 1.4em 0; }
 .sh        { float: left; clear: both; margin: .8em 0; }
 .shimg     { float: left; margin: 0 .5em 0 0; }
 footer     { font-size: 0.9em; border-top: 1px dashed gray; padding-top: 1em; color: #222; clear: both; }
-article    { margin: 2em 0 2em 0; }
-aside      { clear:both; margin-bottom: 2em; font-size: .9em; }
+article    { margin: 2em 0 4em 0; }
+aside      { margin-bottom: 2em; clear:both; font-size: .9em; }
 """.trim
 
-  val css = CSSMinimizeJob(inlineStyles + "\n" + blog.cssStyle)
+  val css = CSSMinimizeJob(basicStyle + "\n" + blog.cssStyle)
 
   val defaultHeader = s"""<div class=r><b><a href="index">${blog.title}</a></b> [<a href="rss.xml">RSS</a>]</div>"""
   val header = new PrepatedText(if (blog.header.nonEmpty) blog.header else defaultHeader, resolver)
