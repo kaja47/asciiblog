@@ -206,7 +206,11 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     "<title>"+ ifs(title, title+" | ")+blog.title+"</title>"+
     rssLink("rss.xml")+
     ifs(headers)+
-    ( if (blog.cssFile == null) "<style>"+mill.css.styleFor(body, !includeCompleteStyle)+"</style>" else "<link rel=stylesheet href="+util.quoteHTMLAttribute(rel("style.css"))+" type=text/css>")+
+    (if (blog.cssFile != null || blog.cssExport)
+      "<link rel=stylesheet href="+util.quoteHTMLAttribute(rel("style.css"))+" type=text/css>"
+    else
+      "<style>"+mill.css.styleFor(body, !includeCompleteStyle)+"</style>"
+    )+
     ifs(containImages, "<script>"+galleryScript+"</script>\n")+
     body
   }

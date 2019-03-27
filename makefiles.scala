@@ -58,6 +58,7 @@ case class Blog (
   val rssCfg: Seq[String],
   val rssTagsCfg: Seq[String],
   val cssStyle: String,
+  val cssExport: Boolean,
   val cssFile: File,
   val header: String,
   val footer: String,
@@ -160,6 +161,7 @@ object Blog {
       rssTagsCfg             = cfgStr("rssTags", "link").lines.map(_.trim).toVector,
 
       cssStyle               = cfgStr ("style", ""),
+      cssExport              = cfgBool("cssExport", false),
       cssFile                = cfg.get("cssFile").map(f => newFile(f.trim, cfgDirectory)).getOrElse(null),
       header                 = cfgStr ("header", ""),
       footer                 = cfgStr ("footer", ""),
@@ -1518,6 +1520,8 @@ object MakeFiles {
 
     if (blog.cssFile != null) {
       save(null, "style.css")(io.Source.fromFile(blog.cssFile).mkString)
+    } else if (blog.cssExport) {
+      save(null, "style.css")(CSSMinimizeJob(layoutMill.basicStyle + "\n" + blog.cssStyle).fullMinimizedStyle)
     }
 
     save(null, "robots.txt")("User-agent: *\nAllow: /")
