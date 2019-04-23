@@ -269,6 +269,14 @@ object util {
       seq.groupBy(f).toSeq.sortBy(_._1)
   }
 
+  def requireConfig(args: Array[String]): args.type = {
+    if (args.length < 1) {
+      println("config file not specified")
+      sys.exit()
+    }
+    args
+  }
+
   def invert[A, B](m: Seq[(A, Seq[B])]): Map[B, Seq[A]] = {
     val res = mutable.Map[B, mutable.ArrayBuffer[A]]()
     for ((a, bs) <- m; b <- bs) { res.getOrElseUpdate(b, new mutable.ArrayBuffer[A]) += a }

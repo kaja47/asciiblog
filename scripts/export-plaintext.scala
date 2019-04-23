@@ -1,11 +1,7 @@
 package asciiblog
 
 object ExportPlaintext extends App {
-
-  if (args.length < 1) {
-    println("config file not specified")
-    sys.exit()
-  }
+  util.requireConfig(args)
 
   val (blog, base, _, _) = MakeFiles.init(args, b => b.copy(printErrors = false, printTiming = false))
 
