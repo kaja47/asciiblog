@@ -135,8 +135,8 @@ object MarkupParser {
     }
 
   val replacements = Seq(
-    "---" -> "&mdash;",
-    "--"  -> "&ndash;",
+    "---" -> "—", // &mdash;
+    "--"  -> "–", // &ndash;
     "..." -> "…",
     "->"  -> "→",
     "<-"  -> "←",
@@ -144,7 +144,9 @@ object MarkupParser {
     "(TM)"-> "™",
     "(R)" -> "®",
     "(C)" -> "©",
-    " - " -> " &ndash; ",
+    " - " -> " – ", // &ndash;
+    "\n- "-> " – ", // &ndash;
+    " -\n"-> " – ", // &ndash;
   )
 
   def findMods(line: String): Option[(Mods, Int)] =
