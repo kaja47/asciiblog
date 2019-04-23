@@ -17,7 +17,7 @@ class TopK[T: Ordering](count: Int) {
       heap.enqueue(x)
     }
   }
-  def getAll   = heap.dequeueAll.reverse
+  def getAll: Seq[T] = heap.dequeueAll.reverse
   def head     = heap.head
   def size     = heap.size
   def nonEmpty = heap.nonEmpty
