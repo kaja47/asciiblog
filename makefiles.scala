@@ -154,11 +154,11 @@ object Blog {
         (f => f == "year" || f == "month" || f == "none" || f.matches("\\d+"))
         (f => s"groupArchiveBy must be set to 'year', 'month', 'none' or some integer, '$f' given"),
 
-      indexCfg               = cfgStr("index",   "full 5\narchive").lines.map(_.trim).toVector,
-      archiveCfg             = cfgStr("archive", "link").lines.map(_.trim).toVector,
-      tagsCfg                = cfgStr("tags",    "link").lines.map(_.trim).toVector,
-      rssCfg                 = cfgStr("rss",     "link").lines.map(_.trim).toVector,
-      rssTagsCfg             = cfgStr("rssTags", "link").lines.map(_.trim).toVector,
+      indexCfg               = cfgStr("index",   "full 5\narchive").linesIterator.map(_.trim).toVector,
+      archiveCfg             = cfgStr("archive", "link").linesIterator.map(_.trim).toVector,
+      tagsCfg                = cfgStr("tags",    "link").linesIterator.map(_.trim).toVector,
+      rssCfg                 = cfgStr("rss",     "link").linesIterator.map(_.trim).toVector,
+      rssTagsCfg             = cfgStr("rssTags", "link").linesIterator.map(_.trim).toVector,
 
       cssStyle               = cfgStr ("style", ""),
       cssExport              = cfgBool("cssExport", false),
@@ -447,7 +447,7 @@ object MakeFiles {
   private def crudelyMinify(js: String) = {
     val rr = "//\\s+s/(.*)/(.*)/\\s*".r
     val pr = "//\\s+prep\\s+(.*)".r
-    val directives = js.lines.takeWhile(_.startsWith("//"))
+    val directives = js.linesIterator.takeWhile(_.startsWith("//"))
 
     val min = js
       .replaceAll("""(?<!let|function|in|of|return)\s+(?!in|of)|/\*.*?\*/|//.*\n""", "")
