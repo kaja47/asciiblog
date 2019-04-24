@@ -25,8 +25,9 @@ libraryDependencies ++= Seq(
   "org.scala-lang.modules"    %% "scala-xml" % "1.0.6",
   "com.maxmind.geoip"         %  "geoip-api" % "1.3.1",
   "org.spire-math"            %% "jawn-ast"  % "0.13.0",
-  "net.sourceforge.cssparser" %  "cssparser" % "0.9.26"
-  //"com.medallia.word2vec" % "Word2VecJava" % "0.10.3"
+  "net.sourceforge.cssparser" %  "cssparser" % "0.9.26",
+  "com.medallia.word2vec" % "Word2VecJava" % "0.10.3"//,
+  //"com.github.jknack"     % "handlebars" % "4.1.2"
 )
 
 fork := true
