@@ -1193,6 +1193,7 @@ object MakeFiles {
 
 
 
+
   def changedArticles(base: Base, blog: Blog): Set[Slug] = {
     import scala.util.hashing.MurmurHash3.{ mix, finalizeHash, mapHash }
 
@@ -1416,7 +1417,7 @@ object MakeFiles {
         case Array("archive") => PagePart.Archive(archivePages.map(_._1), blog.groupArchiveBy)
 
         case Array(part, args @ _*) =>
-          blog.hooks.makePagePart(base, blog, layout, part, args.tail.mkString(" "))
+          blog.hooks.makePagePart(base, blog, layout, part, args.mkString(" "))
       }
 
     def mkBody(cfg: Seq[String]) =
