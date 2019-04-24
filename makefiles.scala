@@ -652,7 +652,7 @@ object MakeFiles {
 
   val tagBlockRegex = """(##|#)\s*(.+?)(?=( |^)(##|#)|$)""".r
   val tagSplitRegex = "\\s*,\\s*".r
-  def isBracketed(x: String) = x.charAt(0) == '(' && x.charAt(x.length-1) == ')'
+  def isBracketed(x: String) = x.length > 2 && x.charAt(0) == '(' && x.charAt(x.length-1) == ')'
   def getTags(s: String): Tags =
     tagBlockRegex.findAllMatchIn(s).foldLeft(Tags()) { (t, m) =>
       val tags = tagSplitRegex.split(m.group(2))
@@ -678,7 +678,7 @@ object MakeFiles {
         sub.whitespaces().ignore()
         val t = sub.until(',').asString().trim
         sub.ignore(1)
-        if (isBracketed(t)) {
+        if (t.length > 0 && isBracketed(t)) {
           hidden += Tag(t.substring(1, t.length-1), supertag)
         } else {
           visible += Tag(t, supertag)
