@@ -84,6 +84,7 @@ p          { margin: 1.4em 0; }
 footer     { font-size: 0.9em; border-top: 1px dashed gray; padding-top: 1em; color: #222; clear: both; }
 article    { margin: 2em 0 4em 0; }
 aside      { margin-bottom: 2em; clear:both; font-size: .9em; }
+pre        { white-space: pre-wrap; overflow-wrap: break-word; }
 """.trim
 
   val css = CSSMinimizeJob(basicStyle + "\n" + blog.cssStyle)
