@@ -379,7 +379,7 @@ class MarkupParser(val lang: String, val processLink: String => String) {
           i = endPos
           sb.append(block.endTag)
           //seenWhitespace = false TODO
-          
+
           if (mods != null && !block.doubleQuotes) {
             sb.insert(outerTagStart+block.attributePos, mkMods(mods))
           }

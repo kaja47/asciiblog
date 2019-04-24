@@ -97,6 +97,7 @@ case class Blog (
   val cfg: Map[String, String] = Map()
 ) extends UrlOps {
   def hasOgTags = twitterSite.nonEmpty || twitterCreator.nonEmpty || openGraph
+  def quiet = copy(printErrors = false, printTiming = false)
 }
 
 
@@ -126,7 +127,7 @@ object Blog {
     }
 
     def check[T](x: T)(f: T => Boolean)(message: T => String) = { require(f(x), message(x)); x }
-    def alts(str: String, alternatives: Map[String, String]) = alternatives.getOrElse(str, str)
+    def alts(str: String, alternatives: Map[String, String]) = alternatives.getOrElse(str.toLowerCase, str)
     def initClass[T](line: String): T = {
       val Array(clazz, args @ _*) = line.split(" ")
       Class.forName(clazz)
@@ -136,8 +137,7 @@ object Blog {
 
     val hooks                  = initClass[Hooks](cfgStr("hooks", "asciiblog.NoHooks"))
     val markup                 = initClass[Markup](alts(cfgStr("markup", "asciiblog.AsciiMarkup"), Map(
-        "html" -> "asciiblog.HTMLMarkup", "ascii" -> "asciiblog.AsciiMarkup",
-        "HTML" -> "asciiblog.HTMLMarkup", "ASCII" -> "asciiblog.AsciiMarkup")))
+        "html" -> "asciiblog.HTMLMarkup", "ascii" -> "asciiblog.AsciiMarkup")))
 
 
     val b = new Blog(
@@ -397,8 +397,8 @@ case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
   lazy val bySlug: Map[String, Article] = all.map(a => (a.slug, a)).toMap
   lazy val articles = all.filter(a => !a.isTag)
   lazy val feed     = all.filter(a => !a.isTag && a.inFeed)
-  lazy val images   = all.sortBy(a => (Option(a.date), a.title)).reverse
-    .flatMap { a => a.images.map(_.copy(inText = false, localSource = a)) }
+  //lazy val images   = all.sortBy(a => (Option(a.date), a.title)).reverse
+  //  .flatMap { a => a.images.map(_.copy(inText = false, localSource = a)) }
 
   lazy val allTags: Map[Tag, (Article, Seq[Article])] = { // [tag -> (article reprsenting this tag, articles tagged by this tag)]
     val imageTagMap: Map[Tag, Seq[(Image, Article)]] = invert(all.flatMap(a => a.images.map(i => ((i, a), i.tags.visible.distinct))))
