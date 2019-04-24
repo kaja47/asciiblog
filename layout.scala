@@ -247,8 +247,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
         "<aside>"+tags.map(makeTagLink).mkString(" ")+"</aside>"
       case PagePart.Archive(archive, groupedBy) =>
         groupedBy match {
-          case "year"  => "<div style=clear:both>"+archive.map(a => articleLink(a, a.title)).mkString("<br>")+"</div>"
-          case "month" => "<div style=clear:both>"+groupArchive(archive)+"</div>"
+          case "year"  => "<div class=archive style=clear:both>"+archive.map(a => articleLink(a, a.title)).mkString("<br>")+"</div>"
+          case "month" => "<div class=archive style=clear:both>"+groupArchive(archive)+"</div>"
         }
       case PagePart.Text(txt) => txt
     }
@@ -311,8 +311,13 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
       })
     })+
     ifs(title == null, "<br>\n")+
-    makeArticleBody(a)+
+    //makeArticleBody(a)+
+    a.text.render(this, rel)+
     renderParts(parts)+
+    ifs(a.extraImages.nonEmpty,
+      "<hr>"+
+      a.extraImages.map { img => imgTag(img.asSmallThumbnail, if (img.localSource != null) img.localSource.text else a.text) }.mkString(" ")
+    )+
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
     "</article>"+
     ifs(!compact,
