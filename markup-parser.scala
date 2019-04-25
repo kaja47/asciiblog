@@ -222,42 +222,6 @@ class MarkupParser(val lang: String, val processLink: String => String) {
     sb.toString
   }
 
-  // TODO hack
-  private[this] var seenWhitespace = false
-
-  // vrátí pozici speciálního znaku nebo str.length, když došlo na konec
-  def nextSpecialCharacter(str: String, from: Int, includingWhitespace: Boolean): Int = {
-    var i = from
-    while (i < str.length) {
-      val ch = str.charAt(i)
-      //if (specialChars.indexOf(ch) != -1) return i
-      if (ch <= largestSpecialChar && specialCharMask(ch)) return i
-      val ws = ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' //  isWhitespace(ch)
-      if (ws) seenWhitespace = true
-      if (ws && includingWhitespace) return i
-      i += 1
-    }
-    i
-  }
-
-  def identifyBlock(str: String, i: Int, outer: MarkupBlock): MarkupBlock = {
-    var j = 0; while (j < blocks.length) {
-      val b = blocks(j)
-
-      if (b.checkStart(str, i) && b != outer) { // its not posible to nest identical blocks
-        if (b.isLongStart(str, i)) {
-          seenWhitespace = false
-          return b
-        } else if (b.tight && b.isCompactStart(str, i)) {
-          return b.asCompact
-        }
-      }
-
-      j += 1
-    }
-    null
-  }
-
   def appendText(str: String, from: Int, to: Int, sb: StringBuilder) = {
     var seg = str.substring(from, to)
     if (lang == "cz")                       { seg = handleCZPrepositions(seg) }
@@ -265,10 +229,10 @@ class MarkupParser(val lang: String, val processLink: String => String) {
     sb.append(seg)
   }
 
-  def blockEnds(str: String, i: Int, outer: MarkupBlock): Boolean = {
+  def blockEnds(str: String, i: Int, outer: MarkupBlock, seenWS: Boolean): Boolean = {
     if (outer.checkEnd(str, i)) {
       if (outer.compact && outer.isEnd(str, i)) return true
-      if (!outer.compact && !seenWhitespace && outer.isCompactEnd(str, i)) return true
+      if (!outer.compact && !seenWS && outer.isCompactEnd(str, i)) return true
       if (!outer.compact && outer.isLongEnd(str, i)) return true
     }
     false
@@ -291,6 +255,40 @@ class MarkupParser(val lang: String, val processLink: String => String) {
   def processMarkup(str: String, pos: Int, sb: StringBuilder, outer: MarkupBlock): ParseResult = {
     var i = pos
 
+    var seenWhitespace = false
+
+    // vrátí pozici speciálního znaku nebo str.length, když došlo na konec
+    def nextSpecialCharacter(str: String, from: Int, includingWhitespace: Boolean): Int = {
+      var i = from
+      while (i < str.length) {
+        val ch = str.charAt(i)
+        if (ch <= largestSpecialChar && specialCharMask(ch)) return i
+        val ws = ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' //  isWhitespace(ch)
+        if (ws) seenWhitespace = true
+        if (ws && includingWhitespace) return i
+        i += 1
+      }
+      i
+    }
+
+    def identifyBlock(str: String, i: Int, outer: MarkupBlock): MarkupBlock = {
+      var j = 0; while (j < blocks.length) {
+        val b = blocks(j)
+
+        if (b.checkStart(str, i) && b != outer) { // its not posible to nest identical blocks
+          if (b.isLongStart(str, i)) {
+            seenWhitespace = false // TODO what does this do anyway?
+            return b
+          } else if (b.tight && b.isCompactStart(str, i)) {
+            return b.asCompact
+          }
+        }
+
+        j += 1
+      }
+      null
+    }
+
     do {
       var mark = i
       val searchForWhitespace = outer != null && outer.compact
@@ -309,7 +307,7 @@ class MarkupParser(val lang: String, val processLink: String => String) {
           appendText(str, mark, i, sb);
           return ParseResult(-1)
         }
-        if (outer != null && blockEnds(str, i, outer)) {
+        if (outer != null && blockEnds(str, i, outer, seenWhitespace)) {
           findMods(str, mark, i) match {
             case Some((mods, modsStart)) =>
               appendText(str, mark, modsStart-1, sb)
