@@ -1,7 +1,7 @@
 package asciiblog
 
 import MakeFiles.{ hash, tagSlug, UrlOps, isAbsolute }
-import java.io.{ File, BufferedWriter, OutputStreamWriter, FileOutputStream }
+import java.io.{ File, BufferedWriter, OutputStreamWriter, FileOutputStream, FileInputStream }
 import java.net.{ URL, URI, URLDecoder }
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
@@ -468,7 +468,7 @@ object MakeFiles {
 
   def readConfig(cfgFile: File): Map[String, String] = {
     // read only the first line and interpret it as utf-8 string
-    val is = new java.io.FileInputStream(cfgFile)
+    val is = new FileInputStream(cfgFile)
     val bytes = mutable.ArrayBuffer[Byte]()
     var b = is.read()
     while (b != -1 && b != '\r' && b != '\n') {
