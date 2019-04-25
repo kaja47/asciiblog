@@ -404,7 +404,7 @@ class AsciiMarkup extends Markup {
     def mergeParagraphsIntoLists(segments: Seq[Segment]): Seq[Segment] = // TODO more general mechanism for not only paragraphs
       segments.foldLeft(Vector[Segment]()) { (res, s) =>
         (s, res.lastOption) match {
-          case (Paragraph(txt, _), Some(BulletList(items))) if txt.lines.forall(_.startsWith("  ")) =>
+          case (Paragraph(txt, _), Some(BulletList(items))) if txt.linesIterator.forall(_.startsWith("  ")) =>
             items.last match {
               case SegmentSeq(ss) =>
                 res.init :+ BulletList(items.init :+ SegmentSeq(ss :+ s))
@@ -412,7 +412,7 @@ class AsciiMarkup extends Markup {
                 res.init :+ BulletList(items.init :+ SegmentSeq(Seq(last, s)))
             }
 
-          case (Paragraph(txt, _), Some(NumberedList(items))) if txt.lines.forall(_.startsWith("  ")) =>
+          case (Paragraph(txt, _), Some(NumberedList(items))) if txt.linesIterator.forall(_.startsWith("  ")) =>
             items.last match {
               case (i, SegmentSeq(ss)) =>
                 res.init :+ NumberedList(items.init :+ (i, SegmentSeq(ss :+ s)))
