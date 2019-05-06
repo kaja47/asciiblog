@@ -106,48 +106,6 @@ object MarkupParser {
   val largestSpecialChar: Char = specialChars.max
   val specialCharMask = Array.tabulate[Boolean](largestSpecialChar+1) { i => specialChars.contains(i.toChar) }
 
-  val allQuoteMarks = Map(
-    "cz" -> Seq("„|“", "‚|‘", "»|«", "›|‹"),
-    "en" -> Seq("“|”", "‘|’"),
-    "fr" -> Seq("«&nbsp;|&nbsp;»"),
-  ).map { case (l, qs) => (l, qs.map{ qs => val Array(a, b) = qs.split("\\|"); (a, b) })}
-
-  val preposCharsLen = 123
-  val preposChars = Array.tabulate[Boolean](preposCharsLen) { i => "ksvzouiaKSVZOUIA".indexOf(i) != -1 }
-  def isPreposChar(ch: Char) = ch < preposCharsLen && preposChars(ch)
-
-  def handleCZPrepositions(txt: String) =
-    if (txt.length < 2) txt else {
-      def ws(ch: Char) = (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')
-
-      val res = new StringBuilder(txt.length+128)
-      var pos = 0
-
-      var i = 2; while (i < txt.length) {
-        if (ws(txt.charAt(i)) && isPreposChar(txt.charAt(i-1)) && ws(txt.charAt(i-2))) {
-          res.append(txt, pos, i).append("\u00A0")
-          pos = i+1
-        }
-        i += 1
-      }
-      res.append(txt, pos, txt.length)
-      res.toString
-    }
-
-  val replacements = Seq(
-    "---" -> "—", // &mdash;
-    "--"  -> "–", // &ndash;
-    "..." -> "…",
-    "->"  -> "→",
-    "<-"  -> "←",
-    "<->" -> "↔",
-    "(TM)"-> "™",
-    "(R)" -> "®",
-    "(C)" -> "©",
-    " - " -> " – ", // &ndash;
-    "\n- "-> " – ", // &ndash;
-    " -\n"-> " – ", // &ndash;
-  )
 
   def findMods(line: String): Option[(Mods, Int)] =
     findMods(line, 0, line.length)
@@ -211,21 +169,20 @@ case class Mods(title: String = "", classes: String = "", styles: String = "") {
 }
 
 
-class MarkupParser(val lang: String, val processLink: String => String) {
+class MarkupParser(typography: Typography) {
   import MarkupParser._
 
-  val quoteMarks = allQuoteMarks(lang).head
+  val quoteMarks = typography.doubleQuoteMarks
 
-  def apply(s: String) = {
+  def apply(s: String, processLink: String => String) = {
     val sb = new StringBuilder
-    processMarkup(s, 0, sb, null)
+    processMarkup(s, 0, sb, null, processLink)
     sb.toString
   }
 
   def appendText(str: String, from: Int, to: Int, sb: StringBuilder) = {
     var seg = str.substring(from, to)
-    if (lang == "cz")                       { seg = handleCZPrepositions(seg) }
-    for ((search, replace) <- replacements) { seg = seg.replace(search, replace) }
+    seg = typography.apply(seg)
     sb.append(seg)
   }
 
@@ -252,7 +209,7 @@ class MarkupParser(val lang: String, val processLink: String => String) {
 
   // vrací pozici, kde úspěšně skončilo parsování
   // nebo -1, pokud nebyl nalezen koncový tag
-  def processMarkup(str: String, pos: Int, sb: StringBuilder, outer: MarkupBlock): ParseResult = {
+  def processMarkup(str: String, pos: Int, sb: StringBuilder, outer: MarkupBlock, processLink: String => String): ParseResult = {
     var i = pos
 
     var seenWhitespace = false
@@ -366,7 +323,7 @@ class MarkupParser(val lang: String, val processLink: String => String) {
 
       } else {
 
-        val ParseResult(endPos, mods) = processMarkup(str, i, sb, block)
+        val ParseResult(endPos, mods) = processMarkup(str, i, sb, block, processLink)
         if (endPos <= -1) {
           // element nemá konec, vrátit zpátky počáteční tag
           sb.setLength(outerTagStart)
@@ -428,4 +385,94 @@ class MarkupParser(val lang: String, val processLink: String => String) {
     }
     if (i == str.length) -1 else i
   }
+}
+
+
+
+
+trait Typography {
+  def apply(text: String): String
+  def doubleQuoteMarks: (String, String)
+  def singleQuoteMarks: (String, String)
+}
+
+object CzechTypography extends Typography {
+  def apply(text: String) = {
+    var t = text
+    t = handlePrepositions(handleHyphens(t))
+    for ((search, replace) <- replacements) { t = t.replace(search, replace) }
+    t
+  }
+
+  val doubleQuoteMarks = ("„", "“")
+  val singleQuoteMarks = ("‚", "‘")
+  //"» «", "› ‹"),
+
+  val replacements = Seq(
+    "---" -> "—", // &mdash;
+    "--"  -> "–", // &ndash;
+    "..." -> "…",
+    "->"  -> "→",
+    "<-"  -> "←",
+    "<->" -> "↔",
+    "(TM)"-> "™",
+    "(R)" -> "®",
+    "(C)" -> "©",
+    " - " -> " – ", // &ndash;
+    "\n- "-> " – ", // &ndash;
+    " -\n"-> " – ", // &ndash;
+  )
+
+  val preposCharsLen = 123
+  val preposChars = Array.tabulate[Boolean](preposCharsLen) { i => "ksvzouiaKSVZOUIA".indexOf(i) != -1 }
+  def isPreposChar(ch: Char) = ch < preposCharsLen && preposChars(ch)
+  val hyphenator = new Hyphenator("/home/k47/skripty/asciiblog/hyph_cs_CZ.dic", encoding = "ISO8859-2")
+
+  def handlePrepositions(txt: String) =
+    if (txt.length < 2) txt else {
+      def ws(ch: Char) = (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')
+
+      val res = new StringBuilder(txt.length+128)
+      var pos = 0
+
+      var i = 2; while (i < txt.length) {
+        if (ws(txt.charAt(i)) && isPreposChar(txt.charAt(i-1)) && ws(txt.charAt(i-2))) {
+          res.append(txt, pos, i).append("\u00A0")
+          pos = i+1
+        }
+        i += 1
+      }
+      res.append(txt, pos, txt.length)
+      res.toString
+    }
+
+
+  def handleHyphens(txt: String) = {
+    val sb = new StringBuilder
+
+    var i = 0; while (i < txt.length) {
+
+      val start = i
+      while (i < txt.length && !isAlphabetic(txt.charAt(i))) {
+        i += 1
+      }
+
+      sb.append(txt, start, i)
+
+      val start2 = i
+      while (i < txt.length && isAlphabetic(txt.charAt(i))) {
+        i += 1
+      }
+
+      if (i - start2 < 7) { // short words, do not hyphenate
+        sb.append(txt, start2, i)
+      } else {
+        sb.append(hyphenator(txt.substring(start2, i), "\u00AD", 2, 3))
+      }
+
+    }
+
+    sb.toString
+  }
+
 }
