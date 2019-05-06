@@ -123,7 +123,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   def ifs(x: String) = if (x != null) x else ""
 
   def plaintextDescription(a: Article): String =
-    stripTags(a.text.firstParagraph).replace('\n', ' ')
+    stripTags(a.text.plaintextSummary).replace('\n', ' ')
 
   private def mainImageUrl(a: Article): String  = a.images.find(_.mods == "main").map(_.url).getOrElse(null)
   private def otherImageUrl(a: Article): String = a.images.headOption.map(_.url).getOrElse(null)

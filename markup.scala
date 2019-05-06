@@ -15,7 +15,8 @@ trait Markup {
 
 trait Text {
   def render(l: ImageLayout, relativize: String => String): String
-  def firstParagraph: String
+  def plaintextSummary: String
+  def plaintext: String
   def paragraph(text: String): String
   def images: Seq[Image]
   def links: Seq[String]
@@ -23,70 +24,22 @@ trait Text {
 
 
 
-// html markup
-
-class HTMLMarkup extends Markup {
-  val ahrefRegex  = """(?x) (?<= \<a   [^>]* href=") (.*?) (?=") """.r
-  val imgsrcRegex = """(?x) (?<= \<img [^>]* src=")  (.*?) (?=") """.r
-
-  def process(text: Seq[String], resolver: String => String, imageRoot: String): HTMLText =
-    new HTMLText(text.mkString("\n"), resolver, imageRoot, this)
-}
-
-class HTMLText(text: String, resolver: String => String, imageRoot: String, markup: HTMLMarkup) extends Text {
-  def render(l: ImageLayout, relativize: String => String): String =
-    markup.ahrefRegex.replaceAllIn(text, m => relativize(resolver(m.group(0))))
-
-  def firstParagraph: String = ""
-  def paragraph(text: String): String = text
-  def images: Seq[Image] = markup.imgsrcRegex.findAllIn(text).toVector
-    .map(url => Image(if (isAbsolute(url)) url else imageRoot + url))
-  def links: Seq[String] = markup.ahrefRegex.findAllIn(text).map(resolver).toVector
-}
-
-
-
 // ASCII markup
 
 object AsciiRegexes {
-  val linkRegex   = """(?x)  " ([^"]+?) " : \[ ([^\]\n]+?) \]""".r
-  val ahrefRegex  = """(?x) (?<= href=") (.*?) (?=") """.r
-  val imgsrcRegex = """(?x) (?<= src=") (.*?) (?=") """.r
+  val linkRegex    = """(?x)  " ([^"]+?) " : \[ ([^\]\n]+?) \]""".r
+  val ahrefRegex   = """(?x) (?<= href=") (.*?) (?=") """.r
 
-  val linkCheck = "\":["
-  val ahrefCheck = "href=\""
-  val imgsrcCheck = "src=\""
+  val linkCheck    = "\":["
+  val ahrefCheck   = "href="
 
-  val codeRegex     = """(?xs) `    (.+?) `    """.r
-  val boldRegex     = """(?xs) \*\* (.+?) \*\* """.r
-  val italicRegex   = """(?xsUu) (?<!\*) \* (?!\*)    ((?:.(?!`))+?) (?<!\*)  \*  (?!\*) """.r
-  val italic2Regex  = """(?xsUu) (?<!:)  // (?=\b|\S) (.+?) (?<!:) (?<=\b|\S) //         """.r
-  val altRegex      = """(?xs) " ([^"]*?) \s+ \.\(  (.*?)  \)" """.r
-  val emRegex       = """---""".r
-  val blackoutRegex = """(?xs) \[\|.+?\|\] """.r
-  val noteRegex     = """(?x) \[\[ (\d++) \]\]""".r
-  val preposRegex   = """(?xuUms) ((?:^|\s|\>)[ksvzouiKSVZOUIA])\s++(?=\w)""".r // for unbreakable space between preposition and word (czech)
+  val noteRegex    = """(?x) \[\[ (\d++) \]\]""".r
 
-  val preposCharsLen = 123
-  val preposChars = Array.tabulate[Boolean](preposCharsLen) { i => "ksvzouiaKSVZOUIA".indexOf(i) != -1 }
-  def isPreposChar(ch: Char) = ch < preposCharsLen && preposChars(ch)
-
-  val codeCheck     = """`"""
-  val boldCheck     = """**"""
-  val italicCheck   = """*"""
-  val italic2Check  = """//"""
-  val altCheck      = """.("""
-  val emCheck       = """---"""
-  val blackoutCheck = """[|"""
-  val noteCheck     = """[["""
-
-  val linkRefRegex  = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
-  val hrRegex       = """(?xm) ---+|\*\*\*+ """.r
-  val blockRegex    = """(?xs) /---(\w+)[^\n]*\n (.*?) \\--- """.r
-  val commentRegex          = """(?xs) \<!--.*?--\>""".r
-
-  val commentCheck          = """<!--"""
+  val linkRefRegex = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
+  val hrRegex      = """(?xm) ---+|\*\*\*+ """.r
+  val commentRegex = """(?xs) \<!--.*?--\>""".r
 }
+
 
 object AsciiText {
   val linkUntil = Slurp { _.until('"') }
@@ -97,21 +50,23 @@ object AsciiText {
   def linkSlurpReplace(txt: String)(f: Slurp.Replacement) =
     Slurp(txt, groups = 3).replace(linkUntil, linkSlurp, f)
 
-  def empty = AsciiText(Seq(), null)
+  def empty = AsciiText(Seq(), null, null)
 }
 
-case class AsciiText(segments: Seq[Segment], resolver: String => String) extends Text { self =>
+
+case class AsciiText(segments: Seq[Segment], resolver: String => String, markup: AsciiMarkup) extends Text { self =>
   import AsciiText._
 
   def render(l: ImageLayout, relativize: String => String): String = mkText(segments, l, resolvedLinks, relativize)
-  def firstParagraph: String = mkParagraph(segments.collect { case Paragraph(txt, _) => txt }.headOption.getOrElse(""), resolvedLinks, identity, true)
-  def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l)).render(null, identity)
+  def plaintextSummary: String = mkParagraph(segments.collect { case Paragraph(txt, _) => txt }.headOption.getOrElse(""), resolvedLinks, identity, true)
+  def plaintext: String = ???
+  def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l), markup).render(null, identity)
 
   // Overwrites segments, doesn't resolve links again. This saves some work but
   // mainly it's there se error messages during link resolution are not
   // displayed twice
   def overwriteSegments(newSegments: Seq[Segment]) =
-    new AsciiText(newSegments, null) {
+    new AsciiText(newSegments, null, markup) {
       override protected def resolvedLinks = self.resolvedLinks
     }
 
@@ -131,11 +86,6 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String) extends
   private def extractLinks(txt: String): Iterator[String] = // 100 ms
     (if (txt.contains(ahrefCheck)) ahrefRegex.findAllMatchIn(txt).map(_.group(1)) else Iterator()) ++
     (if (txt.contains(linkCheck))  linkSlurpIterator(txt)                         else Iterator())
-
-  //require(
-  //  processTexts(segments, txt => linkRegex.findAllMatchIn(txt).map(_.group(2))).toVector ==
-  //  processTexts(segments, linkSlurpIterator).toVector
-  //)
 
   private def checkAliases(aliases: Iterator[(String, String)]) = {
     val as = mutable.Map[String, String]()
@@ -174,86 +124,11 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String) extends
     }.toMap // last key should be used
   }
 
-  private def mkParagraph(_txt: String, aliases: Map[String, String], relativize: String => String, plaintext: Boolean = false): String = {
-    var txt = _txt
-    if (txt.contains(blackoutCheck)) {
-      txt = blackoutRegex.replaceAllIn(txt, m => {
-          val sb = new StringBuilder()
-          val len = m.end - m.start - 2
-          for (i <- 0 to len/5) { sb.append("█████").append("<wbr>") }
-          sb.delete(sb.length-5, sb.length).toString
-      })
-    }
-    if (txt.contains(altCheck)) {
-      txt = altRegex.replaceAllIn(txt, if (plaintext) "$1" else """<span class=about title="$2">$1</span>""")
-    }
-    if (txt.contains(ahrefCheck)) {
-      txt = ahrefRegex.replaceAllIn(txt, m => Regex.quoteReplacement(relativize(aliases(m.group(1)))))
-    }
-    if (txt.contains(linkCheck)) {
-      txt = linkSlurpReplace(txt) { (s, sb) =>
-        if (plaintext) {
-          sb append s.group(1).asString()
-        } else {
-          val link = aliases(s.group(2).asString())
-          if (link == Blog.invalidLinkMarker) {
-            sb append s.group(1).asString()
-          } else {
-            val l = relativize(link)
-            sb append "<a href=" append util.quoteHTMLAttribute(l) append ">" append s.group(1).asString() append "</a>"
-          }
-        }
-      }.toString
-    }
-    if (txt.contains(commentCheck)) {
-      txt = commentRegex.replaceAllIn(txt, "")
-    }
-    if (txt.contains(boldCheck)) {
-      txt = boldRegex.replaceAllIn(txt, if (plaintext) "$1" else """<b>$1</b>""")
-    }
-    if (txt.contains(italicCheck)) {
-      txt = italicRegex.replaceAllIn(txt, if (plaintext) "$1" else """<i>$1</i>""")
-    }
-    if (txt.contains(italic2Check)) {
-      txt = italic2Regex.replaceAllIn(txt, if (plaintext) "$1" else  """<i>$1</i>""")
-    }
-    if (txt.contains(emCheck)) {
-      txt = emRegex.replaceAllIn(txt, "&mdash;")
-    }
-    if (txt.contains(codeCheck)) {
-      txt = codeRegex.replaceAllIn(txt, m => "<code>"+Regex.quoteReplacement(util.escape(m.group(1)))+"</code>")
-    }
-    if (txt.contains(noteCheck)) {
-      txt = noteRegex.replaceAllIn(txt, m => {
-        if (plaintext) "" else {
-          val l = "#fn"+m.group(1)
-          Regex.quoteReplacement(s"""<a href=${util.quoteHTMLAttribute(l)}><sup>${m.group(1)}</sup></a> """)
-        }
-      })
-    }
-    //txt = preposRegex.replaceAllIn(txt, "$1\u00A0")
-
-    {
-      if (txt.length >= 2) {
-        def ws(ch: Char) = (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')
-
-        val res = new StringBuilder(txt.length+128)
-        var pos = 0
-
-        var i = 2; while (i < txt.length) {
-          if (ws(txt.charAt(i)) && isPreposChar(txt.charAt(i-1)) && ws(txt.charAt(i-2))) {
-            res.append(txt, pos, i).append("\u00A0")
-            pos = i+1
-          }
-          i += 1
-        }
-        res.append(txt, pos, txt.length)
-        txt = res.toString
-      }
-    }
-
-    txt
-  }
+  private def mkParagraph(txt: String, aliases: Map[String, String], relativize: String => String, plaintext: Boolean = false): String =
+    markup.parser(txt, (link: String) => {
+      val al = aliases(link)
+      if (al == Blog.invalidLinkMarker) null else relativize(al)
+    })
 
   def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String): String =
     _mkText(segments, l, aliases, relativize, new StringBuilder(1024))
@@ -267,8 +142,17 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String) extends
       case Block("div",  txt, mods) => sb.append("<div").append(mkMods(mods)).append(">").append(txt).append("</div>")
       case Block("code", txt, mods) =>
         sb.append("<pre").append(mkMods(mods)).append(">")
+
+        val r = "brush:(\\w+)".r
+        r.findFirstMatchIn(mods.classes) match {
+          case Some(m) =>
+            sb.append(Highlighter.highlight(txt, m.group(1)))
+          case None =>
             sb.append(util.escape(txt))
+        }
+
         sb.append("</pre>")
+
       case Block("pre",  txt, mods) => sb.append("<pre").append(mkMods(mods)).append(">").append(util.escape(txt)).append("</pre>")
       case Block("comment", _, _)   =>
       case Block(tpe, _, _)        => sys.error(s"unknown block type '$tpe'")
@@ -338,10 +222,9 @@ case class Cell(txt: String, span: Int = 1)
 
 
 class AsciiMarkup extends Markup {
-  def process(text: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): AsciiText = segmentText(text, resolver, imageRoot)
+  val parser = new MarkupParser(CzechTypography)
 
-
-  private def segmentText(lines: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): AsciiText = {
+  def process(lines: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): AsciiText = {
     def matchAllLines[T](ls: Seq[String], prefix: String)(f: PartialFunction[String, T]): Option[Seq[T]] = {
       if (!ls.forall(_.startsWith(prefix))) return None
       val ms = ls.collect(f)
@@ -467,7 +350,7 @@ class AsciiMarkup extends Markup {
         }.toVector
 
     val finalSegments = joinNeighboringLists(mergeParagraphsIntoLists(segments))
-    AsciiText(finalSegments, resolver)
+    AsciiText(finalSegments, resolver, this)
   }
 
   private val imgRegex = """(?xm)
@@ -531,4 +414,29 @@ class AsciiMarkup extends Markup {
     NumberedList(items)
   }
 
+}
+
+
+
+
+// HTML markup
+
+class HTMLMarkup extends Markup {
+  val ahrefRegex  = """(?x) (?<= \<a   [^>]* href=") (.*?) (?=") """.r
+  val imgsrcRegex = """(?x) (?<= \<img [^>]* src=")  (.*?) (?=") """.r
+
+  def process(text: Seq[String], resolver: String => String, imageRoot: String): HTMLText =
+    new HTMLText(text.mkString("\n"), resolver, imageRoot, this)
+}
+
+class HTMLText(text: String, resolver: String => String, imageRoot: String, markup: HTMLMarkup) extends Text {
+  def render(l: ImageLayout, relativize: String => String): String =
+    markup.ahrefRegex.replaceAllIn(text, m => relativize(resolver(m.group(0))))
+
+  def plaintextSummary: String = ""
+  def plaintext: String = ???
+  def paragraph(text: String): String = text
+  def images: Seq[Image] = markup.imgsrcRegex.findAllIn(text).toVector
+    .map(url => Image(if (isAbsolute(url)) url else imageRoot + url))
+  def links: Seq[String] = markup.ahrefRegex.findAllIn(text).map(resolver).toVector
 }
