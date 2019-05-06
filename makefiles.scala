@@ -686,7 +686,7 @@ object MakeFiles {
       }
     }
 
-    Tags(visible, hidden)
+    Tags(visible.toSeq, hidden.toSeq)
   }
 
   def peelOffTags(s: String): (String, Tags) = (tagBlockRegex.replaceAllIn(s, "").trim, getTags(s))
@@ -1104,7 +1104,7 @@ object MakeFiles {
 
     val backlinks: Map[Slug, Seq[Article]] = timer("backlinks", blog) {
       invert(articles.map { a => (a, a.slugsOfLinkedArticles) })
-        .map { case (k, as) => (k, distinctBy(as)(_.slug)) }
+        .map { case (k, as) => (k, as.distinctBy(_.slug)) }
     }
 
     val pubsBy: Map[Slug, Article] = timer("pubsBy", blog) {

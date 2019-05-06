@@ -2,7 +2,7 @@ name := "asciiblog"
 
 version := "0.1"
 
-scalaVersion := "2.12.8"
+scalaVersion := "2.13.0-RC1"
 
 assemblyJarName in assembly := "../../asciiblog.jar"
 
@@ -23,9 +23,9 @@ sources in Compile ++= (baseDirectory.value / "scripts"  * "*.scala").get
 sources in Compile ++= (baseDirectory.value / "test"     * "*.scala").get
 
 libraryDependencies ++= Seq(
-  "org.scala-lang.modules"    %% "scala-xml" % "1.0.6",
+  "org.scala-lang.modules"    %% "scala-xml" % "1.2.0",
   "com.maxmind.geoip"         %  "geoip-api" % "1.3.1",
-  "org.spire-math"            %% "jawn-ast"  % "0.13.0",
+  "org.typelevel"             %% "jawn-ast"  % "0.14.2",
   "net.sourceforge.cssparser" %  "cssparser" % "0.9.26",
   "com.medallia.word2vec" % "Word2VecJava" % "0.10.3"//,
   //"com.github.jknack"     % "handlebars" % "4.1.2"

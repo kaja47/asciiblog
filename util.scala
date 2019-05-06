@@ -289,18 +289,6 @@ object util {
     res.toMap
   }
 
-  def distinctBy[T, U](xs: Seq[T])(f: T => U): Seq[T] = // TODO replace by builtin method in scala 2.13
-    if (xs.length <= 1) xs else {
-      val set = mutable.Set[U]()
-      val b = xs.genericBuilder[T]
-      for (x <- xs) {
-        if (set.add(f(x))) {
-          b += x
-        }
-      }
-      b.result()
-    }
-
   def intersectionSize(a: Array[Int], b: Array[Int]): Int = {
     var size, ai, bi = 0
     while (ai < a.length && bi < b.length) {
@@ -396,7 +384,7 @@ object util {
           i += 1
         }
 
-        res
+        res.toSeq
       }
     }.takeWhile(_ != null).toVector
   }
@@ -404,7 +392,7 @@ object util {
   def splitByInterval[T](xs: Seq[T], begin: T, end: T): Iterator[Seq[T]] =
     splitByInterval(xs, (_: T) == begin, (_: T) == end)
 
-  def splitByInterval[T](xs: Seq[T], begin: T => Boolean, end: T => Boolean): Iterator[Seq[T]] = {
+  def splitByInterval[T](xs: collection.Seq[T], begin: T => Boolean, end: T => Boolean): Iterator[Seq[T]] = {
     var i = 0
     var interval = false
 
@@ -416,14 +404,14 @@ object util {
         val res = mutable.ArrayBuffer[T]()
         while (i < xs.length && !begin(xs(i))) { res += xs(i); i += 1 }
         interval = true
-        res
+        res.toSeq
 
       } else {
         val res = mutable.ArrayBuffer[T]()
         while (i < xs.length && !end(xs(i))) { res += xs(i); i += 1 }
         if (i < xs.length && end(xs(i))) { res += xs(i); i += 1 }
         interval = false
-        res
+        res.toSeq
       }
 
     }.takeWhile(_ != null).filter(_.nonEmpty)

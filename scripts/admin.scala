@@ -1,7 +1,7 @@
 package asciiblog
 
 import java.io. { File, FileWriter }
-import jawn.ast._
+import org.typelevel.jawn.ast._
 
 object Admin extends App {
 
