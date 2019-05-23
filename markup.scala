@@ -184,12 +184,16 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
         }
         sb.append("</ol>")
 
-      case Table(rows, columns) =>
+      case Table(rows, _) =>
         sb.append("<table>")
         rows.foreach { cols =>
           sb.append("<tr>")
-          cols.foreach { cell =>
-            sb.append("<td>").append(mkParagraph(cell.txt, aliases, relativize)).append("</td>")
+          cols.foreach { case Cell(txt, span) =>
+            sb.append("<td")
+            if (span > 1) {
+              sb.append(" colspan=").append(span)
+            }
+            sb.append(">").append(mkParagraph(txt, aliases, relativize)).append("</td>")
           }
           sb.append("</tr>")
         }
@@ -216,7 +220,7 @@ final case class Blockquote(segments: Seq[Segment]) extends Segment
 final case class SegmentSeq(segments: Seq[Segment]) extends Segment
 final case class BulletList(items: Seq[Segment]) extends Segment
 final case class NumberedList(items: Seq[(Int, Segment)]) extends Segment
-final case class Table(rows: Seq[Seq[Cell]], columns: Int) extends Segment
+final case class Table(rows: Seq[Seq[Cell]], columns: Int) extends Segment // TODO columns field is not used
 
 case class Cell(txt: String, span: Int = 1)
 
@@ -386,9 +390,15 @@ class AsciiMarkup extends Markup {
       )
   }
 
+  private val tableRowRegex = """(\|+)([^|]*)""".r
+
   private def mkTable(lines: Seq[String]): Table = {
-    val ls = lines.filterNot{ _.matches("""\|-+""" )}
-    val rows = ls.map { l => l.split("\\|").toSeq.tail.map { cell => Cell(cell, 1) } }
+    val ls = lines.filterNot { _.matches("""\|-+""" )}
+    val rows = ls.map { l => tableRowRegex.findAllMatchIn(l).map { m =>
+      val span = m.group(1).length
+      val txt  = m.group(2)
+      Cell(txt, span)
+    }.toVector }
     val columns = rows.map(_.map(_.span).sum).max
     Table(rows, columns)
   }
