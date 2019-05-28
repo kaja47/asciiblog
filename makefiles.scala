@@ -8,6 +8,7 @@ import java.text.SimpleDateFormat
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.regex.Matcher
+import java.awt.Color
 import javax.imageio.{ ImageIO, IIOException }
 import scala.collection.mutable
 import scala.util.matching.Regex
@@ -123,6 +124,32 @@ object Blog {
       try str.toInt catch {
         case e: java.lang.IllegalArgumentException =>
           throw new ConfigurationException(s"$key: expected integer, '$str' given")
+      }
+    }
+    def cfgColor(key: String, default: Color): Color = {
+      if (!cfg.contains(key)) return default
+      val value = cfg(key)
+      if (value.isEmpty) return default
+
+      def hex1(s: String) = Integer.parseInt(s, 16)*17
+      def hex2(s: String) = Integer.parseInt(s, 16)
+
+      if (value.startsWith("#")) {
+        val Seq(r, g, b, a) = value.length match {
+          case 4 => value.drop(1).grouped(1).map(hex1).toSeq :+ 255
+          case 5 => value.drop(1).grouped(1).map(hex1).toSeq
+          case 7 => value.drop(1).grouped(2).map(hex2).toSeq :+ 255
+          case 9 => value.drop(1).grouped(2).map(hex2).toSeq
+          case _ => throw new ConfigurationException(s"$key: invalid color '$value'")
+        }
+        new Color(r, g, b, a)
+      }
+
+      try {
+        classOf[Color].getField(value).get(null).asInstanceOf[Color]
+      } catch {
+        case _: NoSuchFieldException | _ :ClassCastException =>
+          throw new ConfigurationException(s"$key: invalid color '$value'")
       }
     }
 
