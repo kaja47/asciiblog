@@ -1552,7 +1552,7 @@ object MakeFiles {
     import java.awt.Color
 
     def createCard(a: Article, w: Int = 480, h: Int = 240, background: Color = Color.WHITE, foreground: Color = Color.BLACK) = {
-      val dateFormat = new SimpleDateFormat("d. M. yyyy")
+      val dateFormat = DateTimeFormatter.ofPattern("d. M. yyyy")
       val line1 = (if (a.isTag) "#" else "")+a.title
       val line2 = blog.twitterSite+(if (a.date != null) " — "+dateFormat.format(a.date) else "")
       ImageTools.createCardImage(line1, line2, w, h, background, foreground)
