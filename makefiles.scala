@@ -128,7 +128,7 @@ object Blog {
     }
     def cfgColor(key: String, default: Color): Color = {
       if (!cfg.contains(key)) return default
-      val value = cfg(key)
+      val value = cfg(key).trim
       if (value.isEmpty) return default
 
       def hex1(s: String) = Integer.parseInt(s, 16)*17
@@ -143,13 +143,14 @@ object Blog {
           case _ => throw new ConfigurationException(s"$key: invalid color '$value'")
         }
         new Color(r, g, b, a)
-      }
 
-      try {
-        classOf[Color].getField(value).get(null).asInstanceOf[Color]
-      } catch {
-        case _: NoSuchFieldException | _ :ClassCastException =>
-          throw new ConfigurationException(s"$key: invalid color '$value'")
+      } else {
+        try {
+          classOf[Color].getField(value).get(null).asInstanceOf[Color]
+        } catch {
+          case _: NoSuchFieldException | _ :ClassCastException =>
+            throw new ConfigurationException(s"$key: invalid color '$value'")
+        }
       }
     }
 
