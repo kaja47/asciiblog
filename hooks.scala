@@ -9,7 +9,7 @@ trait Hooks {
   def makePagePart(base: Base, blog: Blog, layout: Layout, name: String, args: String): PagePart
 
   /** This hook is called after all articles are parsed, but before any processing and checks on them. */
-  def prepareArticles(articles: Seq[Article]): Seq[Article]
+  def prepareArticles(blog: Blog, articles: Seq[Article]): Seq[Article]
   /** This hook is called after articles are processed and the final Base is computed. */
   def updateBase(base: Base, blog: Blog): Base
   /** This hook is called after blog is ganerated and cannot affect result in any way. */
@@ -24,7 +24,7 @@ class NoHooks extends Hooks {
   def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String = null
   def makePagePart(base: Base, blog: Blog, layout: Layout, name: String, args: String): PagePart = sys.error(s"unknown part $name")
 
-  def prepareArticles(articles: Seq[Article]): Seq[Article] = articles
+  def prepareArticles(blog: Blog, articles: Seq[Article]): Seq[Article] = articles
   def updateBase(base: Base, blog: Blog): Base = base
   def afterGenerate(base: Base, blog: Blog): Unit = ()
 }
@@ -60,8 +60,8 @@ class LispyHooks(scriptFile: String) extends Hooks {
     call[String]("@header", List(base, blog, layout, article))
   def makePagePart(base: Base, blog: Blog, layout: Layout, name: String, args: String): PagePart =
     ???
-  def prepareArticles(articles: Seq[Article]): Seq[Article] =
-    call[Seq[Article]]("@prepare-articles", List(articles))
+  def prepareArticles(blog: Blog, articles: Seq[Article]): Seq[Article] =
+    call[Seq[Article]]("@prepare-articles", List(blog, articles))
   def updateBase(base: Base, blog: Blog): Base =
     call[Base]("@update-base", List(base, blog))
   def afterGenerate(base: Base, blog: Blog): Unit =

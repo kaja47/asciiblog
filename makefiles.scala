@@ -932,7 +932,7 @@ object MakeFiles {
     implicit val _blog = blog
     var articles: Vector[Article] = timer("readfiles", blog)(readGallery(blog) ++ readPosts(blog))
 
-    articles = blog.hooks.prepareArticles(articles).toVector
+    articles = blog.hooks.prepareArticles(blog, articles).toVector
 
     //timer("checks", blog) {
     if (blog.articlesMustNotBeMixed) {
