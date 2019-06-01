@@ -4,12 +4,13 @@ import java.lang.StringBuilder
 
 object CzechStemmerLight {
 
-  def stem(input: String): String = {
-    val sb = new StringBuilder(input.toLowerCase)
-    removePossessives(removeCase(sb)).toString
-  }
+  def stemLowercased(input: String): String =
+    removePossessives(removeCase(new StringBuilder(input))).toString
 
-  private def endsWith(sb: StringBuilder, str: String) =
+  def stem(input: String): String =
+    removePossessives(removeCase(new StringBuilder(input.toLowerCase))).toString
+
+  private def endsWith(sb: StringBuilder, str: String): Boolean =
     sb.indexOf(str, sb.length-str.length) == sb.length-str.length
 
   private def palatalise(sb: StringBuilder): StringBuilder = {
