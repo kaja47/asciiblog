@@ -56,7 +56,7 @@ object Colors {
 }
 
 
-// `regexes` parametr must not contain parenthesized groups
+// `regexes` parametr must not contain parenthesized capturing groups
 class ProtoHighlighter(regexes: Seq[(Int, String)]) extends Highlighter {
   private val (colors, rgxs) = regexes.unzip
   private val regex = rgxs.map(r => "("+r.trim+")").mkString("|").r
@@ -70,9 +70,11 @@ class ProtoHighlighter(regexes: Seq[(Int, String)]) extends Highlighter {
 
 object ProtoHighlighter {
   def mkTokenRegex(t: String): String =
-    (if (t.head.isLetter) "\\b" else "") + Regex.quote(t) + (if (t.last.isLetter) "\\b" else "")
+    (if (t.head.isLetter) "\\b" else "") + quote(t) + (if (t.last.isLetter) "\\b" else "")
 
-  def split(tokens: String) = tokens.split(" +").map(mkTokenRegex).mkString("|")
+  private def quote(r: String) = if (r.matches("^[a-zA-Z0-9]+$")) r else Regex.quote(r)
+
+  def tokens(ts: String) = ts.split(" +").map(mkTokenRegex).mkString("|")
 
   val comments = Seq(
     Gray   -> """(?xs) /\* .* \*/ """,
@@ -86,10 +88,10 @@ object ProtoHighlighter {
 
 
 class ScalaHighlighter extends ProtoHighlighter(Seq(
-  Red    -> split("class trait object extends with var val def if else match case while do for type forSome try catch finally yield macro return"),
-  Green  -> split("null true false ne eq this super new override final private protected implicit import package sealed <- -> => require"),
+  Red    -> tokens("class trait object extends with var val def if else match case while do for type forSome try catch finally yield macro return"),
+  Green  -> tokens("null true false ne eq this super new override final private protected implicit import package sealed <- -> => require"),
   Green  -> """(?x)  @\w+ """,                 // annotation
-  Blue   -> """(?x)  \b[A-Z][\w$]*\b """,         // type
+  Blue   -> """(?x)  \b[A-Z][\w$]*\b """,      // type
   Purple -> """(?x)  \b0x[a-fA-F0-9]+[lL]? """,// hex number
   Purple -> """(?x)  -? \b\d+ (?:\.\d+)? """,  // number
   Yellow -> """(?xs) \"\"\" .*? \"\"\" """,    // string
@@ -100,9 +102,9 @@ class ScalaHighlighter extends ProtoHighlighter(Seq(
 
 
 class JavaHighlighter extends ProtoHighlighter(Seq(
-  Red    -> split("class interface extends implements var if else case whitch while do for try catch finally return"),
-  Green  -> split("null true false this super new final private protected import package"),
-  Blue   -> split("int long double float boolean void byte char short"),
+  Red    -> tokens("class interface extends implements var if else case whitch while do for try catch finally return"),
+  Green  -> tokens("null true false this super new final private protected import package"),
+  Blue   -> tokens("int long double float boolean void byte char short"),
   Green  -> """(?x)  @\w+ """,                 // annotation
   Blue   -> """(?x)  \b[A-Z]\w*\b """,         // type
   Purple -> """(?x)  \b0x[a-fA-F0-9]+[lL]? """,// hex number
@@ -113,11 +115,11 @@ class JavaHighlighter extends ProtoHighlighter(Seq(
 
 
 class PHPHighlighter extends ProtoHighlighter(comments ++ Seq(
-  Gray   -> split("<?php"),
-  Red    -> split("class for if else elsif declare while foreach as function return yield from echo die isset unset <=> -> => $ !== != === == ... << >> < > <= >= ++ -- ** + - * / % ~ . ! && || & ^ | ?? ?:"),
-  Purple -> split("true false null new clone instanceof"),
-  Blue   -> split("private protected var const (bool) (float) (double) (string) (int) (void)"),
-  Green  -> split("namespace use"),
+  Gray   -> tokens("<?php"),
+  Red    -> tokens("class for if else elsif declare while foreach as function return yield from echo die isset unset <=> -> => $ !== != === == ... << >> < > <= >= ++ -- ** + - * / % ~ . ! && || & ^ | ?? ?:"),
+  Purple -> tokens("true false null new clone instanceof"),
+  Blue   -> tokens("private protected var const (bool) (float) (double) (string) (int) (void)"),
+  Green  -> tokens("namespace use"),
   Orange -> """(?x)  (?<=\$) \w+ """,         // variable
   Purple -> """(?x)  -? \b\d+ (?:\.\d+)? """, // number
   Yellow -> """(?x)  " (?:\\"|[^"])* "  """,  // string
@@ -126,8 +128,8 @@ class PHPHighlighter extends ProtoHighlighter(comments ++ Seq(
 
 
 class JSHighlighter extends ProtoHighlighter(Seq(
-  Red    -> split("for while do if return let var const document function"),
-  Green  -> split("null true false undefined new this =>"),
+  Red    -> tokens("for while do if return let var const document function"),
+  Green  -> tokens("null true false undefined new this =>"),
   Purple -> """(?x)  -? \b\d+ (?:\.\d+)? """, // number
   Yellow -> """(?x)  " (?:\\"|[^"])* "  """,  // string
   Yellow -> """(?x)  ' (?:\\'|[^'])* '  """   // string
@@ -135,10 +137,10 @@ class JSHighlighter extends ProtoHighlighter(Seq(
 
 
 class CHighlighter extends ProtoHighlighter(Seq(
-  Red    -> split("for return switch break continue"),
-  Blue   -> split("int long short char void signed unsigned float double size_t struct"),
-  Orange -> split("const"),
-  Yellow -> split("case"),
+  Red    -> tokens("for return switch break continue"),
+  Blue   -> tokens("int long short char void signed unsigned float double size_t struct"),
+  Orange -> tokens("const"),
+  Yellow -> tokens("case"),
   Purple -> """(?x)  -? \b\d+ (?:\.\d+)? """, // number
   Yellow -> """(?x)  " (?:\\"|[^"])* "  """,  // string
   Yellow -> """(?x)  ' (?:\\'|[^'])* '  """   // string
