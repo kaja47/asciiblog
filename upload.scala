@@ -19,16 +19,15 @@ val target = new File(cfg("remoteDir"))
 val thumbSource = new File(source, "t")
 val thumbTarget = new File(target, "t")
 
-val cardsSource = new File(thumbSource, "card")
-val cardsTarget = new File(thumbTarget, "card")
-
 def copyDirectory(source: File, target: File): Unit = {
   if (!source.exists()) return
 
   target.mkdirs()
   for (s <- source.listFiles) {
     val t = new File(target, s.getName)
-    if (!t.exists && !s.isDirectory) {
+    if (s.isDirectory) {
+      copyDirectory(s, t)
+    } else if (!t.exists) {
       println(s"copying $s -> $t")
       Files.copy(s.toPath, t.toPath, REPLACE_EXISTING)
     }
@@ -36,7 +35,6 @@ def copyDirectory(source: File, target: File): Unit = {
 }
 
 copyDirectory(thumbSource, thumbTarget)
-copyDirectory(cardsSource, cardsTarget)
 
 
 // copy html files
