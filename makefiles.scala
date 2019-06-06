@@ -1438,6 +1438,9 @@ object MakeFiles {
         case Array("includeSummary", slugs @ _*) =>
           PagePart.Text(slugs.map(base.bySlug).map(layout.makeSummary).mkString("\n"))
 
+        case Array("text", text @ _*) =>
+          PagePart.Text(text.mkString(" "))
+
         case Array("tags", args @ _*) =>
           val Seq(cnt, days) = Seq.tabulate(2) { args.map(_.toInt).orElse(Seq(20, 365)) }
           PagePart.Tags(lastTags(cnt, days))
