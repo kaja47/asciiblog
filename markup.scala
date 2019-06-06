@@ -128,7 +128,7 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
     markup.parser(txt, (link: String) => {
       val al = aliases(link)
       if (al == Blog.invalidLinkMarker) null else relativize(al)
-    })
+    }, plaintext)
 
   def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String): String =
     _mkText(segments, l, aliases, relativize, new StringBuilder(1024))

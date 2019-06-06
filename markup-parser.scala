@@ -57,7 +57,7 @@ case class MarkupBlock(
     isLongEnd(str, i) || isCompactEnd(str, i)
 
 
-  def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser) = {
+  def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) = {
     require(!recur)
     sb.append(str, from, to)
   }
@@ -72,17 +72,19 @@ case class MarkupBlock(
 object MarkupParser {
   val blocks = Array(
     new MarkupBlock("<!--", "-->", "",    "",        recur = false, tight = false) {
-      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser) = sb
+      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) = sb
     },
     new MarkupBlock("[|", "|]", "",       "",        recur = false, tight = false) {
-      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser) = {
-        val len = to - from - 2
-        for (i <- 0 until (len/5)) { sb.append("█████").append("<wbr>") }
+      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) = {
+        if (!plaintext) {
+          val len = to - from - 2
+          for (i <- 0 until (len/5)) { sb.append("█████").append("<wbr>") }
+        }
         sb.append("█████")
       }
     },
     new MarkupBlock("`",  "`",  "<code>", "</code>", recur = false, tight = false) {
-      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser) =
+      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) =
         util.escape(str, from, to, sb)
     },
     new MarkupBlock("''", "''", "",       "",        recur = false, tight = false),
@@ -94,9 +96,12 @@ object MarkupParser {
     },
     new MarkupBlock("\"", "\"", "",       "",        recur = true, tight = true, doubleQuotes = true),
     new MarkupBlock("[[", "]]", "",       "",        recur = false, tight = false) {
-      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser) = {
-        val link = /* TODO p.processLink*/("#fn"+str.substring(from, to))
-        sb.append("<a href=").append(link).append("><sup>").append(str, from, to).append("</sup></a> ")
+      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) = {
+        if (!plaintext) {
+          val link = /* TODO p.processLink*/("#fn"+str.substring(from, to))
+          sb.append("<a href=").append(link).append("><sup>").append(str, from, to).append("</sup></a> ")
+        }
+        sb
       }
       override def checkStart(str: String, i: Int) = super.checkStart(str, i) && (i+4 < str.length && Character.isDigit(str.charAt(i+2)))
     },
@@ -169,21 +174,16 @@ case class Mods(title: String = "", classes: String = "", styles: String = "") {
 }
 
 
-class MarkupParser(typography: Typography) {
+class MarkupParser(typography: Typography = NoTypography) {
   import MarkupParser._
 
   val quoteMarks = typography.doubleQuoteMarks
 
-  def apply(s: String, processLink: String => String) = {
+  // TODO plaintext
+  def apply(s: String, processLink: String => String, plaintext: Boolean = false) = {
     val sb = new StringBuilder
-    processMarkup(s, 0, sb, null, processLink)
+    processMarkup(s, 0, sb, null, processLink, plaintext)
     sb.toString
-  }
-
-  def appendText(str: String, from: Int, to: Int, sb: StringBuilder) = {
-    var seg = str.substring(from, to)
-    seg = typography.apply(seg)
-    sb.append(seg)
   }
 
   def blockEnds(str: String, i: Int, outer: MarkupBlock, seenWS: Boolean): Boolean = {
@@ -209,8 +209,14 @@ class MarkupParser(typography: Typography) {
 
   // vrací pozici, kde úspěšně skončilo parsování
   // nebo -1, pokud nebyl nalezen koncový tag
-  def processMarkup(str: String, pos: Int, sb: StringBuilder, outer: MarkupBlock, processLink: String => String): ParseResult = {
+  def processMarkup(str: String, pos: Int, sb: StringBuilder, outer: MarkupBlock, processLink: String => String, plaintext: Boolean): ParseResult = {
     var i = pos
+
+    def appendText(str: String, from: Int, to: Int, sb: StringBuilder) = {
+      var seg = str.substring(from, to)
+      seg = typography.apply(seg, plaintext)
+      sb.append(seg)
+    }
 
     var seenWhitespace = false
 
@@ -288,7 +294,9 @@ class MarkupParser(typography: Typography) {
 
 
       val outerTagStart = sb.length
-      sb.append(block.startTag)
+      if (!plaintext) {
+        sb.append(block.startTag)
+      }
 
       i += block.startToken.length
       val innerStart = i
@@ -307,23 +315,25 @@ class MarkupParser(typography: Typography) {
         } else {
           i = endPos+block.endToken.length
 
-          block.appendBody(str, innerStart, endPos, sb, this)
-          sb.append(block.endTag)
+          block.appendBody(str, innerStart, endPos, sb, this, plaintext)
+          if (!plaintext) {
+            sb.append(block.endTag)
+          }
           seenWhitespace = false
 
-          val posOfEndSqBraqcket = findLink(str, i)
-          if (posOfEndSqBraqcket != -1) {
-            val link = processLink(str.substring(i+2, posOfEndSqBraqcket))
-            if (link != null) {
+          val posOfEndSqBracket = findLink(str, i)
+          if (posOfEndSqBracket != -1 && !plaintext) {
+            val link = processLink(str.substring(i+2, posOfEndSqBracket))
+            if (link != null && !plaintext) {
               sb.insert(outerTagStart, "<a href="+util.quoteHTMLAttribute(link)+">").append("</a>")
             }
-            i = posOfEndSqBraqcket+1
+            i = posOfEndSqBracket+1
           }
         }
 
       } else {
 
-        val ParseResult(endPos, mods) = processMarkup(str, i, sb, block, processLink)
+        val ParseResult(endPos, mods) = processMarkup(str, i, sb, block, processLink, plaintext)
         if (endPos <= -1) {
           // element nemá konec, vrátit zpátky počáteční tag
           sb.setLength(outerTagStart)
@@ -332,34 +342,38 @@ class MarkupParser(typography: Typography) {
         } else {
 
           i = endPos
-          sb.append(block.endTag)
+          if (!plaintext) {
+            sb.append(block.endTag)
+          }
           //seenWhitespace = false TODO
 
-          if (mods != null && !block.doubleQuotes) {
+          if (mods != null && !block.doubleQuotes && !plaintext) {
             sb.insert(outerTagStart+block.attributePos, mkMods(mods))
           }
 
-          val posOfEndSqBraqcket = findLink(str, i)
-          if (posOfEndSqBraqcket != -1) {
-            val link = processLink(str.substring(i+2, posOfEndSqBraqcket))
-            if (link != null) {
+          val posOfEndSqBracket = findLink(str, i)
+          if (posOfEndSqBracket != -1) {
+            val link = processLink(str.substring(i+2, posOfEndSqBracket))
+            if (link != null && !plaintext) {
               if (block.doubleQuotes && mods != null) {
                 sb.insert(outerTagStart, "<a"+mkMods(mods)+" href="+util.quoteHTMLAttribute(link)+">").append("</a>")
               } else {
                 sb.insert(outerTagStart, "<a href="+util.quoteHTMLAttribute(link)+">").append("</a>")
               }
             }
-            i = posOfEndSqBraqcket+1
+            i = posOfEndSqBracket+1
           }
 
-          if (block.doubleQuotes && posOfEndSqBraqcket == -1) {
+          if (block.doubleQuotes && posOfEndSqBracket == -1) {
             if (mods == null) {
               val (a, b) = quoteMarks
               sb.insert(outerTagStart, a)
               sb.append(b)
             } else {
-              sb.insert(outerTagStart, "<span"+mkMods(mods)+">")
-              sb.append("</span>")
+              if (!plaintext) {
+                sb.insert(outerTagStart, "<span"+mkMods(mods)+">")
+                sb.append("</span>")
+              }
             }
           }
 
@@ -391,15 +405,23 @@ class MarkupParser(typography: Typography) {
 
 
 trait Typography {
-  def apply(text: String): String
+  def apply(text: String, plaintext: Boolean): String
   def doubleQuoteMarks: (String, String)
   def singleQuoteMarks: (String, String)
 }
 
+object NoTypography extends Typography {
+  def apply(text: String, plaintext: Boolean) = text
+  val doubleQuoteMarks = ("\"", "\"")
+  val singleQuoteMarks = ("'",  "'")
+}
+
 object CzechTypography extends Typography {
-  def apply(text: String) = {
+  def apply(text: String, plaintext: Boolean) = {
     var t = text
-    t = handlePrepositions(handleHyphens(t))
+    if (!plaintext) {
+      t = handlePrepositions(handleHyphens(t))
+    }
     for ((search, replace) <- replacements) { t = t.replace(search, replace) }
     t
   }
