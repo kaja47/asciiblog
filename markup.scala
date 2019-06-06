@@ -5,7 +5,7 @@ import scala.util.matching.Regex
 import scala.collection.mutable
 import MakeFiles.{ licenses, peelOffTags, isAbsolute }
 import MarkupParser.{ findMods, mkMods }
-import AsciiRegexes._
+import AsciiPatterns._
 
 
 trait Markup {
@@ -15,9 +15,9 @@ trait Markup {
 
 trait Text {
   def render(l: ImageLayout, relativize: String => String): String
+  def paragraph(text: String): String
   def plaintextSummary: String
   def plaintext: String
-  def paragraph(text: String): String
   def images: Seq[Image]
   def links: Seq[String]
 }
@@ -26,7 +26,7 @@ trait Text {
 
 // ASCII markup
 
-object AsciiRegexes {
+object AsciiPatterns {
   val linkRegex    = """(?x)  " ([^"]+?) " : \[ ([^\]\n]+?) \]""".r
   val ahrefRegex   = """(?x) (?<= href=") (.*?) (?=") """.r
 
@@ -38,10 +38,7 @@ object AsciiRegexes {
   val linkRefRegex = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
   val hrRegex      = """(?xm) ---+|\*\*\*+ """.r
   val commentRegex = """(?xs) \<!--.*?--\>""".r
-}
 
-
-object AsciiText {
   val linkUntil = Slurp { _.until('"') }
   val linkSlurp = Slurp { _.groupStart(0).quoted('"').asGroup(1, 1, -1).char(':').ignore().delimited('[', ']').asGroup(2, 1, -1).groupEnd(0) }
 
@@ -50,17 +47,34 @@ object AsciiText {
   def linkSlurpReplace(txt: String)(f: Slurp.Replacement) =
     Slurp(txt, groups = 3).replace(linkUntil, linkSlurp, f)
 
+  private val stripTagRegex = """\<.*?\>""".r // TODO less crude way to strip tags
+
+  def stripTags(html: String) = T.t{
+    var t = html
+    t = (if (html.indexOf('<') == -1) html else stripTagRegex.replaceAllIn(html, ""))
+    t = t.replace("\u00AD", "")  // soft hyphen
+    t = t.replace("\u00A0", " ") // nbsp
+    t = t.replace("&shy;",  "")  // soft hyphen
+    t = t.replace("&nbsp;", " ") // nbsp
+    t = t.replaceAll("\\s+", " ")
+    t
+  }
+}
+
+
+object AsciiText {
   def empty = AsciiText(Seq(), null, null)
 }
 
 
+
 case class AsciiText(segments: Seq[Segment], resolver: String => String, markup: AsciiMarkup) extends Text { self =>
-  import AsciiText._
 
   def render(l: ImageLayout, relativize: String => String): String = mkText(segments, l, resolvedLinks, relativize)
-  def plaintextSummary: String = mkParagraph(segments.collect { case Paragraph(txt, _) => txt }.headOption.getOrElse(""), resolvedLinks, identity, true)
-  def plaintext: String = ???
   def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l), markup).render(null, identity)
+
+  def plaintextSummary: String = stripTags(mkParagraph(segments.collect { case Paragraph(txt, _) => txt }.headOption.getOrElse(""), resolvedLinks, identity, true))
+  def plaintext: String = stripTags(processTexts(segments, txt => Iterator(mkParagraph(txt, resolvedLinks, identity, true))).mkString(" "))
 
   // Overwrites segments, doesn't resolve links again. This saves some work but
   // mainly it's there se error messages during link resolution are not
@@ -357,6 +371,9 @@ class AsciiMarkup extends Markup {
     AsciiText(finalSegments, resolver, this)
   }
 
+  // image format:
+  // [* image.jpg 100x100 .[class](alt) *]:[link] *** title (CC by-nc-sa https://example.com/source)
+
   private val imgRegex = """(?xm)
   \[\* \s+
   (\S++)
@@ -442,10 +459,9 @@ class HTMLMarkup extends Markup {
 class HTMLText(text: String, resolver: String => String, imageRoot: String, markup: HTMLMarkup) extends Text {
   def render(l: ImageLayout, relativize: String => String): String =
     markup.ahrefRegex.replaceAllIn(text, m => relativize(resolver(m.group(0))))
-
+  def paragraph(text: String): String = text
   def plaintextSummary: String = ""
   def plaintext: String = ???
-  def paragraph(text: String): String = text
   def images: Seq[Image] = markup.imgsrcRegex.findAllIn(text).toVector
     .map(url => Image(if (isAbsolute(url)) url else imageRoot + url))
   def links: Seq[String] = markup.ahrefRegex.findAllIn(text).map(resolver).toVector

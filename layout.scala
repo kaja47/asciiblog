@@ -1,7 +1,7 @@
 package asciiblog
 
 import MakeFiles.galleryScript
-import AsciiRegexes.ahrefRegex
+import AsciiPatterns.ahrefRegex
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.net.URLEncoder
@@ -96,11 +96,6 @@ pre        { white-space: pre-wrap; overflow-wrap: break-word; }
 
 
 object FlowLayout {
-  private val stripTagRegex = """\<.*?\>""".r // TODO less crude way to strip tags
-
-  def stripTags(html: String) =
-    if (html.indexOf('<') == -1) html else stripTagRegex.replaceAllIn(html, "")
-
   def truncate(txt: String, len: Int, append: String = "\u2026"): String =
     if (txt.length <= len) txt else {
       val lastSpace = txt.lastIndexOf(" ", len)
@@ -121,9 +116,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   def ifs(x: String, body: => String) = if (x != null && x.nonEmpty) body else ""
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
-
-  def plaintextDescription(a: Article): String =
-    stripTags(a.text.plaintextSummary).replace('\n', ' ')
 
   private def mainImageUrl(a: Article): String  = a.images.find(_.mods == "main").map(_.url).getOrElse(null)
   private def otherImageUrl(a: Article): String = a.images.headOption.map(_.url).getOrElse(null)
@@ -179,7 +171,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
       w.shortElement2("meta") { _.attr("property", "og:type"       ).attr("content", "article") }
       w.shortElement2("meta") { _.attr("property", "og:url"        ).attr("content", baseUrl) }
       w.shortElement2("meta") { _.attr("property", "og:title"      ).attr("content", a.title) }
-      w.shortElement2("meta") { _.attr("property", "og:description").attr("content", truncate(plaintextDescription(a), 200)) }
+      w.shortElement2("meta") { _.attr("property", "og:description").attr("content", truncate(a.text.plaintextSummary, 200)) }
 
       if(img != null) {
         w.shortElement2("meta") { _.attr("property", "og:image").attr("content", img) }
@@ -289,7 +281,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
 
   def makeSummaryBody(a: Article): String = {
     val img = a.images.find(_.mods == "main").map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
-    val txt = truncate(plaintextDescription(a), 300)
+    val txt = truncate(a.text.plaintextSummary, 300)
 
     ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
   }
