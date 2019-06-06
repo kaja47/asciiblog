@@ -1591,7 +1591,8 @@ object MakeFiles {
         val dest = new File(blog.outDir, blog.textCardUrl(a))
         if (!dest.exists) {
           dest.getParentFile.mkdirs()
-          ImageIO.write(createCard(a), "png", dest)
+          val img = createCard(a, background = blog.textCardsBackground, foreground = blog.textCardsColor)
+          ImageIO.write(img, "png", dest)
         }
       }
     }
