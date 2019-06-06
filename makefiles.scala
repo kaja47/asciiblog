@@ -85,6 +85,8 @@ case class Blog (
   val twitterSite: String,
   val twitterCreator: String,
   val textCards: Boolean,
+  val textCardsBackground: Color,
+  val textCardsColor: Color,
 
   val args: Array[String],
   val translation: Map[String, String],
@@ -215,6 +217,8 @@ object Blog {
       twitterSite            = cfgStr ("twitter.site", ""),
       twitterCreator         = cfgStr ("twitter.creator", ""),
       textCards              = cfgBool("textCards", false),
+      textCardsBackground    = cfgColor("textCards.background", Color.WHITE),
+      textCardsColor         = cfgColor("textCards.color", Color.BLACK),
 
       args                   = args,
       translation            = translation ++ cfg.collect { case (k, v) if k.startsWith("translation.") => k.split("\\.", 2)(1) -> v } ,
