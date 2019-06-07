@@ -898,10 +898,8 @@ object MakeFiles {
         if (y == null) (null, t)
         else (LocalDateTime.of(y.toInt, m.toInt-1, d.toInt, 0, 0, 0), t)
 
-      def validSuffix(f: String) = {
-        val ff = f.toLowerCase
-        ff.endsWith(".jpg") || ff.endsWith(".png") || ff.endsWith(".gif")
-      }
+      def validSuffix(f: String) =
+        f.toLowerCase.matches(""".*\.(jpg|jpeg|png|gif)""")
 
       val imgUrls = albumDir.list collect { case f if validSuffix(f) =>
         blog.baseUrl + new URI(null, null, "/albums/"+albumDir.getName+"/"+f, null).toASCIIString
