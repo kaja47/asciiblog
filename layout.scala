@@ -140,7 +140,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     val href = rel(if (linkTo == null) img.url else linkTo)
 
     val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src=${util.quoteHTMLAttribute(src)}>"""
-    val a      = if (!img.zoomable && linkTo == null) imgTag else aTag(imgTag, href)
+    val a      = if (!img.zoomable && linkTo == null) imgTag else "<a href="+util.quoteHTMLAttribute(href)+">"+imgTag+"</a>"
 
     s"""<span class=$cl>$a$desc</span>"""
 
