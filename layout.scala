@@ -350,7 +350,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
 
   def articleLink(a: Article, title: String = null, asLink: Boolean = true, imgMarker: Boolean = false) = {
     val _title = util.escape(if (title == null) a.title else title)
-    "<i>"+(if (a.link != null || asLink) aTag(_title, articleAbsUrl(a)) else _title)+"</i>"+ifs(imgMarker && a.hasImageMarker, blog.imageMarker)
+    (if (a.link != null || asLink) aTag(_title, articleAbsUrl(a)) else _title)+ifs(imgMarker && a.hasImageMarker, blog.imageMarker)
   }
 
   override def makeLink(a: Article) = {
@@ -359,8 +359,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   }
 
   def makeTagLink(t: Article) =
-    if (!t.isSupertag) "#<i>"+aTag(util.escape(t.title), blog.absUrl(t))+"</i>"
-    else            "<b>#<i>"+aTag(util.escape(t.title), blog.absUrl(t))+"</i></b>"
+    if (!t.isSupertag) "#"+aTag(util.escape(t.title), blog.absUrl(t))
+    else            "<b>#"+aTag(util.escape(t.title), blog.absUrl(t))+"</b>"
 
   def makeTagLinks(tags: Seq[Article]) = tags.map(makeTagLink).mkString(" ")
 
