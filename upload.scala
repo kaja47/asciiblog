@@ -39,13 +39,13 @@ copyDirectory(thumbSource, thumbTarget)
 
 // copy html files
 
-def parseFileIndex(lines: Iterator[String]): Map[String, String] =
+def parseFileIndex(lines: Seq[String]): Map[String, String] =
   lines.map { l => val Array(h, f) = l.split(" ", 2) ; (f, h) }.toMap
 
 // [file -> hash]
 def readFileIndex(f: File, retries: Int = 3): Map[String, String] =
   if (f.exists) {
-    parseFileIndex(io.Source.fromFile(f).getLines)
+    parseFileIndex(io.Source.fromFile(f).getLines.toVector)
   } else if (retries > 0) {
     // sometimes files from mounted remote directory are reported as missing during first access
     readFileIndex(f, retries-1)
