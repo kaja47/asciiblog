@@ -181,7 +181,7 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
         items.foreach { it =>
           sb.append("<li>")
           _mkText(Seq(it), l, aliases, relativize, sb)
-          sb.append("</li>\n")
+          sb.append("\n")
         }
         sb.append("</ul>")
 
@@ -194,7 +194,7 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
             if (num != i+1)                   { sb.append(" value=").append(util.quoteHTMLAttribute(num.toString)) }
             sb.append(">")
             _mkText(Seq(it), l, aliases, relativize, sb)
-            sb.append("</li>\n")
+            sb.append("\n")
         }
         sb.append("</ol>")
 
