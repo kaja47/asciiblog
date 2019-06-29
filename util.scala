@@ -269,6 +269,10 @@ object util {
       seq.groupBy(f).toSeq.sortBy(_._1)
   }
 
+  def sortByFreq[T](xs: Seq[T]): Seq[T] =
+    xs.groupBy(identity).mapValues(_.size)
+      .toSeq.sortBy(~_._2).map(_._1)
+
   def requireConfig(args: Array[String]): args.type = {
     if (args.length < 1) {
       println("config file not specified")
