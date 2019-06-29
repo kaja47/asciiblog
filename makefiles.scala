@@ -1550,7 +1550,6 @@ object MakeFiles {
       save(null, ".comments/.htaccess")("Deny from all")
     }
 
-    //save(null, "out.php")(outScript)
 
     if (blog.cssFile != null) {
       save(null, "style.css")(io.Source.fromFile(blog.cssFile).mkString)
