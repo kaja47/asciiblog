@@ -1,22 +1,42 @@
 package asciiblog
 
 object RunLispy extends App {
-  import Lispy._
-
   val script = args match {
-    case Array() => ""
-    case Array("s", rest @ _*) =>
-      rest.mkString(" ")
+    case Array() =>
+      println("lispy repl")
+      new Repl().loop()
     case Array("t", rest @ _*) =>
-      println(tokenize(rest.mkString(" ")).mkString(" "))
-      ""
-    case Array(f) =>
-      io.Source.fromFile(f).mkString
+      println(Lispy.tokenize(rest.mkString(" ")).mkString(" "))
+    case Array("s", rest @ _*) =>
+      new Repl().eval(rest.mkString(" "))
+    case files =>
+      val repl = new Repl()
+      for (f <- files) {
+        repl.eval(io.Source.fromFile(f).mkString)
+      }
+  }
+}
+
+
+class Repl {
+  private var env: Map[String, Any] = Lispy.env
+
+  def eval(line: String) = try {
+    val (res, newEnv) = Lispy.evalMain(Lispy.parse(line), env)
+    env = newEnv
+    println(res)
+  } catch {
+    case e: Exception => println(e)
   }
 
-  val (res, resEnv) = evalMain(parse(script), env)
-  println(res)
-  resEnv.toSeq.sortBy(_._1) foreach println
+  def loop() = {
+    import java.io._
+    val reader = new BufferedReader(new InputStreamReader(System.in))
+    while (true) {
+      eval(reader.readLine())
+    }
+  }
+
 }
 
 
@@ -33,7 +53,12 @@ object Lispy {
   case class Num(value: Int) extends Token with AST { override def toString = value.toString }
   case class Str(value: String) extends Token with AST { override def toString = s""""$value"""" }
   case class Sym(value: String) extends Token with AST { override def toString = s"Sym($value)" }
-  case class Lst(values: List[AST]) extends AST { override def toString = values.mkString("Lst(", ", ", ")") }
+  case class Lst(values: List[AST]) extends AST with Seq[AST] {
+    override def toString = values.mkString("Lst(", ", ", ")")
+    def iterator = values.iterator
+    def apply(x: Int) = values(x)
+    def length = values.length
+  }
   case class ASTSeq(asts: List[AST]) extends AST
 
   case class Func(f: PartialFunction[List[Any], Any]) extends (List[Any] => Any) with AST {
@@ -161,9 +186,12 @@ object Lispy {
 
     "null?"     -> Func { case a :: Nil => a == null },
     "not-null?" -> Func { case a :: Nil => a != null },
+    "sym?"      -> Func { case a :: Nil => a.isInstanceOf[Sym] },
+    "str?"      -> Func { case a :: Nil => a.isInstanceOf[Str] },
 
-    "join"  -> Func { case args => args.mkString },
-    "println"  -> Func { case args => args.foreach(a => print(a)); println(); args.last }
+    "join*"     -> Func { case args => args.mkString },
+    "join"      -> Func { case (arg: IterableOnce[_]) :: Nil => arg.mkString(" ") },
+    "println"   -> Func { case args => args.foreach(a => print(a)); println(); args.last },
   )
 
 
@@ -203,7 +231,7 @@ object Lispy {
     ast match {
       case Num(value) => value
       case Str(value) => value
-      case Lst(Sym("quote") :: args) => args
+      case Lst(Sym("quote") :: arg :: Nil) => arg
       case Lst(Sym("if") :: cond :: thn :: els :: Nil) =>
         if (truthy(evalExpr(cond, env))) evalExpr(thn, env) else evalExpr(els, env)
       case Lst(Sym("if") :: cond :: thn :: Nil) =>
@@ -213,15 +241,21 @@ object Lispy {
           env + (s -> evalExpr(v, env))
         }
         evalExpr(expr, newEnv)
+
       case Lst(Sym("fn") :: Lst(formalArgs) :: body :: Nil) =>
         Func { case args => evalExpr(body, env ++ (formalArgs.map(_.asInstanceOf[Sym].value) zip args)) }
+      case Lst(Sym("fn") :: Sym(fa) :: body :: Nil) =>
+        Func { case args => evalExpr(body, env + (fa -> args)) }
 
       case Lst(Sym("and") :: args) => args.forall(a => truthy(evalExpr(a, env)))
       case Lst(Sym("or") :: args) => args.exists(a => truthy(evalExpr(a, env)))
 
-      case Lst(Sym(s) :: values) =>
-        env(s).asInstanceOf[Func](values.map(v => evalExpr(v, env)))
-      case Sym(s) => env(s)
+      case Lst(expr :: values) =>
+        evalExpr(expr, env).asInstanceOf[Func](values.map(v => evalExpr(v, env)))
+      case Sym("env") => env
+      case Sym(s) =>
+        if (!env.contains(s)) throw new Exception("symbol `"+s+"` not found")
+        env(s)
 
       case ASTSeq(ast :: Nil) =>
         evalExpr(ast, env)
@@ -243,6 +277,7 @@ object Lispy {
 
   def number(x: Any) = x match {
     case x: Integer => x.intValue()
+    case Num(x) => x
     case _ => sys.error(s"$x is not a number")
   }
 
