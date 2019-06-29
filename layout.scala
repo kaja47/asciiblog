@@ -110,6 +110,8 @@ object FlowLayout {
 case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutMill) extends Layout {
   import FlowLayout._
 
+  private final val nbsp = "\u00A0"
+
   def rel(url: String): String = blog.relativize(url, baseUrl)
   def txl(s: String) = blog.translation(s)
   def ifs(c: Boolean, body: => String) = if (c) body else ""
@@ -139,7 +141,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     val src  = rel(blog.absUrlFromPath(srcPath))
     val href = rel(if (linkTo == null) img.url else linkTo)
 
-    val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ") }src=${util.quoteHTMLAttribute(src)}>"""
+    val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ")}src=${util.quoteHTMLAttribute(src)}>"""
     val a      = if (!img.zoomable && linkTo == null) imgTag else "<a href="+util.quoteHTMLAttribute(href)+">"+imgTag+"</a>"
 
     s"""<span class=$cl>$a$desc</span>"""
@@ -254,8 +256,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
         as.reverse.map { a => (a.date.getMonthValue, Some(a)) }
       }
       y+" "+mas.map {
-        case (m, Some(a)) => articleLink(a, "\u00A0"+m+"\u00A0")
-        case (m, None) => "\u00A0"+m+"\u00A0"
+        case (m, Some(a)) => articleLink(a, nbsp+m+nbsp)
+        case (m, None) => nbsp+m+nbsp
       }.mkString(" ")
     }.mkString("<br>")+
     undated.map { a => "<br>"+articleLink(a, txl("undated")) }.mkString
