@@ -2,7 +2,7 @@ package asciiblog
 
 import MakeFiles.{ hash, tagSlug, UrlOps, isAbsolute }
 import java.io.{ File, BufferedWriter, OutputStreamWriter, FileOutputStream, FileInputStream }
-import java.net.{ URL, URI, URLDecoder }
+import java.net.{ URL, URI, URLDecoder, URLEncoder }
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.time.LocalDateTime
@@ -75,6 +75,7 @@ case class Blog (
   val imageMarker: String,
   val albumsDir: String,
   val allowComments: Boolean,
+  val allowShareScript: Boolean,
   val shareLinks: Boolean,
   val demandExplicitSlugs: Boolean,
   val excludeFutureArticles: Boolean,
@@ -207,6 +208,7 @@ object Blog {
       imageMarker            = cfgStr ("imageMarker", ""),
       albumsDir              = cfgStr ("albumsDir", ""),
       allowComments          = cfgBool("allowComments", false),
+      allowShareScript       = cfgBool("allowShareScript", false),
       shareLinks             = cfgBool("shareLinks", false),
       demandExplicitSlugs    = cfgBool("demandExplicitSlugs", false),
       excludeFutureArticles  = cfgBool("excludeFutureArticles", false),
@@ -496,6 +498,7 @@ object MakeFiles {
 
   lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js"), "utf8").mkString)
   lazy val commentsScript = io.Source.fromFile(file("comments.php")).mkString
+  lazy val shareScript    = io.Source.fromFile(file("share.php")).mkString
   lazy val outScript      = io.Source.fromFile(file("out.php")).mkString
 
   def readConfig(cfgFile: File): Map[String, String] = {
@@ -1550,6 +1553,10 @@ object MakeFiles {
       save(null, ".comments/.htaccess")("Deny from all")
     }
 
+    if (blog.allowShareScript) {
+      val urlPattern = URLEncoder.encode(blog.absUrlFromSlug("SLUG"), "UTF-8").replace("SLUG", "${slug}")
+      save(null, "share.php") { shareScript.replace("{slug}", urlPattern) }
+    }
 
     if (blog.cssFile != null) {
       save(null, "style.css")(io.Source.fromFile(blog.cssFile).mkString)

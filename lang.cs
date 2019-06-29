@@ -22,3 +22,5 @@ comments.submit Komentovat
 share.share sdílet na
 share.facebook facebooku
 share.twitter twitteru
+share.linkedin linkedin
+share.tumblr tumblru

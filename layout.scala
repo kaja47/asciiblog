@@ -313,11 +313,24 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
     "</article>"+
     ifs(!compact,
-      "<footer>"+
+      "\n<footer>"+
       ifs(blog.allowComments && !a.isTag, s"""<b><a href="${ rel(blog.absUrlFromPath("comments.php?url="+blog.relUrlFromSlug(a.slug))) }">${txl("comments.enter")}</a></b>""")+
       ifs(blog.shareLinks && !a.isTag, {
-        val url = URLEncoder.encode(blog.absUrl(a), "UTF-8")
-        s""" &nbsp;&nbsp; ${txl("share.share")} <a href="https://www.facebook.com/sharer/sharer.php?u=$url">${txl("share.facebook")}</a>, <a href="https://twitter.com/intent/tweet?url=$url">${txl("share.twitter")}</a>"""
+        if (!blog.allowShareScript) {
+          val url = URLEncoder.encode(blog.absUrl(a), "UTF-8")
+          s""" $nbsp ${txl("share.share")}"""+
+          s""" <a href="https://www.facebook.com/sharer/sharer.php?u=$url">${txl("share.facebook")}</a>,"""+
+          s""" <a href="https://twitter.com/intent/tweet?url=$url">${txl("share.twitter")}</a>,"""+
+          s""" <a href="https://www.linkedin.com/shareArticle?mini=true&url=$url">${txl("share.linkedin")}</a>,"""+
+          s""" <a href="https://www.tumblr.com/share/link?url=$url">${txl("share.tumblr")}</a>"""
+      } else {
+          val slug = URLEncoder.encode(a.slug, "UTF-8")
+          s""" $nbsp ${txl("share.share")} """+
+          "<a href="+util.quoteHTMLAttribute(rel("share.php")+"?f="+slug)+">"+txl("share.facebook")+"</a>, "+
+          "<a href="+util.quoteHTMLAttribute(rel("share.php")+"?t="+slug)+">"+txl("share.twitter") +"</a>, "+
+          "<a href="+util.quoteHTMLAttribute(rel("share.php")+"?l="+slug)+">"+txl("share.linkedin")+"</a>, "+
+          "<a href="+util.quoteHTMLAttribute(rel("share.php")+"?u="+slug)+">"+txl("share.tumblr")+"</a>"
+        }
       })+
       ifs((blog.allowComments || blog.shareLinks) && !a.isTag, "<hr>")+
       ifs(a.tags.visible.nonEmpty, "<p>"+txl("tags")       +" "   +makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle))+"</p>")+
