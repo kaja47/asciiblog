@@ -2,13 +2,15 @@
 
 error_reporting(0);
 
+$commentsModeration = '{comments.moderation}' === 'true';
+
 function escapeHtml($s) {
 	return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 }
 
 function escapeHtmlAttr($s) {
-  if (strpos($s, '`') !== false && strpbrk($s, ' <>"\'') === false) { $s .= ' '; }
-  return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+	if (strpos($s, '`') !== false && strpbrk($s, ' <>"\'') === false) { $s .= ' '; }
+	return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 }
 
 class CommentSection {
@@ -50,19 +52,21 @@ class CommentSection {
 		return $this->_getComments($this->openFile($path), $flat);
 	}
 
-	function getCommentsGlobal() {
-		$block = $this->_getComments($this->openFile($this->globalPath, false), true);
+	function getCommentsGlobal($allComments) {
+		$block = $this->_getComments($this->openFile($this->globalPath, false), true, $allComments);
 		$block->title = '{comments.commentsTo}';
 		return $block;
 	}
 
-	private function _getComments($file, $flat = false) {
+	private function _getComments($file, $flat = false, $allComments = false) {
 		$lines = array_map('json_decode', array_map('trim', file($file)));
 		$block = $lines[0];
 		$cs = array();
 		$i = 0;
 		foreach (array_slice($lines, 1) as $c) {
-			$cs[isset($c->id) ? $c->id : $i++] = $c;
+			if ($allComments || !isset($c->approved) || $c->approved) {
+				$cs[isset($c->id) ? $c->id : $i++] = $c;
+			}
 		}
 		if (!$flat) {
 			foreach (array_reverse($cs) as $c) {
@@ -133,6 +137,7 @@ if (isset($_POST['text'])) {
 		'date' => date("Y-m-d H:i:s", time()),
 		'ip'   => (string) $_SERVER['REMOTE_ADDR'],
 		'path' => $url,
+		'approved' => !$commentsModeration, // TODO - if there are any approved comments from the same IP, approve automatically
 	);
 
 	if ($comment->text === '') throw new \Exception("Text field is required.");
@@ -157,6 +162,7 @@ if (isset($_POST['text'])) {
 	}
 
 	if ($commentSection->isSpam($comment)) {
+		echo "SPAM";
 		exit;
 	}
 	$commentSection->addComment($url, $comment);
@@ -165,7 +171,8 @@ if (isset($_POST['text'])) {
 	exit;
 
 } elseif (isset($_GET['rss'])) {
-	$block = $url ? $commentSection->getComments($url) : $commentSection->getCommentsGlobal();
+	$allComments = isset($_GET['all']); // get all comments including not yet approved
+	$block = $url ? $commentSection->getComments($url) : $commentSection->getCommentsGlobal($allComments);
 
 	$rss = new \SimpleXMLElement('<rss version="2.0"></rss>');
 	$rss->channel->title = $block->title;
