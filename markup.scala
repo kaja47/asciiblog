@@ -150,7 +150,7 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
   private def _mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String, sb: StringBuilder): String = {
     segments.foreach {
       case Heading(txt)         => sb.append("<h3>").append(mkParagraph(txt, aliases, relativize)).append("</h3>")
-      case Hr()                 => sb.append("<hr/>\n")
+      case Hr()                 => sb.append("<hr>\n")
       case Linkref(_)           =>
       case Block("html", txt, mods) => sb.append(txt) // TODO mods
       case Block("div",  txt, mods) => sb.append("<div").append(mkMods(mods)).append(">").append(txt).append("</div>")
