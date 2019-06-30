@@ -1537,7 +1537,7 @@ object MakeFiles {
       val Array(pre, post) = p.split(Regex.quote("{comments.body}"))
 
       save(null, "comments.php") {
-        val replaces = blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v } ++ Seq(
+        val replaces = blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v }.toSeq ++ Seq(
           "{comments.prebody}"  -> pre,
           "{comments.postbody}" -> post,
           "{comments.baseUrl}"  -> blog.baseUrl,
