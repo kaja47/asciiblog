@@ -1251,7 +1251,7 @@ object MakeFiles {
       h = skeletonHashCodes(a.backlinks, h)
       h = skeletonHashCodes(a.similar.map(_.article), h)
       h = skeletonHashCodes(a.pubArticles, h)
-      h = mix(h, a.pubBy.##)
+      h = skeletonHashCode(a.pubBy, h)
       h = mix(h, a.inFeed.##)
       h = skeletonHashCode(a.next, h)
       h = skeletonHashCode(a.prev, h)
