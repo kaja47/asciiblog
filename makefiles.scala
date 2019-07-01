@@ -61,6 +61,7 @@ case class Blog (
   val cssStyle: String,
   val cssExport: Boolean,
   val cssFile: File,
+  val galleryScriptExport: Boolean,
   val header: String,
   val footer: String,
   val thumbWidth: Int,
@@ -194,6 +195,7 @@ object Blog {
       cssStyle               = cfgStr ("style", ""),
       cssExport              = cfgBool("cssExport", false),
       cssFile                = cfg.get("cssFile").map(f => newFile(f.trim, cfgDirectory)).getOrElse(null),
+      galleryScriptExport    = cfgBool("galleryScriptExport", false),
       header                 = cfgStr ("header", ""),
       footer                 = cfgStr ("footer", ""),
       thumbWidth             = cfgInt ("thumbnailWidth", 150),
@@ -481,22 +483,10 @@ object MakeFiles {
 
   private def file(f: String) = new File(thisDir, f)
 
-  private def crudelyMinify(js: String) = {
-    val rr = "//\\s+s/(.*)/(.*)/\\s*".r
-    val pr = "//\\s+prep\\s+(.*)".r
-    val directives = js.linesIterator.takeWhile(_.startsWith("//"))
-
-    val min = js
-      .replaceAll("""(?<!let|function|in|of|return)\s+(?!in|of)|/\*.*?\*/|//.*\n""", "")
+  private def crudelyMinify(js: String) =
+    js.replaceAll("""(?<!let|function|in|of|return)\s+(?!in|of)|/\*.*?\*/|//.*\n""", "")
       .replaceAll(""";}""", "}")
 
-    directives.foldLeft(min) { case (js, dir) =>
-      dir match {
-        case rr(from, to) => js.replace(from, to)
-        case pr(prep)     => prep+js
-      }
-    }
-  }
   def keyValuesIterator(f: File, enc: String) = io.Source.fromFile(f, enc).getLines.collect(keyVal)
 
   lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js"), "utf8").mkString)
@@ -1565,6 +1555,10 @@ object MakeFiles {
       save(null, "style.css")(io.Source.fromFile(blog.cssFile).mkString)
     } else if (blog.cssExport) {
       save(null, "style.css")(CSSMinimizeJob(layoutMill.basicStyle + "\n" + blog.cssStyle).fullMinimizedStyle)
+    }
+
+    if (blog.galleryScriptExport) {
+      save(null, "gallery.js")(galleryScript)
     }
 
     save(null, "robots.txt")("User-agent: *\nAllow: /")

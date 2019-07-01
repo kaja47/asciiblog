@@ -201,13 +201,19 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     "<meta name=viewport content=\"width=device-width,initial-scale=1\">"+
     "<title>"+ ifs(title, title+" | ")+blog.title+"</title>"+
     rssLink("rss.xml")+
-    ifs(headers)+
     (if (blog.cssFile != null || blog.cssExport)
       "<link rel=stylesheet href="+util.quoteHTMLAttribute(rel("style.css"))+" type=text/css>"
     else
       "<style>"+mill.css.styleFor(body, !includeCompleteStyle)+"</style>"
     )+
-    ifs(containImages, "<script>"+galleryScript+"</script>\n")+
+    ifs(containImages,
+      if (blog.galleryScriptExport) {
+        "<script src="+util.quoteHTMLAttribute(rel("gallery.js"))+"></script>"
+      } else {
+        "<script>"+galleryScript+"</script>"
+      }
+    )+"\n"+
+    ifs(headers)+"\n"+
     body
   }
 
