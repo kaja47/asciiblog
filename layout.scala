@@ -335,18 +335,17 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
         }
       })+
       ifs((blog.allowComments || blog.shareLinks) && !a.isTag, "<hr>")+
-      ifs(a.tags.visible.nonEmpty, "<p>"+txl("tags")       +" "   +makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle))+"</p>")+
-      ifs(a.pubArticles.nonEmpty,  "<p>"+txl("published")  +"<br>"+a.pubArticles.map(makeLink).mkString("<br>")                         +"</p>")+
-      ifs(a.pubBy != null,         "<p>"+txl("publishedBy")+" "   +articleLink(a.pubBy, makeDate(a), imgMarker = true)                  +"</p>")+
+      ifs(a.tags.visible.nonEmpty, "<p>"+txl("tags")       +" "   +makeTagLinks(a.tags.visible.sortBy(!_.supertag).map(base.tagByTitle)))+
+      ifs(a.pubArticles.nonEmpty,  "<p>"+txl("published")  +"<br>"+a.pubArticles.map(makeLink).mkString("<br>")                         )+
+      ifs(a.pubBy != null,         "<p>"+txl("publishedBy")+" "   +articleLink(a.pubBy, makeDate(a), imgMarker = true)                  )+
       ifs(a.similar.nonEmpty,
         "<p>"+
         (if (a.isTag) txl("similarTags") else txl("similar"))+" "
-        +a.similar.map { s => articleLink(s.article, s.article.title, imgMarker = true)/*+" ("+s.commonTags+", "+s.dateDiff+"d)"*/ }.mkString(", ")+
-        "</p>"
+        +a.similar.map { s => articleLink(s.article, s.article.title, imgMarker = true)/*+" ("+s.commonTags+", "+s.dateDiff+"d)"*/ }.mkString(", ")
       )+
-      ifs(a.backlinks.nonEmpty,    "<p>"+txl("backlinks")  +" "   +a.backlinks.map(s => articleLink(s, s.title, imgMarker = true)).mkString(", ")+"</p>")+
-      ifs(a.foreighBacklinks.nonEmpty,"<p>"+txl("foreignBacklinks")+" "  +a.foreighBacklinks.map(b => aTag(b.title, b.url)+" ("+b.site+")").mkString(", ")+"</p>")+ // ???
-      //ifs(a.license, a.license+"<br>")+
+      ifs(a.backlinks.nonEmpty,    "<p>"+txl("backlinks")  +" "   +a.backlinks.map(s => articleLink(s, s.title, imgMarker = true)).mkString(", "))+
+      ifs(a.foreighBacklinks.nonEmpty,"<p>"+txl("foreignBacklinks")+" "  +a.foreighBacklinks.map(b => aTag(b.title, b.url)+" ("+b.site+")").mkString(", "))+
+      //ifs(a.license, "<p>"+a.license+"<br>")+
       "</footer>"
     )
   }
