@@ -292,7 +292,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     val title = blog.hooks.title(base, blog, this, a, compact)
 
     "<article>"+
-    ifs(!compact && (a.prev != null || a.next != null), "<span class=f>"+makeNextPrevArrows(a.prev, a.next)+"</span>")+
+    ifs(!compact && (a.prev != null || a.next != null), makeNextPrevArrows(a.prev, a.next))+
     (if (title != null) title else if (!a.isTag) makeTitle(a, compact) else txl("tagged")+" "+makeTitle(a)+"<br>")+
     ifs(a.isTag, {
       val sup = a.tags.visible.map(base.tagByTitle)
