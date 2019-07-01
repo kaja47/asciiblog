@@ -472,8 +472,11 @@ object MakeFiles {
 
   private val thisDir: File = {
     val dot = new File(".")
-    val cp  = new File(System.getProperty("java.class.path")).getParentFile
-    if (new File(dot, "gallery.js").exists()) dot else cp
+    val cp  = System.getProperty("java.class.path")
+    val jar = cp.split(":|;").find(_.contains("asciiblog.jar"))
+    if (jar.isEmpty) sys.error("there's no asciiblog.jar file on classpath")
+    def jarDir = new File(jar.get).getParentFile
+    if (new File(dot, "gallery.js").exists()) dot else jarDir
   }
 
   private def file(f: String) = new File(thisDir, f)
