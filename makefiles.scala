@@ -1,6 +1,6 @@
 package asciiblog
 
-import MakeFiles.{ hash, tagSlug, UrlOps, isAbsolute }
+import MakeFiles.{ hash, UrlOps, isAbsolute }
 import java.io.{ File, BufferedWriter, OutputStreamWriter, FileOutputStream, FileInputStream }
 import java.net.{ URL, URI, URLDecoder, URLEncoder }
 import java.security.MessageDigest
