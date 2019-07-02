@@ -5,261 +5,256 @@ error_reporting(0);
 $commentsModeration = '{comments.moderation}' === 'true';
 
 function escapeHtml($s) {
-	return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+  return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 }
 
 function escapeHtmlAttr($s) {
-	if (strpos($s, '`') !== false && strpbrk($s, ' <>"\'') === false) { $s .= ' '; }
-	return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+  if (strpos($s, '`') !== false && strpbrk($s, ' <>"\'') === false) { $s .= ' '; }
+  return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 }
 
 class CommentSection {
-	private $baseDir    = '.comments';
-	private $pathRegex  = '~.*\.html~';
-	private $globalPath = 'global.rss.html';
+  private $commentsFile      = '.comments/comments';
+  private $articlesFile      = '.comments/articles';
+  private $ipBlacklistFile   = '.comments/ip-blacklist';
+  private $termBlacklistFile = '.comments/term-blacklist';
 
-	function isSpam($comment) {
-		$ipBlacklistFile   = $this->baseDir."/ip-blacklist";
-		$termBlacklistFile = $this->baseDir."/term-blacklist";
+  function isSpam($comment) {
+    if (file_exists($this->ipBlacklistFile)) {
+      $ips = array_map('trim', file($this->ipBlacklistFile));
+      foreach ($ips as $ip) {
+        if (substr($comment->ip, 0, strlen($ip)) === $ip) {
+          return true;
+        }
+      }
+    }
 
-		if (file_exists($ipBlacklistFile)) {
-			$ips = array_map('trim', file($ipBlacklistFile));
-			foreach ($ips as $ip) {
-				if (substr($comment->ip, 0, strlen($ip)) === $ip) {
-					return true;
-				}
-			}
-		}
+    if (file_exists($this->termBlacklistFile)) {
+      $terms = array_map('trim', file($this->termBlacklistFile));
+      foreach ($terms as $term) {
+        if (strpos($comment->text, $term) !== false) {
+          return true;
+        }
+      }
+    }
 
-		if (file_exists($termBlacklistFile)) {
-			$terms = array_map('trim', file($termBlacklistFile));
-			foreach ($terms as $term) {
-				if (strpos($comment->text, $term) !== false) {
-					return true;
-				}
-			}
-		}
+    return false;
+  }
 
-		return false;
-	}
+  function addComment($comment) {
+    if ($comment->slug === null) throw new \Exception("missing slug");
+    if ($comment->text === '') throw new \Exception("Text field is required.");
+    if (strlen($comment->name) > 60) throw new \Exception("Name is too long.");
+    if (strlen($comment->mail) > 60) throw new \Exception("Mail is too long.");
+    if (strlen($comment->web)  > 60) throw new \Exception("Web is too long.");
+    if (strlen($comment->text) > 2000) throw new \Exception("Text is too long.");
+    if ($comment->name === '') { $comment->name = 'Anonymous'; }
 
-	function addComment($path, $comment) {
-		$this->append($this->openFile($this->globalPath, false), $comment);
-		$this->append($this->openFile($path), $comment);
-	}
+    if ($this->isSpam($comment)) {
+      throw new \Exception("Spam detected.");
+    }
 
-	function getComments($path, $flat = false) {
-		return $this->_getComments($this->openFile($path), $flat);
-	}
+    if (!$comment->approved) { // auto-approve
+      $shouldAutoapprove = false;
+      foreach ($this->getComments(null)->comments as $c) {
+        if ($c->approved && $c->ip === $comment->ip) {
+          $shouldAutoapprove = true;
+          break;
+        }
+      }
+      $comment->approved = $shouldAutoapprove;
+    }
 
-	function getCommentsGlobal($allComments) {
-		$block = $this->_getComments($this->openFile($this->globalPath, false), true, $allComments);
-		$block->title = '{comments.commentsTo}';
-		return $block;
-	}
+    if (isset($comment->replyTo)) { // check if valid reply
+      $validReply = false;
+      foreach ($this->getComments($comment->slug)->comments as $c) {
+        if ($c->id == $replyTo) {
+          $validReply = true;
+          break;
+        }
+      }
 
-	private function _getComments($file, $flat = false, $allComments = false) {
-		$lines = array_map('json_decode', array_map('trim', file($file)));
-		$block = $lines[0];
-		$cs = array();
-		$i = 0;
-		foreach (array_slice($lines, 1) as $c) {
-			if ($allComments || !isset($c->approved) || $c->approved) {
-				$cs[isset($c->id) ? $c->id : $i++] = $c;
-			}
-		}
-		if (!$flat) {
-			foreach (array_reverse($cs) as $c) {
-				if (isset($c->replyTo) && $cs[$c->replyTo]) {
-					if (!isset($cs[$c->replyTo]->replies)) $cs[$c->replyTo]->replies = array();
-					array_unshift($cs[$c->replyTo]->replies, $c);
-					unset($cs[$c->id]);
-				}
-			}
-		}
-		$block->comments = $cs;
-		return $block;
-	}
+      if (!$validReply || $comment->replyTo == $comment->id) {
+        throw new \Exception("Replying to invalid comment.");
+      }
+    }
 
-	private function openFile($path, $fetchTitle = true) {
-		if ($path[0] === '/' || strpos($path, '..') !== false || !preg_match($this->pathRegex, $path))
-			throw new \Exception("invalid path");
+    file_put_contents($this->commentsFile, json_encode($comment)."\n", FILE_APPEND | LOCK_EX);
+    return $comment;
+  }
 
-		$file = $this->baseDir.'/'.str_replace("/", "_", $path);
-		if (!file_exists($file)) {
-			if (!file_exists($this->baseDir)) {
-				mkdir($this->baseDir);
-			}
-			$header = array('path' => $path, 'title' => $fetchTitle ? $this->getTitle($path) : null);
-			$this->append($file, $header);
-		}
-		return $file;
-	}
+  function getComments($slug = null, $flat = true, $allComments = false) {
+    $articles = []; // [slug => title]
+    foreach (file($this->articlesFile) as $l) {
+      list($s, $t) = explode(" ", trim($l), 2);
+      $articles[$s] = $t;
+    }
 
-	private function getTitle($path) {
-		$html = @file_get_contents($path);
-		if ($html === false) {
-			throw new \Exception("page '$path' cannot be found");
-		}
-		$dom = new \DOMDocument('1.0', 'UTF-8');
-		$html = mb_convert_encoding($html, 'HTML-ENTITIES', "UTF-8");
-		$ok = @ $dom->loadHTML($html);
-		if ($ok === false) {
-			throw new \Exception("page '$path' cannot be found");
-		}
-		$xpath = new \DOMXPath($dom);
-		return $xpath->query('//h2')->item(0)->nodeValue;
-	}
+    if ($slug !== null) {
+      if (!isset($articles[$slug])) throw new \Exception("invalid slug");
+    }
 
-	private function append($file, $data) {
-		file_put_contents($file, json_encode($data)."\n", FILE_APPEND | LOCK_EX);
-	}
+    $comments = array_map(function ($l) { return json_decode(trim($l)); }, file($this->commentsFile));
+    if ($slug !== null) {
+      $comments = array_filter($comments, function ($c) use ($slug) { return $c->slug === $slug; });
+    }
+
+    $cs = array();
+    $i = 0;
+    foreach ($comments as $c) {
+      if ($allComments || !isset($c->approved) || $c->approved) {
+        $cs[isset($c->id) ? $c->id : $i++] = $c;
+      }
+    }
+
+    if (!$flat) {
+      foreach (array_reverse($cs) as $c) {
+        if (isset($c->replyTo) && $cs[$c->replyTo]) {
+          if (!isset($cs[$c->replyTo]->replies)) $cs[$c->replyTo]->replies = array();
+          array_unshift($cs[$c->replyTo]->replies, $c);
+          unset($cs[$c->id]);
+        }
+      }
+    }
+
+    return (object) array(
+      'title' => $slug !== null ? $articles[$slug] : '{comments.commentsTo}',
+      'slug' => $slug,
+      'comments' => $cs,
+    );
+  }
+
 }
 
 function mkText($txt) {
-	return str_replace("\n", "<br/>", $txt);
+  return str_replace("\n", "<br>", $txt);
 }
 
 
 try {
 
-$commentSection = new CommentSection;
-$requestUrl = $_SERVER['REQUEST_URI'];
-$url = (string) $_GET['url'];
+  $commentSection = new CommentSection;
+  $requestUrl = $_SERVER['REQUEST_URI'];
+  $slug = (string) $_GET['u'];
+  $slug = $slug === "" ? null : $slug;
+  $toBeApproved = isset($_GET['app']);
 
-if (isset($_POST['text'])) {
-	$comment = (object) array(
-		'id'   => mt_rand(),
-		'name' => (string) $_POST['name'],
-		'mail' => (string) $_POST['mail'],
-		'web'  => (string) $_POST['web'],
-		'text' => (string) $_POST['text'],
-		'date' => date("Y-m-d H:i:s", time()),
-		'ip'   => (string) $_SERVER['REMOTE_ADDR'],
-		'path' => $url,
-		'approved' => !$commentsModeration, // TODO - if there are any approved comments from the same IP, approve automatically
-	);
+  if (isset($_POST['text'])) {
+    $comment = (object) array(
+      'slug' => $slug,
+      'date' => date("Y-m-d H:i:s", time()),
+      'approved' => !$commentsModeration,
+      'id'   => mt_rand(),
+      'name' => (string) $_POST['name'],
+      'mail' => (string) $_POST['mail'],
+      'web'  => (string) $_POST['web'],
+      'ip'   => (string) $_SERVER['REMOTE_ADDR'],
+      'text' => (string) $_POST['text'],
+    );
 
-	if ($comment->text === '') throw new \Exception("Text field is required.");
-	if (strlen($comment->name) > 60) throw new \Exception("Name is too long.");
-	if (strlen($comment->mail) > 60) throw new \Exception("Mail is too long.");
-	if (strlen($comment->web)  > 60) throw new \Exception("Web is too long.");
-	if (strlen($comment->text) > 2000) throw new \Exception("Text is too long.");
-	if ($comment->name === '') { $comment->name = 'Anonymous'; }
+    if ($_POST['replyTo']) {
+      $comment->replyTo = (int) $_POST['replyTo'];
+    }
 
-	if ($_POST['replyTo']) {
-		$replyTo = (int) $_POST['replyTo'];
-		$valid = false;
-		foreach ($commentSection->getComments($url, true) as $c) {
-			if ($c->id == $replyTo) $valid = true;
-		}
+    $savedComment = $commentSection->addComment($comment);
+    setcookie('user', json_encode(array($comment->name, $comment->mail, $comment->web)), time()+3600*24*30);
+    header('Location: '.$requestUrl.(!$savedComment->approved ? "&app" : ""));
+    exit;
 
-		if (!$valid || $c->replyTo == $c->id) {
-			throw new \Exception("Replying to invalid comment.");
-		}
+  } elseif (isset($_GET['rss'])) {
+    $allComments = isset($_GET['all']); // get all comments including not yet approved
+    $block = $slug ? $commentSection->getComments($slug, true, false) : $commentSection->getComments(null, true, $allComments);
 
-		$comment->replyTo = $replyTo;
-	}
+    $rss = new \SimpleXMLElement('<rss version="2.0"></rss>');
+    $rss->channel->title = $block->title;
+    $rss->channel->link  = "{comments.baseUrl}/comments.php?u=".escapeHtmlAttr($block->slug);
 
-	if ($commentSection->isSpam($comment)) {
-		echo "SPAM";
-		exit;
-	}
-	$commentSection->addComment($url, $comment);
-	setcookie('user', json_encode(array($comment->name, $comment->mail, $comment->web)), time()+3600*24*30);
-	header('Location: '.$requestUrl);
-	exit;
+    foreach ($block->comments as $c) {
+      $item = $rss->channel->addChild("item");
+      $item->title = $block->title." - ".$c->name;
+      $item->description = escapeHtml($c->text);
+      $item->guid  = "{comments.baseUrl}/comments.php?url=".escapeHtmlAttr(isset($c->slug) ? $c->slug : $block->slug)."#".$c->id;
+      $item->guid["isPermalink"] = "true";
+      $item->pubDate = date(DATE_RSS, strtotime($c->date));
+    }
 
-} elseif (isset($_GET['rss'])) {
-	$allComments = isset($_GET['all']); // get all comments including not yet approved
-	$block = $url ? $commentSection->getComments($url) : $commentSection->getCommentsGlobal($allComments);
+    header("Content-Type: application/xml; charset=UTF-8");
+    echo $rss->asXML();
+    exit;
 
-	$rss = new \SimpleXMLElement('<rss version="2.0"></rss>');
-	$rss->channel->title = $block->title;
-	$rss->channel->link  = "{comments.baseUrl}/comments.php?url=".escapeHtmlAttr($block->path);
+  } else {
+    if ($slug === null) throw new \Exception("missing slug");
+    $block = $commentSection->getComments($slug, false, false);
+    @list($name, $mail, $web) = isset($_COOKIE['user']) ? array_map('strval', json_decode((string)$_COOKIE['user'])) : array('', '', '');
 
-	foreach ($block->comments as $c) {
-		$item = $rss->channel->addChild("item");
-		$item->title = $block->title." - ".$c->name;
-		$item->description = escapeHtml($c->text);
-		$item->guid  = "{comments.baseUrl}/comments.php?url=".escapeHtmlAttr(isset($c->path) ? $c->path : $block->path)."#".$c->id;
-		$item->guid["isPermalink"] = "true";
-		$item->pubDate = date(DATE_RSS, strtotime($c->date));
-	}
+    echo '{comments.prebody}';
+    echo "{comments.commentsTo} <h2><a href='", escapeHtmlAttr($block->slug) , "'>", escapeHtml($block->title), "</a></h2><br><br>";
 
-	header("Content-Type: application/xml; charset=UTF-8");
-	echo $rss->asXML();
-	exit;
-
-} else {
-	$block = $commentSection->getComments($url);
-	@list($name, $mail, $web) = isset($_COOKIE['user']) ? array_map('strval', json_decode((string)$_COOKIE['user'])) : array('', '', '');
-
-	echo '{comments.prebody}';
-	echo "{comments.commentsTo} <h2><a href='", escapeHtmlAttr($block->path) , "'>", escapeHtml($block->title), "</a></h2><br/></br/>";
-
-	echo '
+    echo '
 <style>
 textarea { width: 100%; height: 6em; }
 input { padding: 1px 2px; margin: 0em; border:1px solid gray; width: 7em; }
 form div { float: left; margin-left: 0.5em }
 </style>
 
-<form action="'.escapeHtmlAttr($requestUrl).'" method="post">
-	<legend>{comments.text}</legend>
-	<textarea name="text" required></textarea>
-	<br/>
+<form action="'.escapeHtmlAttr($requestUrl).'" method=post>
+  <legend>{comments.text}</legend>
+  <textarea name=text required></textarea>
+  <br>
 
-	<div>
-		<label for="name">{comments.name}</label>
-		<input type="text" maxlength="60" name="name" id="name" value="'.escapeHtmlAttr($name).'">
-	</div>
+  <div>
+    <label for=name>{comments.name}</label>
+    <input type=text maxlength=60 name=name id=name value="'.escapeHtmlAttr($name).'">
+  </div>
 
-	<div>
-		<label for="mail">{comments.mail}</label>
-		<input type="email" maxlength="60" name="mail" id="mail" value="'.escapeHtmlAttr($mail).'">
-	</div>
+  <div>
+    <label for=mail>{comments.mail}</label>
+    <input type=email maxlength=60 name=mail id=mail value="'.escapeHtmlAttr($mail).'">
+  </div>
 
-	<div>
-		<label for="web">{comments.web}</label>
-		<input type="url" maxlength="60" name="web" id="web" value="'.escapeHtmlAttr($web).'">
-	</div>
+  <div>
+    <label for=web>{comments.web}</label>
+    <input type=url maxlength=60 name=web id=web value="'.escapeHtmlAttr($web).'">
+  </div>
 
-	<div>
-		<input type="submit" name="send" value="{comments.submit}">
-	</div>
-	<br clear=all />
+  <div>
+    <input type=submit name=send value="{comments.submit}">
+  </div>
+  <br clear=all>
 
 </form>
-<br/><br/>
-';
+<br>';
 
-	function printComments($comments) {
-		foreach ($comments as $c) {
-			if ($c->web) {
-				echo "<a href='", escapeHtmlAttr($c->web), "'><i id='{$c->id}'>", escapeHtml($c->name), "</i></a> ";
-			} else {
-				echo                                         "<i id='{$c->id}'>", escapeHtml($c->name), "</i> ";
-			}
-			echo "<span style='color: gray;'>(", date("Y-m-d H:i", strtotime($c->date)), ")</span><br/>";
-			echo mkText(escapeHtml($c->text));
-			echo "<br/><br/>";
+    if ($toBeApproved) {
+      echo "<p>{comments.approve}</p>";
+    }
 
-			if (isset($c->replies)) {
-				echo "<div style='margin-left:2em;'>";
-				printComments($c->replies);
-				echo "</div>";
-			}
-		}
-	}
+    function printComments($comments) {
+      foreach ($comments as $c) {
+        if ($c->web) {
+          echo "<a href='", escapeHtmlAttr($c->web), "'><i id='{$c->id}'>", escapeHtml($c->name), "</i></a> ";
+        } else {
+          echo                                         "<i id='{$c->id}'>", escapeHtml($c->name), "</i> ";
+        }
+        echo "<span style='color: gray;'>(", date("Y-m-d H:i", strtotime($c->date)), ")</span><br/>";
+        echo mkText(escapeHtml($c->text));
+        echo "<br/><br/>";
 
-	printComments($block->comments);
+        if (isset($c->replies)) {
+          echo "<div style='margin-left:2em;'>";
+          printComments($c->replies);
+          echo "</div>";
+        }
+      }
+    }
 
-	echo '{comments.postbody}';
-	exit;
-}
+    printComments($block->comments);
+
+    echo '{comments.postbody}';
+    exit;
+  }
 
 } catch (Exception $e) {
-	echo $e->getMessage();
-	exit;
+  echo $e->getMessage();
+  exit;
 }

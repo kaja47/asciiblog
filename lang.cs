@@ -19,6 +19,7 @@ comments.name Jméno
 comments.mail Email
 comments.web Web
 comments.submit Komentovat
+comments.approve Váš komentář čeká na schválení
 share.share sdílet na
 share.facebook facebooku
 share.twitter twitteru

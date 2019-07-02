@@ -322,7 +322,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     "</article>"+
     ifs(!compact,
       "\n<footer>"+
-      ifs(blog.allowComments && !a.isTag, s"""<b><a href="${ rel(blog.absUrlFromPath("comments.php?url="+blog.relUrlFromSlug(a.slug))) }">${txl("comments.enter")}</a></b>""")+
+      ifs(blog.allowComments && !a.isTag, s"""<b><a href="${rel(blog.absUrlFromPath("comments.php?u="+a.slug)) }">${txl("comments.enter")}</a></b>""")+
       ifs(blog.shareLinks && !a.isTag, {
         if (!blog.allowShareScript) {
           val url = URLEncoder.encode(blog.absUrl(a), "UTF-8")

@@ -76,6 +76,7 @@ case class Blog (
   val imageMarker: String,
   val albumsDir: String,
   val allowComments: Boolean,
+  val commentsModeration: Boolean,
   val allowShareScript: Boolean,
   val shareLinks: Boolean,
   val demandExplicitSlugs: Boolean,
@@ -210,6 +211,7 @@ object Blog {
       imageMarker            = cfgStr ("imageMarker", ""),
       albumsDir              = cfgStr ("albumsDir", ""),
       allowComments          = cfgBool("allowComments", false),
+      commentsModeration     = cfgBool("commentsModeration", false),
       allowShareScript       = cfgBool("allowShareScript", false),
       shareLinks             = cfgBool("shareLinks", false),
       demandExplicitSlugs    = cfgBool("demandExplicitSlugs", false),
@@ -1529,20 +1531,18 @@ object MakeFiles {
       val Array(pre, post) = p.split(Regex.quote("{comments.body}"))
 
       save(null, "comments.php") {
-        val replaces = blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v }.toSeq ++ Seq(
-          "{comments.prebody}"  -> pre,
-          "{comments.postbody}" -> post,
-          "{comments.baseUrl}"  -> blog.baseUrl,
-          """href="rss.xml""""  -> """href="'.escapeHtmlAttr($requestUrl).'&amp;rss"""" // this is a bit ugly trick
+        val replacements = blog.translation.collect { case (k, v) if k.startsWith("comments.") => s"{$k}" -> v }.toSeq ++ Seq(
+          "{comments.prebody}"    -> pre,
+          "{comments.postbody}"   -> post,
+          "{comments.baseUrl}"    -> blog.baseUrl,
+          "{comments.moderation}" -> blog.commentsModeration.toString,
+          "href=rss.xml"          -> """href="'.escapeHtmlAttr($requestUrl).'&amp;rss"""" // this is a bit ugly trick
         )
-        var cs = commentsScript
-        for ((from, to) <- replaces) {
-          cs = cs.replace(from, to)
-        }
-        cs
+        replacements.foldLeft(commentsScript) { case (cs, (from, to)) => cs.replace(from, to) }
       }
       new File(".comments").mkdirs()
       save(null, ".comments/.htaccess")("Deny from all")
+      save(null, ".comments/articles")(base.all.sortBy(_.slug).map { a => a.slug+" "+a.title }.mkString("\n"))
     }
 
     if (blog.allowShareScript) {
