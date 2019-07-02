@@ -492,7 +492,6 @@ object MakeFiles {
   lazy val galleryScript  = crudelyMinify(io.Source.fromFile(file("gallery.js"), "utf8").mkString)
   lazy val commentsScript = io.Source.fromFile(file("comments.php")).mkString
   lazy val shareScript    = io.Source.fromFile(file("share.php")).mkString
-  lazy val outScript      = io.Source.fromFile(file("out.php")).mkString
 
   def readConfig(cfgFile: File): Map[String, String] = {
     // read only the first line and interpret it as utf-8 string

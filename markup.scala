@@ -49,7 +49,7 @@ object AsciiPatterns {
 
   private val stripTagRegex = """\<.*?\>""".r // TODO less crude way to strip tags
 
-  def stripTags(html: String) = T.t{
+  def stripTags(html: String) = {
     var t = html
     t = (if (html.indexOf('<') == -1) html else stripTagRegex.replaceAllIn(html, ""))
     t = t.replace("\u00AD", "")  // soft hyphen

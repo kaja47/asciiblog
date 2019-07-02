@@ -370,7 +370,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
 
   def articleLink(a: Article, title: String = null, asLink: Boolean = true, imgMarker: Boolean = false) = {
     val _title = util.escape(if (title == null) a.title else title)
-    (if (a.link != null || asLink) aTag(_title, articleAbsUrl(a)) else _title)+ifs(imgMarker && a.hasImageMarker, blog.imageMarker)
+    (if (a.link != null || asLink) aTag(_title, articleAbsUrl(a)) else _title)+ifs(imgMarker && a.hasImageMarker, " "+blog.imageMarker)
   }
 
   override def makeLink(a: Article) = {
@@ -390,7 +390,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     (if (next == null) "»»»" else aTag("»»»", blog.absUrl(next)))+
     "</span>"
 
-  def aTag(title: String, href: String) = 
+  def aTag(title: String, href: String) =
     "<a href="+util.quoteHTMLAttribute(rel(href))+">"+title+"</a>"
 
   private val shortDate = DateTimeFormatter.ofPattern("d. M.")
