@@ -9,17 +9,33 @@ import AsciiPatterns._
 
 
 trait Markup {
-  type ResolveLinkFunc = String => String
-  def process(text: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): Text
+  def process(text: Seq[String], resolver: LinkResolver, imageRoot: String): Text
 }
 
 trait Text {
-  def render(l: ImageLayout, relativize: String => String): String
+  def render(relativize: String => String): String
   def paragraph(text: String): String
   def plaintextSummary: String
   def plaintext: String
   def images: Seq[Image]
   def links: Seq[String]
+}
+
+
+
+// Object passed to Text in order to properly render local urls (but not relativize them).
+trait LinkResolver {
+  def link(l: String): String
+  def thumbnail(img: Image): String
+  def bigThumbnail(img: Image, half: Boolean): String
+}
+
+object LinkResolver {
+  val fail = new LinkResolver {
+    def link(l: String): String = ???
+    def thumbnail(img: Image): String = ???
+    def bigThumbnail(img: Image, half: Boolean): String = ???
+  }
 }
 
 
@@ -83,10 +99,10 @@ object AsciiText {
 
 
 
-case class AsciiText(segments: Seq[Segment], resolver: String => String, markup: AsciiMarkup) extends Text { self =>
+case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: AsciiMarkup) extends Text { self =>
 
-  def render(l: ImageLayout, relativize: String => String): String = mkText(segments, l, resolvedLinks, relativize)
-  def paragraph(text: String): String = AsciiText(Seq(Inline(text)), l => resolvedLinks(l), markup).render(null, identity)
+  def render(relativize: String => String): String = mkText(segments, resolvedLinks, relativize)
+  def paragraph(text: String): String = "" //TODO//AsciiText(Seq(Inline(text)), l => resolvedLinks(l), markup).render(identity)
 
   def plaintextSummary: String = stripTags(mkParagraph(segments.collect { case Paragraph(txt, _) => txt }.headOption.getOrElse(""), resolvedLinks, identity, true))
   def plaintext: String = stripTags(processTexts(segments, txt => Iterator(mkParagraph(txt, resolvedLinks, identity, true))).mkString(" "))
@@ -95,7 +111,7 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
   // mainly it's there se error messages during link resolution are not
   // displayed twice
   def overwriteSegments(newSegments: Seq[Segment]) =
-    new AsciiText(newSegments, null, markup) {
+    new AsciiText(newSegments, resolver, markup) {
       override protected def resolvedLinks = self.resolvedLinks
     }
 
@@ -132,7 +148,7 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
     val aliasMap = checkAliases(aliases)
     processTexts(segments, extractLinks).map { l =>
       val (base, hash) = util.splitByHash(l)
-      (l, resolver(aliasMap.getOrElse(base, base)+hash))
+      (l, resolver.link(aliasMap.getOrElse(base, base)+hash))
     }.toMap
   }
 
@@ -159,11 +175,17 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
       if (al == Blog.invalidLinkMarker) null else relativize(al)
     }, plaintext)
 
-  def mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String): String =
-    _mkText(segments, l, aliases, relativize, new StringBuilder(1024))
+  def mkText(segments: Seq[Segment], aliases: Map[String, String], relativize: String => String): String =
+    _mkText(segments, aliases, relativize, new StringBuilder(1024))
 
-  private def _mkText(segments: Seq[Segment], l: ImageLayout, aliases: Map[String, String], relativize: String => String, sb: StringBuilder): String = {
-    segments.foreach {
+  private def _mkText(segments: Seq[Segment], aliases: Map[String, String], relativize: String => String, sb: StringBuilder): String = {
+    for (i <- 0 until segments.length) {
+      def omitEndPTag = if (i == segments.length-1) false else (segments(i+1) match {
+        case Paragraph(_, _) | Table(_, _) | Hr() | Blockquote(_) | Heading(_) | Block("pre", _, _) | Block("div", _, _) | BulletList(_) | NumberedList(_) => true
+        case _ => false
+      })
+
+      segments(i) match {
       case Heading(txt)         => sb.append("<h3>").append(mkParagraph(txt, aliases, relativize)).append("</h3>")
       case Hr()                 => sb.append("<hr>\n")
       case Linkref(_)           =>
@@ -185,17 +207,19 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
       case Block("pre",  txt, mods) => sb.append("<pre").append(mkMods(mods)).append(">").append(util.escape(txt)).append("</pre>")
       case Block("comment", _, _)   =>
       case Block(tpe, _, _)        => sys.error(s"unknown block type '$tpe'")
-      case Images(images)       => images.foreach { img => sb.append(l.imgTag(img, this)).append(" ") }
-      case Paragraph(txt, mods) => sb.append("<p").append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize)).append("</p>")
-      case Blockquote(sx)       => sb.append("<blockquote>"); _mkText(sx, l, aliases, relativize, sb); sb.append("</blockquote>")
+      case Images(images)       => images.foreach { img => sb.append(imgTag(img, relativize)).append(" ") }
+      case Paragraph(txt, mods) =>
+        sb.append("<p").append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize))
+        if (!omitEndPTag) sb.append("</p>")
+      case Blockquote(sx)       => sb.append("<blockquote>"); _mkText(sx, aliases, relativize, sb); sb.append("</blockquote>")
       case Inline(txt)          => sb.append(mkParagraph(txt, aliases, relativize))
       case ByLine(txt)          => sb.append("<div style='text-align:right'>").append(mkParagraph(txt, aliases, relativize)).append("</div>")
-      case SegmentSeq(sx)       => _mkText(sx, l, aliases, relativize, sb)
+      case SegmentSeq(sx)       => _mkText(sx, aliases, relativize, sb)
       case BulletList(items)    =>
         sb.append("<ul>")
         items.foreach { it =>
           sb.append("<li>")
-          _mkText(Seq(it), l, aliases, relativize, sb)
+          _mkText(Seq(it), aliases, relativize, sb)
           sb.append("\n")
         }
         sb.append("</ul>")
@@ -208,7 +232,7 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
             if (validRefTargets(num) == list) { sb.append(" id=").append(util.quoteHTMLAttribute("fn"+num)) }
             if (num != i+1)                   { sb.append(" value=").append(util.quoteHTMLAttribute(num.toString)) }
             sb.append(">")
-            _mkText(Seq(it), l, aliases, relativize, sb)
+            _mkText(Seq(it), aliases, relativize, sb)
             sb.append("\n")
         }
         sb.append("</ol>")
@@ -227,9 +251,37 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
           sb.append("\n")
         }
         sb.append("</table>")
+      }
     }
 
     sb.toString
+  }
+
+  private def classAndSrc(img: Image) =
+    img match {
+      case i if i.mods == "main" && i.align == ">" => ("fr",   resolver.bigThumbnail(img, true))
+      case i if i.mods == "main" =>                   ("main", resolver.bigThumbnail(img, false))
+      case i if i.align == ">" =>                     ("thr",  resolver.thumbnail(img))
+      case i =>                                       ("thz",  resolver.thumbnail(img))
+    }
+
+  private def imgTag(img: Image, relativize: String => String) = {
+    val (cl, src) = classAndSrc(img)
+    val href = relativize(img.url)
+
+    val desc = {
+      val title   = if (img.title != null) paragraph(img.title).trim else ""
+      //val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim
+      val source  = if (img.source != null) "(<a href="+util.quoteHTMLAttribute(img.source)+">via</a>)" else ""
+      val license = if (img.license != null) img.license+" "+source.trim else ""
+      val locSrc  = if (img.localSource != null) "<a href="+util.quoteHTMLAttribute(relativize(resolver.link(img.localSource.slug)))+">"+util.escape(title)+"</a>" else ""
+      Seq(title, /*tags,*/ license, locSrc).mkString(" ").replaceAll(" +", " ").trim
+    }
+
+    val imgTag = s"""<img class=thz ${if (img.alt != null) s"title='${img.alt}' " else ""}src=${util.quoteHTMLAttribute(relativize(src))}>"""
+    val a      = if (!img.zoomable) imgTag else "<a href="+util.quoteHTMLAttribute(href)+">"+imgTag+"</a>"
+
+    s"""<span class=$cl>$a$desc</span>"""
   }
 
 }
@@ -257,7 +309,7 @@ case class Cell(txt: String, span: Int = 1)
 class AsciiMarkup extends Markup {
   val parser = new MarkupParser(CzechTypography)
 
-  def process(lines: Seq[String], resolver: ResolveLinkFunc, imageRoot: String): AsciiText = {
+  def process(lines: Seq[String], resolver: LinkResolver, imageRoot: String): AsciiText = {
     def matchAllLines[T](ls: Seq[String], prefix: String)(f: PartialFunction[String, T]): Option[Seq[T]] = {
       if (!ls.forall(_.startsWith(prefix))) return None
       val ms = ls.collect(f)
@@ -467,17 +519,17 @@ class HTMLMarkup extends Markup {
   val ahrefRegex  = """(?x) (?<= \<a   [^>]* href=") (.*?) (?=") """.r
   val imgsrcRegex = """(?x) (?<= \<img [^>]* src=")  (.*?) (?=") """.r
 
-  def process(text: Seq[String], resolver: String => String, imageRoot: String): HTMLText =
+  def process(text: Seq[String], resolver: LinkResolver, imageRoot: String): HTMLText =
     new HTMLText(text.mkString("\n"), resolver, imageRoot, this)
 }
 
-class HTMLText(text: String, resolver: String => String, imageRoot: String, markup: HTMLMarkup) extends Text {
-  def render(l: ImageLayout, relativize: String => String): String =
-    markup.ahrefRegex.replaceAllIn(text, m => relativize(resolver(m.group(0))))
+class HTMLText(text: String, resolver: LinkResolver, imageRoot: String, markup: HTMLMarkup) extends Text {
+  def render(relativize: String => String): String =
+    markup.ahrefRegex.replaceAllIn(text, m => relativize(resolver.link(m.group(0))))
   def paragraph(text: String): String = text
   def plaintextSummary: String = ""
   def plaintext: String = ???
   def images: Seq[Image] = markup.imgsrcRegex.findAllIn(text).toVector
     .map(url => Image(if (isAbsolute(url)) url else imageRoot + url))
-  def links: Seq[String] = markup.ahrefRegex.findAllIn(text).map(resolver).toVector
+  def links: Seq[String] = markup.ahrefRegex.findAllIn(text).map(resolver.link).toVector
 }

@@ -14,7 +14,7 @@ trait LayoutMill {
   def basicStyle: String
 }
 
-trait Layout extends ImageLayout {
+trait Layout {
   def baseUrl: String
   def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false, article: Option[Article] = None): String
 
@@ -31,8 +31,8 @@ trait Layout extends ImageLayout {
   def makeSummary(a: Article): String
   def makeLink(a: Article): String = ???
 
-  def makeSummrayList(as: Seq[Article]) = ???
-  def makeLinkList(as: Seq[Article]) = ???
+  //def makeSummrayList(as: Seq[Article]) = ???
+  //def makeLinkList(as: Seq[Article]) = ???
 
   def articleUrl(a: Article): String
   def articleLink(a: Article, title: String, asLink: Boolean = true, imgMarker: Boolean = false): String
@@ -40,10 +40,6 @@ trait Layout extends ImageLayout {
   def ogTags(a: Article): String
 }
 
-// this type is passed into markup
-trait ImageLayout {
-  def imgTag(img: Image, t: Text, showDesc: Boolean = true, linkTo: String = null): String
-}
 
 
 sealed trait PagePart
@@ -122,35 +118,9 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   private def mainImageUrl(a: Article): String  = a.images.find(_.mods == "main").map(_.url).getOrElse(null)
   private def otherImageUrl(a: Article): String = a.images.headOption.map(_.url).getOrElse(null)
 
-  def imgTag(img: Image, t: Text, showDesc: Boolean = true, linkTo: String = null) = {
-    val (cl, srcPath) = img match {
-      case i if i.mods == "main" && i.align == ">" => ("fr",   blog.bigThumbnailUrl(img, true))
-      case i if i.mods == "main" =>                   ("main", blog.bigThumbnailUrl(img, false))
-      case i if i.align == ">" =>                     ("thr",  blog.thumbnailUrl(img))
-      case i =>                                       ("thz",  blog.thumbnailUrl(img))
-    }
-    val desc = if (showDesc) {
-      val title   = ifs(img.title, t.paragraph(img.title).trim)
-      val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim
-      val source  = ifs(img.source, "("+aTag(txl("source"), img.source)+")")
-      val license = (ifs(img.license)+" "+source).trim
-      val locSrc  = ifs(img.localSource, articleLink(img.localSource, img.localSource.title))
-      Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
-    } else ""
 
-    val src  = rel(blog.absUrlFromPath(srcPath))
-    val href = rel(if (linkTo == null) img.url else linkTo)
 
-    val imgTag = s"""<img class=thz ${ifs(img.alt, s"title='${img.alt}' ")}src=${util.quoteHTMLAttribute(src)}>"""
-    val a      = if (!img.zoomable && linkTo == null) imgTag else "<a href="+util.quoteHTMLAttribute(href)+">"+imgTag+"</a>"
 
-    s"""<span class=$cl>$a$desc</span>"""
-
-    // <picture>
-    // <source srcset="img.webp" type="image/webp">
-    // <img src="img.jpg" srcset="thumb.jpg 200w halfthumb 400w bigthumb 800w">
-    // </picture>
-  }
 
   def rssLink(rss: String) = {
     val w = new XMLSW(new java.lang.StringBuilder(100), true)
@@ -272,7 +242,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   def makeFullArticle(a: Article, parts: Seq[PagePart] = Seq()): String = _makeFullArticle(a, false, parts)
 
   def makeArticleBody(a: Article): String =
-    a.text.render(this, rel)
+    a.text.render(rel)
 
 
   def listOfLinks(list: Seq[Article]) = {
@@ -286,10 +256,17 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   def makeSummary(a: Article): String = "<div class=sh>"+makeTitle(a)+"<br>"+makeSummaryBody(a)+"</div>"
 
   def makeSummaryBody(a: Article): String = {
-    val img = a.images.find(_.mods == "main").map(i => imgTag(i.asSmallThumbnail, a.text, false, blog.absUrl(a))).getOrElse("")
+    val img = a.images.find(_.mods == "main").map(i => imgLinkTag(i.asSmallThumbnail, blog.absUrl(a))).getOrElse("")
     val txt = truncate(a.text.plaintextSummary, 300)
 
     ifs(img, s"<div class=shimg>$img</div> ")+txt+" "+articleLink(a, txl("continueReading"))
+  }
+
+  private def imgLinkTag(img: Image, linkTo: String) = {
+    val src = rel(blog.absUrlFromPath(blog.thumbnailUrl(img)))
+    val imgTag = "<img class=thz src="+util.quoteHTMLAttribute(src)+">"
+    val a      = "<a href="+util.quoteHTMLAttribute(rel(linkTo))+">"+imgTag+"</a>"
+    s"""<span class=thz>$a</span>"""
   }
 
   private def _makeFullArticle(a: Article, compact: Boolean, parts: Seq[PagePart]): String = {
@@ -310,7 +287,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     })+
     ifs(title == null, "<br>\n")+
     //makeArticleBody(a)+
-    a.text.render(this, rel)+
+    a.text.render(rel)+
     renderParts(parts)+
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
     "</article>"+

@@ -1047,7 +1047,13 @@ object MakeFiles {
 
     timer("parse text", blog) {
     articles = articles.map { a =>
-      val txt = blog.markup.process(a.rawText, link => resolveLink(link, globalNames, a), blog.imageRoot)
+      val resolver = new LinkResolver {
+          def link(l: String): String = resolveLink(l, globalNames, a)
+          def thumbnail(img: Image): String = blog.thumbnailUrl(img)
+          def bigThumbnail(img: Image, half: Boolean): String = blog.bigThumbnailUrl(img, half)
+      }
+      val txt = blog.markup.process(a.rawText, resolver, blog.imageRoot)
+
       a.copy(
         text = txt,
         images = (a.images ++ txt.images) // images might be already populated from readGallery()
