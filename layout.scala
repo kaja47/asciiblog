@@ -285,7 +285,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
       })
     })+
     ifs(title == null, "<br>\n")+
-    //makeArticleBody(a)+
     a.text.render(rel)+
     renderParts(parts)+
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+

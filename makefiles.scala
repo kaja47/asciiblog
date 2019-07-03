@@ -1424,8 +1424,8 @@ object MakeFiles {
 
     def mkBody(cfg: Seq[String]) =
       cfg.head.split("\\s+").head match {
-        case "full" | "fullArticles" => (a: Article) => FlowLayout.updateLinks(layoutMill.make(null).makeArticleBody(a), blog.addParamMediumFeed)
-        case "summary" | "summaries" => (a: Article) => FlowLayout.updateLinks(layoutMill.make(null).makeSummaryBody(a), blog.addParamMediumFeed)
+        case "full" | "fullArticles" => (a: Article) => FlowLayout.updateLinks(a.text.render(identity), blog.addParamMediumFeed)
+        case "summary" | "summaries" => (a: Article) => FlowLayout.updateLinks(a.text.plaintextSummary, blog.addParamMediumFeed)
         case "link" | "links"        => (a: Article) => ""
       }
 
