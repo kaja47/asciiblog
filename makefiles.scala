@@ -304,7 +304,6 @@ case class Article(
   def isSupertag = meta.isSupertag
   def isTag      = meta.isTag || meta.isSupertag
   def asTag      = if (isTag) Tag(title, isSupertag) else null
-  def extraImages = images.filter(!_.inText)
   def slugsOfLinkedArticles(implicit blog: Blog): Seq[Slug] = text.links.filter(blog.isLocalLink).map(blog.extractSlug)
 
   // image marker is shown only for images that are not from external sources
@@ -367,7 +366,6 @@ case class Image(
   license: String = null,
   source: String = null,
   tags: Tags = Tags(),
-  inText: Boolean = true, // is this image specified in article text or is it part of a gallery
   zoomable: Boolean = true,
   localSource: Article = null
 ) {
@@ -435,12 +433,10 @@ case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
   lazy val bySlug: Map[String, Article] = all.map(a => (a.slug, a)).toMap
   lazy val articles = all.filter(a => !a.isTag)
   lazy val feed     = all.filter(a => !a.isTag && a.inFeed)
-  //lazy val images   = all.sortBy(a => (Option(a.date), a.title)).reverse
-  //  .flatMap { a => a.images.map(_.copy(inText = false, localSource = a)) }
 
   lazy val allTags: Map[Tag, (Article, Seq[Article])] = { // [tag -> (article reprsenting this tag, articles tagged by this tag)]
     val imageTagMap: Map[Tag, Seq[(Image, Article)]] = invert(all.flatMap(a => a.images.map(i => ((i, a), i.tags.visible.distinct))))
-    def taggedImages(t: Tag) = imageTagMap.getOrElse(t, Seq()).map { case (i, a) => i.copy(inText = false, localSource = a) }
+    def taggedImages(t: Tag) = imageTagMap.getOrElse(t, Seq()).map { case (i, a) => i.copy(localSource = a) } // TODO
 
     all.filter(_.isTag).map { t =>
       t.asTag -> (t.copy(images = t.images ++ taggedImages(t.asTag)), tagMap.getOrElse(t.asTag, Seq()))
@@ -881,36 +877,6 @@ object MakeFiles {
 
 
 
-  def readGallery(blog: Blog): Vector[Article] = {
-    if (blog.albumsDir.isEmpty) return Vector()
-
-    val albumDirs = new File(blog.albumsDir, "albums").listFiles.sortBy(_.getName).reverse.toSeq
-    val dateTitle = """^(?:(\d+)-(\d+)-(\d+)\s*-?\s*)?(.*)$""".r
-
-    for (albumDir <- albumDirs.toVector) yield {
-      println(albumDir.getName)
-
-      val dateTitle(y, m, d, t) = albumDir.getName
-      val (date, title) =
-        if (y == null) (null, t)
-        else (LocalDateTime.of(y.toInt, m.toInt-1, d.toInt, 0, 0, 0), t)
-
-      def validSuffix(f: String) =
-        f.toLowerCase.matches(""".*\.(jpg|jpeg|png|gif)""")
-
-      val imgUrls = albumDir.list collect { case f if validSuffix(f) =>
-        blog.baseUrl + new URI(null, null, "/albums/"+albumDir.getName+"/"+f, null).toASCIIString
-      }
-
-      new Article(
-        title  = if (title.nonEmpty) title else albumDir.getName,
-        slug   = generateSlug(albumDir.getName),
-        dates  = Seq(date),
-        images = imgUrls.map { url => new Image(url, inText = false) }
-      )
-    }
-  }
-
   def readPosts(implicit blog: Blog): Vector[Article] = {
     val lineRegex = """^===+$""".r.pattern
     blog.files.iterator.flatMap { f =>
@@ -929,7 +895,7 @@ object MakeFiles {
 
   def makeBase(blog: Blog, fast: Boolean = false): (Blog, Base, String => String, Set[Slug]) = {
     implicit val _blog = blog
-    var articles: Vector[Article] = timer("readfiles", blog)(readGallery(blog) ++ readPosts(blog))
+    var articles: Vector[Article] = timer("readfiles", blog)(readPosts(blog))
 
     articles = blog.hooks.prepareArticles(blog, articles).toVector
 

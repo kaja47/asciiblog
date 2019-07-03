@@ -271,10 +271,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
 
   def makeFullArticle(a: Article, parts: Seq[PagePart] = Seq()): String = _makeFullArticle(a, false, parts)
 
-  def makeArticleBody(a: Article): String = {
-    a.text.render(this, rel)+
-    a.extraImages.map { img => imgTag(img.asSmallThumbnail, if (img.localSource != null) img.localSource.text else a.text) }.mkString(" ")
-  }
+  def makeArticleBody(a: Article): String =
+    a.text.render(this, rel)
 
 
   def listOfLinks(list: Seq[Article]) = {
@@ -314,10 +312,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     //makeArticleBody(a)+
     a.text.render(this, rel)+
     renderParts(parts)+
-    ifs(a.extraImages.nonEmpty,
-      "<hr>"+
-      a.extraImages.map { img => imgTag(img.asSmallThumbnail, if (img.localSource != null) img.localSource.text else a.text) }.mkString(" ")
-    )+
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
     "</article>"+
     ifs(!compact,
