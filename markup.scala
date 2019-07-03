@@ -222,9 +222,9 @@ case class AsciiText(segments: Seq[Segment], resolver: String => String, markup:
             if (span > 1) {
               sb.append(" colspan=").append(span)
             }
-            sb.append(">").append(mkParagraph(txt, aliases, relativize)).append("</td>")
+            sb.append(">").append(mkParagraph(txt.trim, aliases, relativize))
           }
-          sb.append("</tr>")
+          sb.append("\n")
         }
         sb.append("</table>")
     }
