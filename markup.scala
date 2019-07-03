@@ -56,8 +56,23 @@ object AsciiPatterns {
     t = t.replace("\u00A0", " ") // nbsp
     t = t.replace("&shy;",  "")  // soft hyphen
     t = t.replace("&nbsp;", " ") // nbsp
-    t = t.replaceAll("\\s+", " ")
-    t
+    //t = t.replaceAll("\\s+", " ")
+    //t
+
+    val res = new StringBuilder(t.length)
+    var space = true
+    var i = 0; while (i < t.length) {
+      val ch = t.charAt(i)
+      val ws = Character.isWhitespace(ch)
+
+      if (!ws) res.append(ch)
+      else if (!space) res.append(' ')
+
+      space = ws
+      i += 1
+    }
+
+    res.toString
   }
 }
 
