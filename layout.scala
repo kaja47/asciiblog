@@ -6,7 +6,6 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.net.URLEncoder
 import scala.util.matching.Regex
-import util.escape
 
 
 trait LayoutMill {
@@ -172,13 +171,13 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     "<title>"+ ifs(title, title+" | ")+blog.title+"</title>"+
     rssLink("rss.xml")+
     (if (blog.cssFile != null || blog.cssExport)
-      "<link rel=stylesheet href="+util.quoteHTMLAttribute(rel("style.css"))+" type=text/css>"
+      "<link rel=stylesheet href="+html.quoteAttribute(rel("style.css"))+" type=text/css>"
     else
       "<style>"+mill.css.styleFor(body, !includeCompleteStyle)+"</style>"
     )+
     ifs(containImages,
       if (blog.galleryScriptExport) {
-        "<script src="+util.quoteHTMLAttribute(rel("gallery.js"))+"></script>"
+        "<script src="+html.quoteAttribute(rel("gallery.js"))+"></script>"
       } else {
         "<script>"+galleryScript+"</script>"
       }
@@ -196,7 +195,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   def makeArchive(a: Article, parts: Seq[PagePart]): String =
     makeNextPrevArrows(a.next, a.prev)+
     "<article>"+
-    "<h2>"+util.escape(a.title)+"</h2><br><br>"+
+    "<h2>"+html.escape(a.title)+"</h2><br><br>"+
     renderParts(parts)+
     "</article>"+
     makeNextPrevArrows(a.next, a.prev)
@@ -264,8 +263,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
 
   private def imgLinkTag(img: Image, linkTo: String) = {
     val src = rel(blog.absUrlFromPath(blog.thumbnailUrl(img)))
-    val imgTag = "<img class=thz src="+util.quoteHTMLAttribute(src)+">"
-    val a      = "<a href="+util.quoteHTMLAttribute(rel(linkTo))+">"+imgTag+"</a>"
+    val imgTag = "<img class=thz src="+html.quoteAttribute(src)+">"
+    val a      = "<a href="+html.quoteAttribute(rel(linkTo))+">"+imgTag+"</a>"
     s"""<span class=thz>$a</span>"""
   }
 
@@ -305,10 +304,10 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
       } else {
           val slug = URLEncoder.encode(a.slug, "UTF-8")
           s""" $nbsp ${txl("share.share")} """+
-          "<a href="+util.quoteHTMLAttribute(rel("share.php")+"?f="+slug)+">"+txl("share.facebook")+"</a>, "+
-          "<a href="+util.quoteHTMLAttribute(rel("share.php")+"?t="+slug)+">"+txl("share.twitter") +"</a>, "+
-          "<a href="+util.quoteHTMLAttribute(rel("share.php")+"?l="+slug)+">"+txl("share.linkedin")+"</a>, "+
-          "<a href="+util.quoteHTMLAttribute(rel("share.php")+"?u="+slug)+">"+txl("share.tumblr")+"</a>"
+          "<a href="+html.quoteAttribute(rel("share.php")+"?f="+slug)+">"+txl("share.facebook")+"</a>, "+
+          "<a href="+html.quoteAttribute(rel("share.php")+"?t="+slug)+">"+txl("share.twitter") +"</a>, "+
+          "<a href="+html.quoteAttribute(rel("share.php")+"?l="+slug)+">"+txl("share.linkedin")+"</a>, "+
+          "<a href="+html.quoteAttribute(rel("share.php")+"?u="+slug)+">"+txl("share.tumblr")+"</a>"
         }
       })+
       ifs((blog.allowComments || blog.shareLinks) && !a.isTag, "<hr>")+
@@ -340,7 +339,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   def articleAbsUrl(a: Article) = if (a.link != null) a.link else blog.absUrl(a)
 
   def articleLink(a: Article, title: String = null, asLink: Boolean = true, imgMarker: Boolean = false) = {
-    val _title = util.escape(if (title == null) a.title else title)
+    val _title = html.escape(if (title == null) a.title else title)
     (if (a.link != null || asLink) aTag(_title, articleAbsUrl(a)) else _title)+ifs(imgMarker && a.hasImageMarker, " "+blog.imageMarker)
   }
 
@@ -350,8 +349,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   }
 
   def makeTagLink(t: Article) =
-    if (!t.isSupertag) "#"+aTag(util.escape(t.title), blog.absUrl(t))
-    else            "<b>#"+aTag(util.escape(t.title), blog.absUrl(t))+"</b>"
+    if (!t.isSupertag) "#"+aTag(html.escape(t.title), blog.absUrl(t))
+    else            "<b>#"+aTag(html.escape(t.title), blog.absUrl(t))+"</b>"
 
   def makeTagLinks(tags: Seq[Article]) = tags.map(makeTagLink).mkString(" ")
 
@@ -362,7 +361,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     "</span>"
 
   def aTag(title: String, href: String) =
-    "<a href="+util.quoteHTMLAttribute(rel(href))+">"+title+"</a>"
+    "<a href="+html.quoteAttribute(rel(href))+">"+title+"</a>"
 
   private val shortDate = DateTimeFormatter.ofPattern("d. M.")
   private val longDate  = DateTimeFormatter.ofPattern("d. M. yyyy")
@@ -376,19 +375,19 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
 }
 
 
-class PrepatedText(html: String, resolver: String => String) {
+class PrepatedText(htmlText: String, resolver: String => String) {
   val ahrefRegex  = """(?x) (?<= href=) ("|') (.*?) \1 """.r
 
   private val arr = {
     val res = new collection.mutable.ArrayBuffer[String]
-    val m = ahrefRegex.pattern.matcher(html)
+    val m = ahrefRegex.pattern.matcher(htmlText)
     var pos = 0
     while (m.find()) {
-      res += html.substring(pos, m.start)
+      res += htmlText.substring(pos, m.start)
       res += resolver(m.group(2))
       pos = m.end
     }
-    res += html.substring(pos)
+    res += htmlText.substring(pos)
     res.result
   }
 
@@ -396,7 +395,7 @@ class PrepatedText(html: String, resolver: String => String) {
     val sb = new StringBuilder()
     var i = 0; while (i < arr.length-1) {
       sb.append(arr(i))
-      sb.append(util.quoteHTMLAttribute(rel(arr(i+1))))
+      sb.append(html.quoteAttribute(rel(arr(i+1))))
       i += 2
     }
     sb.append(arr.last)

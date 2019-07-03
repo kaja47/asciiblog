@@ -85,7 +85,7 @@ object MarkupParser {
     },
     new MarkupBlock("`",  "`",  "<code>", "</code>", recur = false, tight = false) {
       override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) =
-        util.escape(str, from, to, sb)
+        html.escape(str, from, to, sb)
     },
     new MarkupBlock("''", "''", "",       "",        recur = false, tight = false),
     new MarkupBlock("**", "**", "<b>",    "</b>",    recur = true, tight = true),
@@ -159,10 +159,10 @@ object MarkupParser {
       if (m.classes.isEmpty) (Array[String](), Array[String]())
       else m.classes.split(" ").partition(_.startsWith("#"))
 
-    (if (m.title.nonEmpty)  " title="+util.quoteHTMLAttribute(m.title)                       else "")+
-    (if (classes.nonEmpty)  " class="+util.quoteHTMLAttribute(classes.mkString(" "))         else "")+
-    (if (ids.nonEmpty)      " id="   +util.quoteHTMLAttribute(ids.map(_.tail).mkString(" ")) else "")+
-    (if (m.styles.nonEmpty) " style="+util.quoteHTMLAttribute(m.styles)                      else "")
+    (if (m.title.nonEmpty)  " title="+html.quoteAttribute(m.title)                       else "")+
+    (if (classes.nonEmpty)  " class="+html.quoteAttribute(classes.mkString(" "))         else "")+
+    (if (ids.nonEmpty)      " id="   +html.quoteAttribute(ids.map(_.tail).mkString(" ")) else "")+
+    (if (m.styles.nonEmpty) " style="+html.quoteAttribute(m.styles)                      else "")
   }
 
 }
@@ -325,7 +325,7 @@ class MarkupParser(typography: Typography = NoTypography) {
           if (posOfEndSqBracket != -1 && !plaintext) {
             val link = processLink(str.substring(i+2, posOfEndSqBracket))
             if (link != null && !plaintext) {
-              sb.insert(outerTagStart, "<a href="+util.quoteHTMLAttribute(link)+">").append("</a>")
+              sb.insert(outerTagStart, "<a href="+html.quoteAttribute(link)+">").append("</a>")
             }
             i = posOfEndSqBracket+1
           }
@@ -356,9 +356,9 @@ class MarkupParser(typography: Typography = NoTypography) {
             val link = processLink(str.substring(i+2, posOfEndSqBracket))
             if (link != null && !plaintext) {
               if (block.doubleQuotes && mods != null) {
-                sb.insert(outerTagStart, "<a"+mkMods(mods)+" href="+util.quoteHTMLAttribute(link)+">").append("</a>")
+                sb.insert(outerTagStart, "<a"+mkMods(mods)+" href="+html.quoteAttribute(link)+">").append("</a>")
               } else {
-                sb.insert(outerTagStart, "<a href="+util.quoteHTMLAttribute(link)+">").append("</a>")
+                sb.insert(outerTagStart, "<a href="+html.quoteAttribute(link)+">").append("</a>")
               }
             }
             i = posOfEndSqBracket+1

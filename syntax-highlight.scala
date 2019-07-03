@@ -24,13 +24,13 @@ object Highlighter {
     val sb = new StringBuilder
     var lastEnd = 0
     for (l <- lights) {
-      sb.append(util.escape(source.substring(lastEnd, l.start)))
+      sb.append(html.escape(source.substring(lastEnd, l.start)))
       sb.append("<span class=hl"+l.color+">")
-      sb.append(util.escape(source.substring(l.start, l.start+l.length)))
+      sb.append(html.escape(source.substring(l.start, l.start+l.length)))
       sb.append("</span>")
       lastEnd = l.start+l.length
     }
-    sb.append(util.escape(source.substring(lastEnd)))
+    sb.append(html.escape(source.substring(lastEnd)))
     sb.toString
   }
 }

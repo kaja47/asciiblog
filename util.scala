@@ -121,7 +121,6 @@ class LongTopK(count: Int) {
 
 
 object XMLSW {
-
   def document(body: XMLSW => Unit, sb: StringBuilder): StringBuilder = {
     new XMLSW(sb).document(body)
     sb
@@ -225,7 +224,7 @@ class XMLSW(sb: java.lang.StringBuilder, val html5: Boolean = false) {
 
   private def writeAttr(key: String, value: String) = {
     sb.append(" ").append(key).append("=")
-    val q = !html5 || util.mustHTMLAttributeBeQuoted(value)
+    val q = !html5 || html.mustAttributeBeQuoted(value)
     if (q) sb.append("\"")
     writeString(value, true)
     if (q) sb.append("\"")
@@ -254,6 +253,43 @@ class XMLSW(sb: java.lang.StringBuilder, val html5: Boolean = false) {
       i += 1
     }
     sb.append(txt, start, txt.length)
+  }
+}
+
+
+object html {
+  def escape(s: String): String =
+    escape(s, 0, s.length, new StringBuilder).toString
+
+  def escape(s: String, from: Int, to: Int, sb: StringBuilder): StringBuilder = {
+    var i = from; while (i < to) {
+      s.charAt(i) match {
+        case '"' => sb append "&quot;"
+        case '&' => sb append "&amp;"
+        case '<' => sb append "&lt;"
+        case '>' => sb append "&gt;"
+        case ch  => sb append ch
+      }
+      i += 1
+    }
+    sb
+  }
+
+  def quoteAttribute(attr: String): String =
+    quoteAttribute(attr, new StringBuilder).toString
+
+  def quoteAttribute(attr: String, sb: StringBuilder): StringBuilder =
+    if (mustAttributeBeQuoted(attr)) sb.append("\"").append(attr).append("\"") else sb.append(attr)
+
+  def mustAttributeBeQuoted(attr: String): Boolean = {
+    val chars = " \t\n\r\f\"'`=<>"
+    var i = 0; while (i < attr.length) {
+      if (chars.indexOf(attr.charAt(i)) != -1) {
+        return true
+      }
+      i += 1
+    }
+    false
   }
 }
 
@@ -338,40 +374,6 @@ object util {
     val pos = l.indexOf('#')
     if (pos >= 0) (l.substring(0, pos), l.substring(pos))
     else          (l, "")
-  }
-
-  def escape(s: String): String =
-    escape(s, 0, s.length, new StringBuilder).toString
-
-  def escape(s: String, from: Int, to: Int, sb: StringBuilder): StringBuilder = {
-    var i = from; while (i < to) {
-      s.charAt(i) match {
-        case '"' => sb append "&quot;"
-        case '&' => sb append "&amp;"
-        case '<' => sb append "&lt;"
-        case '>' => sb append "&gt;"
-        case ch  => sb append ch
-      }
-      i += 1
-    }
-    sb
-  }
-
-  def quoteHTMLAttribute(attr: String): String =
-    quoteHTMLAttribute(attr, new StringBuilder).toString
-
-  def quoteHTMLAttribute(attr: String, sb: StringBuilder): StringBuilder =
-    if (mustHTMLAttributeBeQuoted(attr)) sb.append("\"").append(attr).append("\"") else sb.append(attr)
-
-  def mustHTMLAttributeBeQuoted(attr: String): Boolean = {
-    val chars = " \t\n\r\f\"'`=<>"
-    var i = 0; while (i < attr.length) {
-      if (chars.indexOf(attr.charAt(i)) != -1) {
-        return true
-      }
-      i += 1
-    }
-    false
   }
 
   def splitByRepeating[T](xs: Seq[T], t: T): Seq[Seq[T]] = {

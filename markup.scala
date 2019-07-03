@@ -199,12 +199,12 @@ case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: Asc
           case Some(m) =>
             sb.append(Highlighter.highlight(txt, m.group(1)))
           case None =>
-            sb.append(util.escape(txt))
+            sb.append(html.escape(txt))
         }
 
         sb.append("</pre>")
 
-      case Block("pre",  txt, mods) => sb.append("<pre").append(mkMods(mods)).append(">").append(util.escape(txt)).append("</pre>")
+      case Block("pre",  txt, mods) => sb.append("<pre").append(mkMods(mods)).append(">").append(html.escape(txt)).append("</pre>")
       case Block("comment", _, _)   =>
       case Block(tpe, _, _)        => sys.error(s"unknown block type '$tpe'")
       case Images(images)       => images.foreach { img => sb.append(imgTag(img, relativize)).append(" ") }
@@ -229,8 +229,8 @@ case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: Asc
         items.zipWithIndex.foreach {
           case ((num, it), i) =>
             sb.append("<li")
-            if (validRefTargets(num) == list) { sb.append(" id=").append(util.quoteHTMLAttribute("fn"+num)) }
-            if (num != i+1)                   { sb.append(" value=").append(util.quoteHTMLAttribute(num.toString)) }
+            if (validRefTargets(num) == list) { sb.append(" id=").append(html.quoteAttribute("fn"+num)) }
+            if (num != i+1)                   { sb.append(" value=").append(html.quoteAttribute(num.toString)) }
             sb.append(">")
             _mkText(Seq(it), aliases, relativize, sb)
             sb.append("\n")
@@ -272,14 +272,14 @@ case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: Asc
     val desc = {
       val title   = if (img.title != null) paragraph(img.title).trim else ""
       //val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim
-      val source  = if (img.source != null) "(<a href="+util.quoteHTMLAttribute(img.source)+">via</a>)" else ""
+      val source  = if (img.source != null) "(<a href="+html.quoteAttribute(img.source)+">via</a>)" else ""
       val license = if (img.license != null) img.license+" "+source.trim else ""
-      val locSrc  = if (img.localSource != null) "<a href="+util.quoteHTMLAttribute(relativize(resolver.link(img.localSource.slug)))+">"+util.escape(title)+"</a>" else ""
+      val locSrc  = if (img.localSource != null) "<a href="+html.quoteAttribute(relativize(resolver.link(img.localSource.slug)))+">"+html.escape(title)+"</a>" else ""
       Seq(title, /*tags,*/ license, locSrc).mkString(" ").replaceAll(" +", " ").trim
     }
 
-    val imgTag = s"""<img class=thz ${if (img.alt != null) s"title='${img.alt}' " else ""}src=${util.quoteHTMLAttribute(relativize(src))}>"""
-    val a      = if (!img.zoomable) imgTag else "<a href="+util.quoteHTMLAttribute(href)+">"+imgTag+"</a>"
+    val imgTag = s"""<img class=thz ${if (img.alt != null) s"title='${img.alt}' " else ""}src=${html.quoteAttribute(relativize(src))}>"""
+    val a      = if (!img.zoomable) imgTag else "<a href="+html.quoteAttribute(href)+">"+imgTag+"</a>"
 
     s"""<span class=$cl>$a$desc</span>"""
   }
