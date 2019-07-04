@@ -311,31 +311,16 @@ case class Article(
   def hasImageMarker = images.exists(i => i.source == null || i.source == "")
   def hasTag(t: Tag) = tags.visible.contains(t)
 
-  def mapImages(f: Image => Image) = {
-    def mapSegments(ss: Seq[Segment]): Seq[Segment] = ss.map { // TODO segments are impl. detail of AsciiText
-      case Images(is)     => Images(is.map(f))
-      case Blockquote(ss) => Blockquote(mapSegments(ss))
-      case s => s
-    }
-
-    copy(
-      text = text match {
-        case t: AsciiText => t.overwriteSegments(mapSegments(t.segments)) // TODO this sould not be here
-        case t => t
-      }
-    )
-  }
-
   def addImageTags(tags: Seq[Tag]) =
-    mapImages { i => i.copy(tags = i.tags.copy(visible = (i.tags.visible ++ tags).distinct)) }
+    copy(text = text.mapImages { i => i.copy(tags = i.tags.copy(visible = (i.tags.visible ++ tags).distinct)) })
 
   def imagesWithoutArticleTags = {
     val ts = if (isTag) Set(asTag) else tags.visible.toSet
     val nozoom = meta.nozoom
-    mapImages { i => i.copy(
+    copy(text = text.mapImages { i => i.copy(
       tags = i.tags.copy(visible = i.tags.visible.filter(t => !ts.contains(t))),
       zoomable = !nozoom
-    )}
+    )})
   }
 
   def mkRawText = rawText.mkString("\n")

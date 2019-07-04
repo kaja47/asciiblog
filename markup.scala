@@ -21,6 +21,7 @@ trait Text {
 
   def resolve(resolver: LinkResolver): Text
   def appendImages(images: Seq[Image]): Text
+  def mapImages(f: Image => Image): Text
 }
 
 
@@ -107,14 +108,19 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, resolver: Lin
 
   def resolve(r: LinkResolver): AsciiText = copy(resolver = r)
   def appendImages(images: Seq[Image]): Text = copy(segments = segments :+ Images(images))
-
-  // Overwrites segments, doesn't resolve links again. This saves some work but
-  // mainly it's there so error messages during link resolution are not
-  // displayed twice
-  def overwriteSegments(newSegments: Seq[Segment]) =
-    new AsciiText(newSegments, parser, resolver) {
+  def mapImages(f: Image => Image): Text = {
+    def mapSegments(ss: Seq[Segment]): Seq[Segment] = ss.map {
+      case Images(is)     => Images(is.map(f))
+      case Blockquote(ss) => Blockquote(mapSegments(ss))
+      case s => s
+    }
+    // Overwrites segments, doesn't resolve links again. This saves some work but
+    // mainly it's there so error messages during link resolution are not
+    // displayed twice
+    new AsciiText(mapSegments(segments), parser, resolver) {
       override protected def resolvedLinks = self.resolvedLinks
     }
+  }
 
   val images: Seq[Image] = segments.collect { case Images(imgs) => imgs }.flatten
 
@@ -531,4 +537,5 @@ case class HTMLText(text: String, imageRoot: String, markup: HTMLMarkup, resolve
   def links: Seq[String] = markup.ahrefRegex.findAllIn(text).map(resolver.link).toVector
   def resolve(r: LinkResolver): HTMLText = copy(resolver = r)
   def appendImages(images: Seq[Image]): Text = ???
+  def mapImages(f: Image => Image): Text = ???
 }
