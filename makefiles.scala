@@ -739,8 +739,8 @@ object MakeFiles {
     val rels    = chompOne(_metaLines, prefixedList("rel:"), Seq.empty)
     val pubs    = chompOne(_metaLines, prefixedList("pub:"), Seq.empty)
     val aliass  = chompOne(_metaLines, prefixedList("alias:"), Seq.empty)
-    val implies = Option(chompOne(_metaLines, prefixedLine("implies:"))).map(x => parseTags(x).visible).getOrElse(Seq.empty)
-    val imgtags = Option(chompOne(_metaLines, prefixedLine("imageTags:"))).map(x => parseTags(x).visible).getOrElse(Seq.empty)
+    val implies = chompOne(_metaLines, l => Option(prefixedLine("implies:")(l)).flatMap(x => Option(parseTags(x))).map(_.visible).getOrElse(null), Seq.empty)
+    val imgtags = chompOne(_metaLines, l => Option(prefixedLine("imageTags:")(l)).flatMap(x => Option(parseTags(x))).map(_.visible).getOrElse(null), Seq.empty)
 
     if (unchompedLines(_metaLines) > 0)
       sys.error("some metainformation was not processed: "+_metaLines.toSeq)
