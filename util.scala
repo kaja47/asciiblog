@@ -422,6 +422,15 @@ object util {
 
     }.takeWhile(_ != null).filter(_.nonEmpty)
   }
+
+  def isInt(x: String): Boolean = {
+    var i = 0; while (i < x.length) {
+      val ch = x.charAt(i)
+      if (ch < '0' || ch > '9') return false
+      i += 1
+    }
+    x.length > 0
+  }
 }
 
 object timer {

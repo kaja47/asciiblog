@@ -1384,33 +1384,30 @@ object MakeFiles {
     }
 
 
-    def mkPagePart(line: String, articles: Seq[Article], layout: Layout, base: Base) =
-      line.split("\\s+") match {
-        case Array(part @ ("full" | "fullArticles" | "summary" | "summaries" | "link" | "links"), args @ _*) =>
+    def mkPagePart(cfg: String, articles: Seq[Article], layout: Layout, base: Base) =
+      cfg.split("\\s+") match {
+        case Array(part @ ("full" | "fullArticles" | "summary" | "summaries" | "link" | "links" | "body" | "bodies"), args @ _*) =>
 
-          val (from, until) = args.map(_.toInt) match {
-            case Seq(f, u) => (f, u)
-            case Seq(u)    => (0, u)
-            case Seq()     => (0, Int.MaxValue/4)
+          val as: Seq[Article] = if (args.forall(util.isInt)) {
+            val (from, until) = args.map(_.toInt) match {
+              case Seq(f, u) => (f, u)
+              case Seq(u)    => (0, u)
+              case Seq()     => (0, Int.MaxValue/4)
+            }
+            articles.slice(from, until)
+          } else {
+            args.map(base.bySlug)
           }
 
           part match {
-            case "full" | "fullArticles" => PagePart.FullArticles(articles.slice(from, until))
-            case "summary" | "summaries" => PagePart.Summaries(articles.slice(from, until))
-            case "link" | "links"        => PagePart.Links(articles.slice(from, until))
+            case "full" | "fullArticles" => PagePart.FullArticles(as)
+            case "summary" | "summaries" => PagePart.Summaries(as)
+            case "link" | "links"        => PagePart.Links(as)
+            case "body" | "bodies"       => PagePart.Bodies(as)
           }
 
-        case Array("includeBody", slugs @ _*) =>
-          PagePart.Text(slugs.map(base.bySlug).map(layout.makeArticleBody).mkString("\n"))
-
-        case Array("includeFull", slugs @ _*) =>
-          PagePart.Text(slugs.map(base.bySlug).map(layout.makeArticle).mkString("\n"))
-
-        case Array("includeSummary", slugs @ _*) =>
-          PagePart.Text(slugs.map(base.bySlug).map(layout.makeSummary).mkString("\n"))
-
-        case Array("text", text @ _*) =>
-          PagePart.Text(text.mkString(" "))
+        case Array("text", _*) =>
+          PagePart.Text(cfg)
 
         case Array("tags", args @ _*) =>
           val Seq(cnt, days) = Seq.tabulate(2) { args.map(_.toInt).orElse(Seq(20, 365)) }
@@ -1422,11 +1419,11 @@ object MakeFiles {
           blog.hooks.makePagePart(base, blog, layout, part, args.mkString(" "))
       }
 
-    def mkBody(cfg: Seq[String]) =
+    def mkBody(cfg: Seq[String]): Article => String =
       cfg.head.split("\\s+").head match {
-        case "full" | "fullArticles" => (a: Article) => FlowLayout.updateLinks(a.text.render(identity), blog.addParamMediumFeed)
-        case "summary" | "summaries" => (a: Article) => FlowLayout.updateLinks(a.text.plaintextSummary, blog.addParamMediumFeed)
-        case "link" | "links"        => (a: Article) => ""
+        case "full" | "fullArticles" => a => FlowLayout.updateLinks(a.text.render(identity), blog.addParamMediumFeed)
+        case "summary" | "summaries" => a => FlowLayout.updateLinks(a.text.plaintextSummary, blog.addParamMediumFeed)
+        case "link" | "links"        => a => ""
       }
 
     val rssLimit = blog.rssCfg.head.split("\\s+").lift(1).getOrElse("10").toInt
@@ -1440,7 +1437,7 @@ object MakeFiles {
         val l = layoutMill.make(blog.absUrl(a))
         val prev = archivePages.lift(idx+1).map(_._1).getOrElse(null)
         val next = archivePages.lift(idx-1).map(_._1).getOrElse(null)
-        val parts = blog.archiveCfg.map(line => mkPagePart(line, as, l, base))
+        val parts = blog.archiveCfg.map(cfg => mkPagePart(cfg, as, l, base))
         val body = l.makeArchive(a.copy(prev = prev, next = next), parts)
         l.makePage(body, containImages = as.exists(_.hasImageMarker))
       }
@@ -1450,7 +1447,7 @@ object MakeFiles {
     val path = blog.relUrlFromSlug("index")
     save(null, path) {
       val l = layoutMill.make(blog.absUrlFromPath(path))
-      val indexParts = blog.indexCfg.map(line => mkPagePart(line, base.feed, l, base))
+      val indexParts = blog.indexCfg.map(cfg => mkPagePart(cfg, base.feed, l, base))
       val body = l.makeIndex(indexParts)
       l.makePage(body, containImages = true) // TODO
     }
@@ -1463,7 +1460,7 @@ object MakeFiles {
           var l = layoutMill.make(blog.absUrl(a))
           val aa = a.imagesWithoutArticleTags
           val body = l.makeFullArticle(aa)
-          l.makePage(body, aa.title, containImages = aa.images.exists(_.zoomable), headers = l.ogTags(aa))
+          l.makePage(body, aa.title, containImages = aa.images.exists(_.zoomable), ogTags = aa)
         }
       }
     }
@@ -1475,12 +1472,12 @@ object MakeFiles {
 
       val linked = a.slugsOfLinkedArticles(blog).toSet
       val list = as.filter(a => !linked.contains(a.asSlug) && !a.isTag)
-      val parts = blog.tagsCfg.map(line => mkPagePart(line, list, l, base))
+      val parts = blog.tagsCfg.map(cfg => mkPagePart(cfg, list, l, base))
 
       val body = l.makeFullArticle(a.imagesWithoutArticleTags, parts)
       val hasImages = a.images.nonEmpty || as.exists(_.images.nonEmpty)
 
-      save(as :+ a, blog.relUrl(a))(l.makePage(body, a.title, containImages = hasImages, headers = l.rssLink(a.slug+".xml")))
+      save(as :+ a, blog.relUrl(a))(l.makePage(body, a.title, containImages = hasImages, rssLink = a.slug+".xml"))
       save(as :+ a, a.slug+".xml")(makeRSS(as.take(rssLimit), mkBody(blog.rssTagsCfg), blog.absUrlFromPath(a.slug+".xml")))
     }
 

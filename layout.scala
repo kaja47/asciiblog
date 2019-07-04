@@ -15,28 +15,15 @@ trait LayoutMill {
 
 trait Layout {
   def baseUrl: String
-  def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false, article: Option[Article] = None): String
+  def makePage(content: String, title: String = null, containImages: Boolean = false, ogTags: Article = null, rssLink: String = null, includeCompleteStyle: Boolean = false, article: Option[Article] = None): String
 
   def makeIndex(parts: Seq[PagePart]): String
   def makeArchive(a: Article, parts: Seq[PagePart]): String
   def makeFullArticle(a: Article, parts: Seq[PagePart] = Seq()): String
   def makeTagIndex(tags: Seq[(Article, Int)]): String
 
-  // Bare article body, no title, no links to related articles, no tags. This method is used in RSS feeds.
-  def makeArticleBody(a: Article): String
-  def makeSummaryBody(a: Article): String
-
-  def makeArticle(a: Article): String = ???
-  def makeSummary(a: Article): String
-  def makeLink(a: Article): String = ???
-
-  //def makeSummrayList(as: Seq[Article]) = ???
-  //def makeLinkList(as: Seq[Article]) = ???
-
   def articleUrl(a: Article): String
   def articleLink(a: Article, title: String, asLink: Boolean = true, imgMarker: Boolean = false): String
-  def rssLink(rss: String): String
-  def ogTags(a: Article): String
 }
 
 
@@ -46,6 +33,7 @@ object PagePart {
   case class FullArticles(articles: Seq[Article]) extends PagePart
   case class Summaries(articles: Seq[Article]) extends PagePart
   case class Links(articles: Seq[Article]) extends PagePart
+  case class Bodies(articles: Seq[Article]) extends PagePart
   case class Tags(tags: Seq[Article]) extends PagePart
   case class Archive(archive: Seq[Article], groupedBy: String) extends PagePart
   case class Text(txt: String) extends PagePart
@@ -114,51 +102,9 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   def ifs(x: Any, body: => String) = if (x != null) body else ""
   def ifs(x: String) = if (x != null) x else ""
 
-  private def mainImageUrl(a: Article): String  = a.images.find(_.mods == "main").map(_.url).getOrElse(null)
-  private def otherImageUrl(a: Article): String = a.images.headOption.map(_.url).getOrElse(null)
 
 
-
-
-
-  def rssLink(rss: String) = {
-    val w = new XMLSW(new java.lang.StringBuilder(100), true)
-    (w.shortElement2("link") { _.attr("rel", "alternate").attr("type", "application/rss+xml").attr("href", rel(rss)) }).builder.toString
-  }
-
-  def ogTags(a: Article): String = {
-    if (blog.hasOgTags) {
-      val mainImg  = mainImageUrl(a)
-      val otherImg = otherImageUrl(a)
-      val (tpe, img) =
-        if (mainImg != null)       ("summary_large_image", mainImg)
-        else if (otherImg != null) ("summary",             otherImg)
-        else if (blog.textCards)   ("summary_large_image", blog.absUrlFromPath(blog.textCardUrl(a)))
-        else                       ("summary",             null)
-
-      val sb = new java.lang.StringBuilder(300)
-      val w = new XMLSW(sb, html5 = true)
-      w.shortElement2("meta") { _.attr("name",     "twitter:card"  ).attr("content", tpe) }
-      w.shortElement2("meta") { _.attr("property", "og:type"       ).attr("content", "article") }
-      w.shortElement2("meta") { _.attr("property", "og:url"        ).attr("content", baseUrl) }
-      w.shortElement2("meta") { _.attr("property", "og:title"      ).attr("content", a.title) }
-      w.shortElement2("meta") { _.attr("property", "og:description").attr("content", truncate(a.text.plaintextSummary, 200)) }
-
-      if(img != null) {
-        w.shortElement2("meta") { _.attr("property", "og:image").attr("content", img) }
-      }
-      if(blog.twitterSite.nonEmpty) {
-        w.shortElement2("meta") { _.attr("name", "twitter:site").attr("content", blog.twitterSite) }
-      }
-      if(blog.twitterCreator.nonEmpty) {
-        w.shortElement2("meta") { _.attr("name", "twitter:creator").attr("content", blog.twitterCreator) }
-      }
-      sb.toString
-    } else ""
-  }
-
-
-  def makePage(content: String, title: String = null, containImages: Boolean = false, headers: String = null, includeCompleteStyle: Boolean = false, article: Option[Article] = None): String = {
+  def makePage(content: String, title: String = null, containImages: Boolean = false, ogTags: Article = null, rssLink: String = null, includeCompleteStyle: Boolean = false, article: Option[Article] = None): String = {
     val h = blog.hooks.header(base, blog, this, article)
     val header = if (h != null) h else mill.header.get(rel)
     val footer = mill.footer.get(rel)
@@ -169,7 +115,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     "<meta charset=utf-8>"+
     "<meta name=viewport content=\"width=device-width,initial-scale=1\">"+
     "<title>"+ ifs(title, title+" | ")+blog.title+"</title>"+
-    rssLink("rss.xml")+
+    makeRssLink("rss.xml")+
     (if (blog.cssFile != null || blog.cssExport)
       "<link rel=stylesheet href="+html.quoteAttribute(rel("style.css"))+" type=text/css>"
     else
@@ -182,7 +128,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
         "<script>"+galleryScript+"</script>"
       }
     )+"\n"+
-    ifs(headers)+"\n"+
+    ifs(rssLink, makeRssLink(rssLink)+"\n")+
+    ifs(blog.hasOgTags && ogTags != null, makeOgTags(ogTags)+"\n")+
     body
   }
 
@@ -212,6 +159,8 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
         listOfSummaries(articles)
       case PagePart.Links(articles) =>
         listOfLinks(articles)
+      case PagePart.Bodies(articles) =>
+        articles.map(_.text.render(rel)).mkString
       case PagePart.Tags(tags) =>
         "<aside>"+tags.map(makeTagLink).mkString(" ")+"</aside>"
       case PagePart.Archive(archive, groupedBy) =>
@@ -239,9 +188,6 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
   }
 
   def makeFullArticle(a: Article, parts: Seq[PagePart] = Seq()): String = _makeFullArticle(a, false, parts)
-
-  def makeArticleBody(a: Article): String =
-    a.text.render(rel)
 
 
   def listOfLinks(list: Seq[Article]) = {
@@ -342,7 +288,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     (if (a.link != null || asLink) aTag(_title, articleAbsUrl(a)) else _title)+ifs(imgMarker && a.hasImageMarker, " "+blog.imageMarker)
   }
 
-  override def makeLink(a: Article) = {
+  def makeLink(a: Article) = {
     val title = blog.hooks.listTitle(base, blog, this, a)
     if (title != null) title else makeDate(a)+" "+articleLink(a, a.title, imgMarker = true)
   }
@@ -371,7 +317,46 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     case d if a.date.getYear == thisYear => shortDate.format(d)
     case d => longDate.format(d)
   }
+
+
+  private def mainImageUrl(a: Article): String  = a.images.find(_.mods == "main").map(_.url).getOrElse(null)
+  private def otherImageUrl(a: Article): String = a.images.headOption.map(_.url).getOrElse(null)
+
+  def makeRssLink(rss: String) = {
+    val w = new XMLSW(new java.lang.StringBuilder(100), true)
+    (w.shortElement2("link") { _.attr("rel", "alternate").attr("type", "application/rss+xml").attr("href", rel(rss)) }).builder.toString
+  }
+
+  def makeOgTags(a: Article): String = {
+    val mainImg  = mainImageUrl(a)
+    val otherImg = otherImageUrl(a)
+    val (tpe, img) =
+      if (mainImg != null)       ("summary_large_image", mainImg)
+      else if (otherImg != null) ("summary",             otherImg)
+      else if (blog.textCards)   ("summary_large_image", blog.absUrlFromPath(blog.textCardUrl(a)))
+      else                       ("summary",             null)
+
+    val sb = new java.lang.StringBuilder(300)
+    val w = new XMLSW(sb, html5 = true)
+    w.shortElement2("meta") { _.attr("name",     "twitter:card"  ).attr("content", tpe) }
+    w.shortElement2("meta") { _.attr("property", "og:type"       ).attr("content", "article") }
+    w.shortElement2("meta") { _.attr("property", "og:url"        ).attr("content", baseUrl) }
+    w.shortElement2("meta") { _.attr("property", "og:title"      ).attr("content", a.title) }
+    w.shortElement2("meta") { _.attr("property", "og:description").attr("content", truncate(a.text.plaintextSummary, 200)) }
+
+    if(img != null) {
+      w.shortElement2("meta") { _.attr("property", "og:image").attr("content", img) }
+    }
+    if(blog.twitterSite.nonEmpty) {
+      w.shortElement2("meta") { _.attr("name", "twitter:site").attr("content", blog.twitterSite) }
+    }
+    if(blog.twitterCreator.nonEmpty) {
+      w.shortElement2("meta") { _.attr("name", "twitter:creator").attr("content", blog.twitterCreator) }
+    }
+    sb.toString
+  }
 }
+
 
 
 class PrepatedText(htmlText: String, resolver: String => String) {
