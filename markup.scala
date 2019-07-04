@@ -14,7 +14,6 @@ trait Markup {
 
 trait Text {
   def render(relativize: String => String): String
-  def paragraph(text: String): String
   def plaintextSummary: String
   def plaintext: String
   def images: Seq[Image]
@@ -102,8 +101,6 @@ object AsciiText {
 case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: AsciiMarkup) extends Text { self =>
 
   def render(relativize: String => String): String = mkText(segments, resolvedLinks, relativize)
-  def paragraph(text: String): String = "" //TODO//AsciiText(Seq(Inline(text)), l => resolvedLinks(l), markup).render(identity)
-
   def plaintextSummary: String = stripTags(mkParagraph(segments.collect { case Paragraph(txt, _) => txt }.headOption.getOrElse(""), resolvedLinks, identity, true))
   def plaintext: String = stripTags(processTexts(segments, txt => Iterator(mkParagraph(txt, resolvedLinks, identity, true))).mkString(" "))
 
@@ -207,7 +204,7 @@ case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: Asc
       case Block("pre",  txt, mods) => sb.append("<pre").append(mkMods(mods)).append(">").append(html.escape(txt)).append("</pre>")
       case Block("comment", _, _)   =>
       case Block(tpe, _, _)        => sys.error(s"unknown block type '$tpe'")
-      case Images(images)       => images.foreach { img => sb.append(imgTag(img, relativize)).append(" ") }
+      case Images(images)       => images.foreach { img => sb.append(mkImgTag(img, aliases, relativize)).append(" ") }
       case Paragraph(txt, mods) =>
         sb.append("<p").append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize))
         if (!omitEndPTag) sb.append("</p>")
@@ -257,20 +254,16 @@ case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: Asc
     sb.toString
   }
 
-  private def classAndSrc(img: Image) =
-    img match {
+  private def mkImgTag(img: Image, aliases: Map[String, String], relativize: String => String) = {
+    val (cl, src) = img match {
       case i if i.mods == "main" && i.align == ">" => ("fr",   resolver.bigThumbnail(img, true))
       case i if i.mods == "main" =>                   ("main", resolver.bigThumbnail(img, false))
       case i if i.align == ">" =>                     ("thr",  resolver.thumbnail(img))
       case i =>                                       ("thz",  resolver.thumbnail(img))
     }
-
-  private def imgTag(img: Image, relativize: String => String) = {
-    val (cl, src) = classAndSrc(img)
     val href = relativize(img.url)
-
     val desc = {
-      val title   = if (img.title != null) paragraph(img.title).trim else ""
+      val title   = if (img.title != null) mkParagraph(img.title, aliases, relativize).trim else ""
       //val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim
       val source  = if (img.source != null) "(<a href="+html.quoteAttribute(img.source)+">via</a>)" else ""
       val license = if (img.license != null) img.license+" "+source.trim else ""
@@ -526,7 +519,6 @@ class HTMLMarkup extends Markup {
 class HTMLText(text: String, resolver: LinkResolver, imageRoot: String, markup: HTMLMarkup) extends Text {
   def render(relativize: String => String): String =
     markup.ahrefRegex.replaceAllIn(text, m => relativize(resolver.link(m.group(0))))
-  def paragraph(text: String): String = text
   def plaintextSummary: String = ""
   def plaintext: String = ???
   def images: Seq[Image] = markup.imgsrcRegex.findAllIn(text).toVector
