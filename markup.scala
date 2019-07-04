@@ -1,7 +1,6 @@
 package asciiblog
 
 import java.lang.StringBuilder
-import scala.util.matching.Regex
 import scala.collection.mutable
 import MakeFiles.{ licenses, peelOffTags, isAbsolute }
 import MarkupParser.{ findMods, mkMods }
@@ -9,7 +8,8 @@ import AsciiPatterns._
 
 
 trait Markup {
-  def process(text: Seq[String], resolver: LinkResolver, imageRoot: String): Text
+  def process(text: Seq[String], imageRoot: String): Text
+  def empty: Text
 }
 
 trait Text {
@@ -18,6 +18,9 @@ trait Text {
   def plaintext: String
   def images: Seq[Image]
   def links: Seq[String]
+
+  def resolve(resolver: LinkResolver): Text
+  def appendImages(images: Seq[Image]): Text
 }
 
 
@@ -94,23 +97,22 @@ object AsciiPatterns {
 }
 
 
-object AsciiText {
-  def empty = AsciiText(Seq(), null, null)
-}
 
 
-
-case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: AsciiMarkup) extends Text { self =>
+case class AsciiText(segments: Seq[Segment], parser: MarkupParser, resolver: LinkResolver = null) extends Text { self =>
 
   def render(relativize: String => String): String = mkText(segments, resolvedLinks, relativize)
   def plaintextSummary: String = stripTags(mkParagraph(segments.collect { case Paragraph(txt, _) => txt }.headOption.getOrElse(""), resolvedLinks, identity, true))
   def plaintext: String = stripTags(processTexts(segments, txt => Iterator(mkParagraph(txt, resolvedLinks, identity, true))).mkString(" "))
 
+  def resolve(r: LinkResolver): AsciiText = copy(resolver = r)
+  def appendImages(images: Seq[Image]): Text = copy(segments = segments :+ Images(images))
+
   // Overwrites segments, doesn't resolve links again. This saves some work but
-  // mainly it's there se error messages during link resolution are not
+  // mainly it's there so error messages during link resolution are not
   // displayed twice
   def overwriteSegments(newSegments: Seq[Segment]) =
-    new AsciiText(newSegments, resolver, markup) {
+    new AsciiText(newSegments, parser, resolver) {
       override protected def resolvedLinks = self.resolvedLinks
     }
 
@@ -169,7 +171,7 @@ case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: Asc
   }
 
   private def mkParagraph(txt: String, aliases: Map[String, String], relativize: String => String, plaintext: Boolean = false): String =
-    markup.parser(txt, (link: String) => {
+    parser(txt, (link: String) => {
       val al = aliases(link)
       if (al == Blog.invalidLinkMarker) null else relativize(al)
     }, plaintext)
@@ -304,7 +306,9 @@ case class Cell(txt: String, span: Int = 1)
 class AsciiMarkup extends Markup {
   val parser = new MarkupParser(CzechTypography)
 
-  def process(lines: Seq[String], resolver: LinkResolver, imageRoot: String): AsciiText = {
+  def empty: AsciiText = AsciiText(Seq(), parser, null)
+
+  def process(lines: Seq[String], imageRoot: String): AsciiText = {
     def matchAllLines[T](ls: Seq[String], prefix: String)(f: PartialFunction[String, T]): Option[Seq[T]] = {
       if (!ls.forall(_.startsWith(prefix))) return None
       val ms = ls.collect(f)
@@ -429,8 +433,7 @@ class AsciiMarkup extends Markup {
           }
         }.toVector
 
-    val finalSegments = joinNeighboringLists(mergeParagraphsIntoLists(segments))
-    AsciiText(finalSegments, resolver, this)
+    AsciiText(joinNeighboringLists(mergeParagraphsIntoLists(segments)), parser)
   }
 
   // image format:
@@ -512,11 +515,13 @@ class HTMLMarkup extends Markup {
   val ahrefRegex  = """(?x) (?<= \<a   [^>]* href=") (.*?) (?=") """.r
   val imgsrcRegex = """(?x) (?<= \<img [^>]* src=")  (.*?) (?=") """.r
 
-  def process(text: Seq[String], resolver: LinkResolver, imageRoot: String): HTMLText =
-    new HTMLText(text.mkString("\n"), resolver, imageRoot, this)
+  def process(text: Seq[String], imageRoot: String): HTMLText =
+    new HTMLText(text.mkString("\n"), imageRoot, this)
+
+  def empty = HTMLText("", null, this)
 }
 
-class HTMLText(text: String, resolver: LinkResolver, imageRoot: String, markup: HTMLMarkup) extends Text {
+case class HTMLText(text: String, imageRoot: String, markup: HTMLMarkup, resolver: LinkResolver = ???) extends Text {
   def render(relativize: String => String): String =
     markup.ahrefRegex.replaceAllIn(text, m => relativize(resolver.link(m.group(0))))
   def plaintextSummary: String = ""
@@ -524,4 +529,6 @@ class HTMLText(text: String, resolver: LinkResolver, imageRoot: String, markup: 
   def images: Seq[Image] = markup.imgsrcRegex.findAllIn(text).toVector
     .map(url => Image(if (isAbsolute(url)) url else imageRoot + url))
   def links: Seq[String] = markup.ahrefRegex.findAllIn(text).map(resolver.link).toVector
+  def resolve(r: LinkResolver): HTMLText = copy(resolver = r)
+  def appendImages(images: Seq[Image]): Text = ???
 }

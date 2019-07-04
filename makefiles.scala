@@ -434,14 +434,8 @@ case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
   lazy val articles = all.filter(a => !a.isTag)
   lazy val feed     = all.filter(a => !a.isTag && a.inFeed)
 
-  lazy val allTags: Map[Tag, (Article, Seq[Article])] = { // [tag -> (article reprsenting this tag, articles tagged by this tag)]
-    val imageTagMap: Map[Tag, Seq[(Image, Article)]] = invert(all.flatMap(a => a.images.map(i => ((i, a), i.tags.visible.distinct))))
-    def taggedImages(t: Tag) = imageTagMap.getOrElse(t, Seq()).map { case (i, a) => i.copy(localSource = a) } // TODO
-
-    all.filter(_.isTag).map { t =>
-      t.asTag -> (t/*.copy(images = t.images ++ taggedImages(t.asTag))TODO*/, tagMap.getOrElse(t.asTag, Seq()))
-    }.toMap
-  }
+  lazy val allTags: Map[Tag, (Article, Seq[Article])] = // [tag -> (article reprsenting this tag, articles tagged by this tag)]
+    all.collect { case t if t.isTag => t.asTag -> ((t, tagMap.getOrElse(t.asTag, Seq()))) }.toMap
 
   def tagByTitle(t: Tag): Article = allTags(t)._1
 
@@ -1014,12 +1008,42 @@ object MakeFiles {
       }
     }
 
+
+    timer("parse text", blog) {
+      articles = articles.map { a =>
+        a.copy(text = blog.markup.process(a.rawText, blog.imageRoot))
+      }
+    }
+
+    articles = articles.map { a =>
+      if (a.imgtags.isEmpty) a else a.addImageTags(a.imgtags)
+    }
+
+    def materializeNonexplicitTags(all: Vector[Article]): Vector[Article] = timer("materializeNonexplicitTags", blog) {
+      val explicitTags: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
+      val mentionedTags: Set[Tag] = all.flatMap { a => a.tags.visible ++ a.tags.hidden ++ a.implies ++ a.imgtags ++ a.images.flatMap(i => i.tags.visible ++ i.tags.hidden) }.toSet
+      (mentionedTags -- explicitTags).iterator.map { t =>
+        Article(t.title, tagSlug(t.title), meta = Meta(Seq(if (t.supertag) "supertag" else "tag")), text = blog.markup.empty)
+      }.toVector
+    }
+
+    articles = articles ++ materializeNonexplicitTags(articles)
+
+
+    timer("append tagged images to tag pages") {
+      val imageTags: Map[Tag, Seq[Image]] = (for (a <- articles; i <- a.images; t <- i.tags.visible) yield (i.asSmallThumbnail, t)).groupMap(_._2)(_._1)
+
+      articles = articles.map { a =>
+        if (imageTags.contains(a.asTag)) {
+          a.copy(text = a.text.appendImages(imageTags(a.asTag)))
+        } else a
+      }
+    }
+
+
+
     // Maps all article slugs (main ones and aliases) to their absolute urls.
-    // Bit of a hack, this lazy function closes over mutable variable articles.
-    // So when it's finally called it sould use the most recent and up to date
-    // collection of articles. This is needed to resolve circular dependency:
-    // global names -> parse text -> materializeNonexplicitTags -> global names
-    lazy val globalNames: Map[String, String] = timer("global names", blog) {
+    val globalNames: Map[String, String] = timer("global names", blog) {
       articles.iterator.flatMap { a => (a.slug +: a.aliases).map(s => (s, blog.absUrl(a))) }.toMap
     }
 
@@ -1044,31 +1068,21 @@ object MakeFiles {
 
     val resolver = (link: String) => resolveLink(link, globalNames, null)
 
-    timer("parse text", blog) {
-    articles = articles.map { a =>
-      val resolver = new LinkResolver {
+
+    {
+      val tags = articles.collect { case a if a.isTag => (a.asTag, blog.absUrl(a)) }.toMap
+
+      articles = articles.map { a =>
+        a.copy(text = a.text.resolve(new LinkResolver {
           def link(l: String): String = resolveLink(l, globalNames, a)
           def thumbnail(img: Image): String = blog.thumbnailUrl(img)
           def bigThumbnail(img: Image, half: Boolean): String = blog.bigThumbnailUrl(img, half)
-          def tag(t: Tag): String = "", // TODO
+          def tag(t: Tag): String = tags(t)
+        }))
       }
-      a.copy(text = blog.markup.process(a.rawText, resolver, blog.imageRoot))
-    }
     }
 
-    def materializeNonexplicitTags(all: Vector[Article]): Vector[Article] = timer("materializeNonexplicitTags", blog) {
-      val explicitTags: Set[Tag] = all.collect { case a if a.isTag => a.asTag }.toSet
-      val mentionedTags: Set[Tag] = all.flatMap { a => a.tags.visible ++ a.tags.hidden ++ a.implies ++ a.imgtags ++ a.images.flatMap(i => i.tags.visible ++ i.tags.hidden) }.toSet
-      (mentionedTags -- explicitTags).iterator.map { t =>
-        Article(t.title, tagSlug(t.title), meta = Meta(Seq(if (t.supertag) "supertag" else "tag")), text = AsciiText.empty)
-      }.toVector
-    }
 
-    articles = articles ++ materializeNonexplicitTags(articles)
-
-    articles = articles.map { a =>
-      if (a.imgtags.isEmpty) a else a.addImageTags(a.imgtags)
-    }
 
     timer("check slugs and alias for uniqueness", blog) {
     val allIds = new mutable.HashMap[String, Article]()
