@@ -160,17 +160,10 @@ object Blog {
     }
 
     def check[T](x: T)(f: T => Boolean)(message: T => String) = { require(f(x), message(x)); x }
-    def alts(str: String, alternatives: Map[String, String]) = alternatives.getOrElse(str.toLowerCase, str)
-    def initClass[T](line: String): T = {
-      val Array(clazz, args @ _*) = line.split(" ")
-      Class.forName(clazz)
-        .getDeclaredConstructor(args.map(_.getClass): _*)
-        .newInstance(args: _*).asInstanceOf[T],
-    }
 
-    val hooks                  = initClass[Hooks](cfgStr("hooks", "asciiblog.NoHooks"))
-    val markup                 = initClass[Markup](alts(cfgStr("markup", "asciiblog.AsciiMarkup"), Map(
-        "html" -> "asciiblog.HTMLMarkup", "ascii" -> "asciiblog.AsciiMarkup")))
+    def evalLispy(code: String) = Lispy.evalMain(Lispy.parse(code), Lispy.env)._1
+    val hooks  = evalLispy(cfgStr("hooks",  "(new asciiblog.NoHooks)")).asInstanceOf[Hooks]
+    val markup = evalLispy(cfgStr("markup", "(new asciiblog.AsciiMarkup)")).asInstanceOf[Markup]
 
 
     val b = new Blog(

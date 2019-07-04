@@ -309,8 +309,10 @@ final case class Table(rows: Seq[Seq[Cell]]) extends Segment
 case class Cell(txt: String, span: Int = 1)
 
 
-class AsciiMarkup extends Markup {
-  val parser = new MarkupParser(CzechTypography)
+class AsciiMarkup(typography: Typography) extends Markup {
+  val parser = new MarkupParser(typography)
+
+  def this() = this(NoTypography)
 
   def empty: AsciiText = AsciiText(Seq(), parser, null)
 

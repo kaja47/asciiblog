@@ -414,7 +414,7 @@ object NoTypography extends Typography {
   val singleQuoteMarks = ("'",  "'")
 }
 
-object CzechTypography extends Typography {
+class CzechTypography(hyphenator: Hyphenator = NoHyphenator) extends Typography {
   def apply(text: String, plaintext: Boolean) = {
     var t = text
     if (!plaintext) {
@@ -446,7 +446,6 @@ object CzechTypography extends Typography {
   val preposCharsLen = 123
   val preposChars = Array.tabulate[Boolean](preposCharsLen) { i => "ksvzouiaKSVZOUIA".indexOf(i) != -1 }
   def isPreposChar(ch: Char) = ch < preposCharsLen && preposChars(ch)
-  val hyphenator = new Hyphenator("/home/k47/skripty/asciiblog/hyph_cs_CZ.dic", encoding = "ISO8859-2")
 
   def handlePrepositions(txt: String) =
     if (txt.length < 2) txt else {

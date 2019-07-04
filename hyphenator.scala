@@ -3,14 +3,31 @@ package asciiblog
 import java.lang.StringBuilder
 import scala.collection.mutable
 
+
+trait Hyphenator {
+  def apply(word: String, hypen: String = "-", front: Int = 2, back: Int = 2): String
+}
+
+
+object NoHyphenator extends Hyphenator {
+  def apply(word: String, hypen: String = "-", front: Int = 2, back: Int = 2): String = word
+}
+
+
+
 /**
  * http://www.tug.org/docs/liang/
  */
-class Hyphenator(patternFile: String, exceptionFile: String = null, val separator: String = "-", encoding: String) {
+class FileHyphenator(patternFile: String, exceptionFile: String = null, val separator: String = "-") extends Hyphenator {
+  def this(patternFile: String) = this(patternFile: String, null, "-")
 
   private def read(file: String, f: String => (String, Array[Int])): Map[String, Array[Int]] =
-    if (file == null) Map()
-    else io.Source.fromFile(file, encoding).getLines.map(f).toMap
+    if (file == null) Map() else {
+      import java.io._
+      if (!new File(file).exists()) throw new Exception(s"file $file does not exist")
+      val encoding = util.readFirstLineAsUtf8(new File(file))
+      io.Source.fromFile(file, encoding).getLines.drop(1).map(f).toMap
+    }
 
   private val patterns   = read(patternFile, mkPattern)
   private val exceptions = read(exceptionFile, mkException)
