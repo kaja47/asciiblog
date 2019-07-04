@@ -1051,6 +1051,7 @@ object MakeFiles {
           def link(l: String): String = resolveLink(l, globalNames, a)
           def thumbnail(img: Image): String = blog.thumbnailUrl(img)
           def bigThumbnail(img: Image, half: Boolean): String = blog.bigThumbnailUrl(img, half)
+          def tag(t: Tag): String = "", // TODO
       }
       val txt = blog.markup.process(a.rawText, resolver, blog.imageRoot)
 

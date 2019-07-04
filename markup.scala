@@ -22,11 +22,12 @@ trait Text {
 
 
 
-// Object passed to Text in order to properly render local urls (but not relativize them).
+// Object passed to Text in order to properly render local links as absolute urls
 trait LinkResolver {
   def link(l: String): String
   def thumbnail(img: Image): String
   def bigThumbnail(img: Image, half: Boolean): String
+  def tag(t: Tag): String
 }
 
 object LinkResolver {
@@ -34,6 +35,7 @@ object LinkResolver {
     def link(l: String): String = ???
     def thumbnail(img: Image): String = ???
     def bigThumbnail(img: Image, half: Boolean): String = ???
+    def tag(t: Tag): String = ???
   }
 }
 
@@ -264,11 +266,11 @@ case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: Asc
     val href = relativize(img.url)
     val desc = {
       val title   = if (img.title != null) mkParagraph(img.title, aliases, relativize).trim else ""
-      //val tags    = makeTagLinks(img.tags.visible.map(base.tagByTitle)).trim
+      val tags    = img.tags.visible.map { t => "<a href="+html.quoteAttribute(relativize(resolver.tag(t)))+">#"+t.title+"</a>" }.mkString(" ")
       val source  = if (img.source != null) "(<a href="+html.quoteAttribute(img.source)+">via</a>)" else ""
       val license = if (img.license != null) img.license+" "+source.trim else ""
       val locSrc  = if (img.localSource != null) "<a href="+html.quoteAttribute(relativize(resolver.link(img.localSource.slug)))+">"+html.escape(title)+"</a>" else ""
-      Seq(title, /*tags,*/ license, locSrc).mkString(" ").replaceAll(" +", " ").trim
+      Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
     }
 
     val imgTag = s"""<img class=thz ${if (img.alt != null) s"title='${img.alt}' " else ""}src=${html.quoteAttribute(relativize(src))}>"""
