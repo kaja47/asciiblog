@@ -287,7 +287,6 @@ case class Article(
   license: String = null,
   rawText: Seq[String] = Seq(),
   text: Text = null,
-  images: Seq[Image] = Seq(),
   backlinks: Seq[Article] = Seq(),
   similar: Seq[Similar] = Seq(),
   pubArticles: Seq[Article] = Seq(),
@@ -306,6 +305,8 @@ case class Article(
   def asTag      = if (isTag) Tag(title, isSupertag) else null
   def slugsOfLinkedArticles(implicit blog: Blog): Seq[Slug] = text.links.filter(blog.isLocalLink).map(blog.extractSlug)
 
+  def images: Seq[Image] = text.images
+
   // image marker is shown only for images that are not from external sources
   def hasImageMarker = images.exists(i => i.source == null || i.source == "")
   def hasTag(t: Tag) = tags.visible.contains(t)
@@ -318,7 +319,6 @@ case class Article(
     }
 
     copy(
-      images = images.map(f),
       text = text match {
         case t: AsciiText => t.overwriteSegments(mapSegments(t.segments)) // TODO this sould not be here
         case t => t
@@ -439,7 +439,7 @@ case class Base(all: Vector[Article], tagMap: Map[Tag, Seq[Article]] = Map()) {
     def taggedImages(t: Tag) = imageTagMap.getOrElse(t, Seq()).map { case (i, a) => i.copy(localSource = a) } // TODO
 
     all.filter(_.isTag).map { t =>
-      t.asTag -> (t.copy(images = t.images ++ taggedImages(t.asTag)), tagMap.getOrElse(t.asTag, Seq()))
+      t.asTag -> (t/*.copy(images = t.images ++ taggedImages(t.asTag))TODO*/, tagMap.getOrElse(t.asTag, Seq()))
     }.toMap
   }
 
@@ -948,7 +948,6 @@ object MakeFiles {
             val (short, long) = if (a.rawText.size < b.rawText.size) (a.rawText, b.rawText) else (b.rawText, a.rawText)
             if (short.isEmpty) long else short ++ Seq("", "") ++ long
           },
-          images  = a.images ++ b.images,
           inFeed  = a.inFeed && b.inFeed
         ) // backlinks, similar, pubArticles, pubBy not yet populated
 
@@ -1053,12 +1052,7 @@ object MakeFiles {
           def bigThumbnail(img: Image, half: Boolean): String = blog.bigThumbnailUrl(img, half)
           def tag(t: Tag): String = "", // TODO
       }
-      val txt = blog.markup.process(a.rawText, resolver, blog.imageRoot)
-
-      a.copy(
-        text = txt,
-        images = (a.images ++ txt.images) // images might be already populated from readGallery()
-      )
+      a.copy(text = blog.markup.process(a.rawText, resolver, blog.imageRoot))
     }
     }
 
