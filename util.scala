@@ -3,7 +3,7 @@ package asciiblog
 import scala.collection.mutable
 import scala.util.matching.Regex
 import java.util.regex.{ Pattern, Matcher }
-import java.io.File
+import java.io.{ File, FileInputStream }
 import java.lang.StringBuilder
 
 class TopK[T: Ordering](count: Int) {
@@ -430,6 +430,18 @@ object util {
       i += 1
     }
     x.length > 0
+  }
+
+  def readFirstLineAsUtf8(file: File) = {
+    val is = new FileInputStream(file)
+    val bytes = mutable.ArrayBuffer[Byte]()
+    var b = is.read()
+    while (b != -1 && b != '\r' && b != '\n') {
+      bytes += b.toByte
+      b = is.read()
+    }
+    is.close()
+    new String(bytes.toArray, "utf-8")
   }
 }
 

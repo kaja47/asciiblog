@@ -486,16 +486,7 @@ object MakeFiles {
   lazy val shareScript    = io.Source.fromFile(file("share.php")).mkString
 
   def readConfig(cfgFile: File): Map[String, String] = {
-    // read only the first line and interpret it as utf-8 string
-    val is = new FileInputStream(cfgFile)
-    val bytes = mutable.ArrayBuffer[Byte]()
-    var b = is.read()
-    while (b != -1 && b != '\r' && b != '\n') {
-      bytes += b.toByte
-      b = is.read()
-    }
-    val firstLine = new String(bytes.toArray, "utf-8")
-    is.close()
+    val firstLine = util.readFirstLineAsUtf8(cfgFile)
 
     // config file may start by "encoding" directive determining encoding for the file itself
     // (This is ok because file either starts with encoding directive or is encoded as utf-8)
