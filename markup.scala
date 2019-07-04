@@ -121,7 +121,7 @@ case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: Asc
     case SegmentSeq(sx) => processTexts(sx, f)
     case BulletList(items)   => processTexts(items, f)
     case NumberedList(items) => processTexts(items.map(_._2), f)
-    case Table(rows, _) => rows.iterator.flatten.flatMap(cell => f(cell.txt))
+    case Table(rows)         => rows.iterator.flatten.flatMap(cell => f(cell.txt))
     case _ => Iterator()
   }
 
@@ -178,7 +178,7 @@ case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: Asc
   private def _mkText(segments: Seq[Segment], aliases: Map[String, String], relativize: String => String, sb: StringBuilder): String = {
     for (i <- 0 until segments.length) {
       def omitEndPTag = if (i == segments.length-1) false else (segments(i+1) match {
-        case Paragraph(_, _) | Table(_, _) | Hr() | Blockquote(_) | Heading(_) | Block("pre", _, _) | Block("div", _, _) | BulletList(_) | NumberedList(_) => true
+        case Paragraph(_, _) | Table(_) | Hr() | Blockquote(_) | Heading(_) | Block("pre", _, _) | Block("div", _, _) | BulletList(_) | NumberedList(_) => true
         case _ => false
       })
 
@@ -234,7 +234,7 @@ case class AsciiText(segments: Seq[Segment], resolver: LinkResolver, markup: Asc
         }
         sb.append("</ol>")
 
-      case Table(rows, _) =>
+      case Table(rows) =>
         sb.append("<table>")
         rows.foreach { cols =>
           sb.append("<tr>")
@@ -294,7 +294,7 @@ final case class Blockquote(segments: Seq[Segment]) extends Segment
 final case class SegmentSeq(segments: Seq[Segment]) extends Segment
 final case class BulletList(items: Seq[Segment]) extends Segment
 final case class NumberedList(items: Seq[(Int, Segment)]) extends Segment
-final case class Table(rows: Seq[Seq[Cell]], columns: Int) extends Segment // TODO columns field is not used
+final case class Table(rows: Seq[Seq[Cell]]) extends Segment
 
 case class Cell(txt: String, span: Int = 1)
 
@@ -471,13 +471,11 @@ class AsciiMarkup extends Markup {
 
   private def mkTable(lines: Seq[String]): Table = {
     val ls = lines.filterNot { _.matches("""\|-+""" )}
-    val rows = ls.map { l => tableRowRegex.findAllMatchIn(l).map { m =>
+    Table(ls.map { l => tableRowRegex.findAllMatchIn(l).map { m =>
       val span = m.group(1).length
       val txt  = m.group(2)
       Cell(txt, span)
-    }.toVector }
-    val columns = rows.map(_.map(_.span).sum).max
-    Table(rows, columns)
+    }.toVector })
   }
 
   private def mkBulletList(lines: Seq[String]): BulletList = {
