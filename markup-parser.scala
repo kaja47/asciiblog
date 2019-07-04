@@ -57,7 +57,7 @@ case class MarkupBlock(
     isLongEnd(str, i) || isCompactEnd(str, i)
 
 
-  def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) = {
+  def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, plaintext: Boolean) = {
     require(!recur)
     sb.append(str, from, to)
   }
@@ -72,10 +72,10 @@ case class MarkupBlock(
 object MarkupParser {
   val blocks = Array(
     new MarkupBlock("<!--", "-->", "",    "",        recur = false, tight = false) {
-      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) = sb
+      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, plaintext: Boolean) = sb
     },
     new MarkupBlock("[|", "|]", "",       "",        recur = false, tight = false) {
-      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) = {
+      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, plaintext: Boolean) = {
         if (!plaintext) {
           val len = to - from - 2
           for (i <- 0 until (len/5)) { sb.append("█████").append("<wbr>") }
@@ -84,7 +84,7 @@ object MarkupParser {
       }
     },
     new MarkupBlock("`",  "`",  "<code>", "</code>", recur = false, tight = false) {
-      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) =
+      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, plaintext: Boolean) =
         html.escape(str, from, to, sb)
     },
     new MarkupBlock("''", "''", "",       "",        recur = false, tight = false),
@@ -96,10 +96,9 @@ object MarkupParser {
     },
     new MarkupBlock("\"", "\"", "",       "",        recur = true, tight = true, doubleQuotes = true),
     new MarkupBlock("[[", "]]", "",       "",        recur = false, tight = false) {
-      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, p: MarkupParser, plaintext: Boolean) = {
+      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, plaintext: Boolean) = {
         if (!plaintext) {
-          val link = /* TODO p.processLink*/("#fn"+str.substring(from, to))
-          sb.append("<a href=").append(link).append("><sup>").append(str, from, to).append("</sup></a> ")
+          sb.append("<a href=").append("#fn"+str.substring(from, to)).append("><sup>").append(str, from, to).append("</sup></a> ")
         }
         sb
       }
@@ -179,7 +178,6 @@ class MarkupParser(typography: Typography = NoTypography) {
 
   val quoteMarks = typography.doubleQuoteMarks
 
-  // TODO plaintext
   def apply(s: String, processLink: String => String, plaintext: Boolean = false) = {
     val sb = new StringBuilder
     processMarkup(s, 0, sb, null, processLink, plaintext)
@@ -315,7 +313,7 @@ class MarkupParser(typography: Typography = NoTypography) {
         } else {
           i = endPos+block.endToken.length
 
-          block.appendBody(str, innerStart, endPos, sb, this, plaintext)
+          block.appendBody(str, innerStart, endPos, sb, plaintext)
           if (!plaintext) {
             sb.append(block.endTag)
           }
