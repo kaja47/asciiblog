@@ -126,6 +126,10 @@ object Lispy {
     case Sym(s) if s(0) == '.' =>
       Func { case obj :: args => javacall(s.tail, obj, args) }
 
+    //(new class args) -> (javanew class args)
+    case Lst(Sym("new") :: Sym(cls) :: args)  =>
+      Lst(Sym("javanew") :: Str(cls) :: args.map(rewrite))
+
     case Lst(Sym("defn") :: name :: args :: body) =>
       Lst(Sym("def") :: name :: Lst(Sym("fn") :: args :: body.map(rewrite)) :: Nil)
 
@@ -176,9 +180,8 @@ object Lispy {
     },
 
 
-    "javacall" -> Func{
-      case (method: String) :: obj :: args => javacall(method, obj, args)
-    },
+    "javacall" -> Func { case (method: String) :: obj :: args => javacall(method, obj, args) },
+    "javanew"  -> Func { case (cls: String) :: args => javanew(cls, args) },
 
     "true"  -> true,
     "false" -> false,
@@ -197,6 +200,9 @@ object Lispy {
 
   def javacall(method: String, obj: Any, args: Seq[Any]) =
     new java.beans.Expression(obj, method, args.toArray.asInstanceOf[Array[Object]]).getValue
+
+  def javanew(cls: String, args: Seq[Any]) =
+    new java.beans.Expression(Class.forName(cls), "new", args.toArray.asInstanceOf[Array[Object]]).getValue
 
 
   type Env = Map[String, Any]
