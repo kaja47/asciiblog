@@ -1,5 +1,7 @@
 package asciiblog
 
+import scala.annotation.unchecked.uncheckedVariance
+
 object RunLispy extends App {
   val script = args match {
     case Array() =>
@@ -63,6 +65,10 @@ object Lispy {
 
   case class Func(f: PartialFunction[List[Any], Any]) extends (List[Any] => Any) with AST {
     def apply(args: List[Any]): Any = f(args)
+  }
+
+  case class Func1(f: PartialFunction[Any, Any]) extends (Any => Any) with AST {
+    def apply(arg: Any): Any = f(arg)
   }
 
   def tokenize(txt: String): Vector[Token] =
@@ -248,8 +254,11 @@ object Lispy {
         }
         evalExpr(expr, newEnv)
 
+      case Lst(Sym("fn") :: Lst(Sym(formalArg) :: Nil) :: body :: Nil) =>
+        Func1 { case arg => evalExpr(body, env + (formalArg -> arg)) }
       case Lst(Sym("fn") :: Lst(formalArgs) :: body :: Nil) =>
         Func { case args => evalExpr(body, env ++ (formalArgs.map(_.asInstanceOf[Sym].value) zip args)) }
+
       case Lst(Sym("fn") :: Sym(fa) :: body :: Nil) =>
         Func { case args => evalExpr(body, env + (fa -> args)) }
 
@@ -257,7 +266,12 @@ object Lispy {
       case Lst(Sym("or") :: args) => args.exists(a => truthy(evalExpr(a, env)))
 
       case Lst(expr :: values) =>
-        evalExpr(expr, env).asInstanceOf[Func](values.map(v => evalExpr(v, env)))
+        evalExpr(expr, env) match {
+          case Func(f) => f(values.map(evalExpr(_, env)))
+          case Func1(f) if values.length == 1 => f(values.head)
+          case f: Function1[Any, Any] @uncheckedVariance if values.length == 1 => f.apply(evalExpr(values.head, env))
+        }
+
       case Sym("env") => env
       case Sym(s) =>
         if (!env.contains(s)) throw new Exception("symbol `"+s+"` not found")
@@ -269,7 +283,8 @@ object Lispy {
         evalExpr(ast, env)
         evalExpr(ASTSeq(rest), env)
 
-      case f: Func => f
+      case f: Func  => f
+      case f: Func1 => f
 
       case _ => sys.error(ast.toString)
     }
