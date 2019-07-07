@@ -376,24 +376,25 @@ class AsciiMarkup(typography: Typography) extends Markup {
       }
     }
 
-    def mergeParagraphsIntoLists(segments: Seq[Segment]): Seq[Segment] = // TODO more general mechanism for not only paragraphs
+    def isIndented(txt: String) = txt.linesIterator.forall(_.startsWith("  "))
+    def unindent(txt: String) = txt.linesIterator.map(_.drop(2)).toVector
+
+    def mergeParagraphsIntoLists(segments: Seq[Segment]): Seq[Segment] =
       segments.foldLeft(Vector[Segment]()) { (res, s) =>
         (s, res.lastOption) match {
-          case (Paragraph(txt, _), Some(BulletList(items))) if txt.linesIterator.forall(_.startsWith("  ")) =>
-            items.last match {
-              case SegmentSeq(ss) =>
-                res.init :+ BulletList(items.init :+ SegmentSeq(ss :+ s))
-              case last =>
-                res.init :+ BulletList(items.init :+ SegmentSeq(Seq(last, s)))
-            }
+          case (Paragraph(txt, _), Some(BulletList(items))) if isIndented(txt) =>
+            val newSeg = identifySegment(unindent(txt))
+            res.init :+ (items.last match {
+              case SegmentSeq(ss) => BulletList(items.init :+ SegmentSeq(ss :+ newSeg))
+              case last           => BulletList(items.init :+ SegmentSeq(Seq(last, newSeg)))
+            })
 
-          case (Paragraph(txt, _), Some(NumberedList(items))) if txt.linesIterator.forall(_.startsWith("  ")) =>
-            items.last match {
-              case (i, SegmentSeq(ss)) =>
-                res.init :+ NumberedList(items.init :+ (i, SegmentSeq(ss :+ s)))
-              case (i, last) =>
-                res.init :+ NumberedList(items.init :+ ((i, SegmentSeq(Seq(last, s)))))
-            }
+          case (Paragraph(txt, _), Some(NumberedList(items))) if isIndented(txt) =>
+            val newSeg = identifySegment(unindent(txt))
+            res.init :+ (items.last match {
+              case (i, SegmentSeq(ss)) => NumberedList(items.init :+ (i, SegmentSeq(ss :+ newSeg)))
+              case (i, last)           => NumberedList(items.init :+ ((i, SegmentSeq(Seq(last, newSeg)))))
+            })
 
           case (s, _) => res :+ s
         }
