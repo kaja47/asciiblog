@@ -188,12 +188,12 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, resolver: Lin
   private def _mkText(segments: Seq[Segment], aliases: Map[String, String], relativize: String => String, sb: StringBuilder): String = {
     for (i <- 0 until segments.length) {
       def omitEndPTag = if (i == segments.length-1) false else (segments(i+1) match {
-        case Paragraph(_, _) | Table(_) | Hr() | Blockquote(_) | Heading(_) | Block("pre", _, _) | Block("div", _, _) | BulletList(_) | NumberedList(_) => true
+        case Paragraph(_, _) | Table(_) | Hr() | Blockquote(_) | Heading(_, _) | Block("pre", _, _) | Block("div", _, _) | BulletList(_) | NumberedList(_) => true
         case _ => false
       })
 
       segments(i) match {
-      case Heading(txt)         => sb.append("<h3>").append(mkParagraph(txt, aliases, relativize)).append("</h3>")
+      case Heading(txt, mods)   => sb.append("<h3").append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize)).append("</h3>")
       case Hr()                 => sb.append("<hr>\n")
       case Linkref(_)           =>
       case Block("html", txt, mods) => sb.append(txt) // TODO mods
@@ -292,7 +292,7 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, resolver: Lin
 
 sealed trait Segment
 sealed trait Textual extends Segment { def txt: String }
-final case class Heading(txt: String) extends Segment with Textual
+final case class Heading(txt: String, mods: Mods) extends Segment with Textual
 final case class Paragraph(txt: String, mods: Mods = Mods()) extends Segment with Textual
 final case class Inline(txt: String) extends Segment with Textual
 final case class ByLine(txt: String) extends Segment with Textual
@@ -330,8 +330,14 @@ class AsciiMarkup(typography: Typography) extends Markup {
       if (ls.length == 1 && hrRegex.pattern.matcher(ls(0)).matches())
         return Hr()
 
-      if (ls.length == 2 && hrRegex.pattern.matcher(ls(1)).matches())
-        return Heading(ls(0))
+      if (ls.length == 2 && hrRegex.pattern.matcher(ls(1)).matches()) {
+        val rawLine = ls(0)
+        val (line, mods) = findMods(rawLine) match {
+          case Some((mods, pos)) => (rawLine.substring(0, pos).trim, mods)
+          case None =>              (rawLine, Mods())
+        }
+        return Heading(line, mods)
+      }
 
       if (ls.length == 1 && ls(0).startsWith("---"))
         return ByLine(ls.mkString("\n"))
