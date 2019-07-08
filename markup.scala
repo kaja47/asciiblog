@@ -490,7 +490,7 @@ class AsciiMarkup(typography: Typography) extends Markup {
   private val tableRowRegex = """(\|+)([^|]*)""".r
   private val tableHeadingRegex = """\|-+""".r
 
-  private def mkTable(lines: Seq[String]): Table = {
+  private def mkTable(lines: Seq[String]): Table =
     Table(lines.foldLeft(Seq[Seq[Cell]]()) { case (rows, line) =>
       line match {
         case tableHeadingRegex() => // make cells of previous row <th>
@@ -499,11 +499,10 @@ class AsciiMarkup(typography: Typography) extends Markup {
           rows :+ tableRowRegex.findAllMatchIn(line).map { m =>
             val span = m.group(1).length
             val txt  = m.group(2)
-            Cell(txt, span, false)
+            Cell(txt.stripPrefix("*"), span, txt.startsWith("*"))
           }.toVector
       }
     })
-  }
 
   private def mkBulletList(lines: Seq[String]): BulletList = {
     val starts = (0 until lines.length).filter(i => lines(i).startsWith("-"))
