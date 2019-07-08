@@ -248,8 +248,8 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, resolver: Lin
         sb.append("<table>")
         rows.foreach { cols =>
           sb.append("<tr>")
-          cols.foreach { case Cell(txt, span) =>
-            sb.append("<td")
+          cols.foreach { case Cell(txt, span, th) =>
+            sb.append(if (th) "<th" else "<td")
             if (span > 1) {
               sb.append(" colspan=").append(span)
             }
@@ -306,7 +306,7 @@ final case class BulletList(items: Seq[Segment]) extends Segment
 final case class NumberedList(items: Seq[(Int, Segment)]) extends Segment
 final case class Table(rows: Seq[Seq[Cell]]) extends Segment
 
-case class Cell(txt: String, span: Int = 1)
+case class Cell(txt: String, span: Int = 1, th: Boolean)
 
 
 class AsciiMarkup(typography: Typography) extends Markup {
@@ -488,14 +488,21 @@ class AsciiMarkup(typography: Typography) extends Markup {
   }
 
   private val tableRowRegex = """(\|+)([^|]*)""".r
+  private val tableHeadingRegex = """\|-+""".r
 
   private def mkTable(lines: Seq[String]): Table = {
-    val ls = lines.filterNot { _.matches("""\|-+""" )}
-    Table(ls.map { l => tableRowRegex.findAllMatchIn(l).map { m =>
-      val span = m.group(1).length
-      val txt  = m.group(2)
-      Cell(txt, span)
-    }.toVector })
+    Table(lines.foldLeft(Seq[Seq[Cell]]()) { case (rows, line) =>
+      line match {
+        case tableHeadingRegex() => // make cells of previous row <th>
+          if (rows.isEmpty) rows else rows.init :+ rows.last.map { _.copy(th = true) }
+        case line =>
+          rows :+ tableRowRegex.findAllMatchIn(line).map { m =>
+            val span = m.group(1).length
+            val txt  = m.group(2)
+            Cell(txt, span, false)
+          }.toVector
+      }
+    })
   }
 
   private def mkBulletList(lines: Seq[String]): BulletList = {
