@@ -164,6 +164,8 @@ try {
   } elseif (isset($_GET['rss'])) {
     $allComments = isset($_GET['all']); // get all comments including not yet approved
     $block = $slug ? $commentSection->getComments($slug, true, false) : $commentSection->getComments(null, true, $allComments);
+    usort($block->comments, function ($a, $b) { return strcmp($b->date, $a->date); });
+    $block->comments = array_slice($block->comments, 0, 20);
 
     $rss = new \SimpleXMLElement('<rss version="2.0"></rss>');
     $rss->channel->title = $block->title;
