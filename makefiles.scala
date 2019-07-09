@@ -1427,7 +1427,12 @@ object MakeFiles {
       val l = layoutMill.make(blog.absUrlFromPath(path))
       val indexParts = blog.indexCfg.map(cfg => mkPagePart(cfg, base.feed, l, base))
       val body = l.makeIndex(indexParts)
-      l.makePage(body, containImages = true) // TODO
+      val containImages = indexParts.exists {
+        case PagePart.FullArticles(as) => as.exists(_.hasImageMarker)
+        case PagePart.Bodies(as) => as.exists(_.hasImageMarker)
+        case _ => false
+      }
+      l.makePage(body, containImages = containImages)
     }
     }
 
