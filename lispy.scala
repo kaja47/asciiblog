@@ -274,7 +274,7 @@ object Lispy {
 
       case Sym("env") => env
       case Sym(s) =>
-        if (!env.contains(s)) throw new Exception("symbol `"+s+"` not found")
+        if (!env.contains(s)) throw new LispyException("symbol `"+s+"` not found")
         env(s)
 
       case ASTSeq(ast :: Nil) =>
@@ -305,3 +305,6 @@ object Lispy {
 
   def numfun2(f: (Int, Int) => Any) = Func{ case a :: b :: Nil => f(number(a), number(b)) }
 }
+
+
+class LispyException(msg: String) extends Exception(msg)
