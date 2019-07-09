@@ -196,7 +196,7 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, resolver: Lin
       case Heading(txt, mods)   => sb.append("<h3").append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize)).append("</h3>")
       case Hr()                 => sb.append("<hr>\n")
       case Linkref(_)           =>
-      case Block("html", txt, mods) => sb.append(txt) // TODO mods
+      case Block("html", txt, _)    => sb.append(txt)
       case Block("div",  txt, mods) => sb.append("<div").append(mkMods(mods)).append(">").append(txt).append("</div>")
       case Block("code", txt, mods) =>
         sb.append("<pre").append(mkMods(mods)).append(">")

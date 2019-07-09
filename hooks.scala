@@ -22,7 +22,7 @@ class NoHooks extends Hooks {
   def listTitle(base: Base, blog: Blog, layout: Layout, article: Article): String = null
   def list(base: Base, blog: Blog, layout: Layout, articles: Seq[Article]): String = null
   def header(base: Base, blog: Blog, layout: Layout, article: Option[Article]): String = null
-  def makePagePart(base: Base, blog: Blog, layout: Layout, name: String, args: String): PagePart = sys.error(s"unknown part $name")
+  def makePagePart(base: Base, blog: Blog, layout: Layout, name: String, args: String): PagePart = sys.error(s"unknown part '$name'")
 
   def prepareArticles(blog: Blog, articles: Seq[Article]): Seq[Article] = articles
   def updateBase(base: Base, blog: Blog): Base = base
