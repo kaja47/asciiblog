@@ -100,7 +100,7 @@ object AsciiPatterns {
 
 
 
-case class AsciiText(segments: Seq[Segment], parser: MarkupParser, resolver: LinkResolver = null) extends Text { self =>
+case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: Highlighters, resolver: LinkResolver = null) extends Text { self =>
 
   def render(relativize: String => String): String = mkText(segments, resolvedLinks, relativize)
   def plaintextSummary: String = stripTags(mkParagraph(segments.collect { case Paragraph(txt, _) => txt }.headOption.getOrElse(""), resolvedLinks, identity, true))
@@ -117,7 +117,7 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, resolver: Lin
     // Overwrites segments, doesn't resolve links again. This saves some work but
     // mainly it's there so error messages during link resolution are not
     // displayed twice
-    new AsciiText(mapSegments(segments), parser, resolver) {
+    new AsciiText(mapSegments(segments), parser, highlighter, resolver) {
       override protected def resolvedLinks = self.resolvedLinks
     }
   }
@@ -204,7 +204,7 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, resolver: Lin
         val r = "brush:(\\w+)".r
         r.findFirstMatchIn(mods.classes) match {
           case Some(m) =>
-            sb.append(Highlighter.highlight(txt, m.group(1)))
+            sb.append(highlighter.highlight(txt, m.group(1)))
           case None =>
             sb.append(html.escape(txt))
         }
@@ -311,10 +311,11 @@ case class Cell(txt: String, span: Int = 1, th: Boolean)
 
 class AsciiMarkup(typography: Typography) extends Markup {
   val parser = new MarkupParser(typography)
+  val highlighter = DefaultHighlighters // TODO
 
   def this() = this(NoTypography)
 
-  def empty: AsciiText = AsciiText(Seq(), parser, null)
+  def empty: AsciiText = AsciiText(Seq(), parser, highlighter, null)
 
   def process(lines: Seq[String], imageRoot: String): AsciiText = {
     def matchAllLines[T](ls: Seq[String], prefix: String)(f: PartialFunction[String, T]): Option[Seq[T]] = {
@@ -448,7 +449,7 @@ class AsciiMarkup(typography: Typography) extends Markup {
           }
         }.toVector
 
-    AsciiText(joinNeighboringLists(mergeParagraphsIntoLists(segments)), parser)
+    AsciiText(joinNeighboringLists(mergeParagraphsIntoLists(segments)), parser, highlighter)
   }
 
   // image format:

@@ -8,15 +8,8 @@ import Colors._
 import ProtoHighlighter._
 import FastHighlighter._
 
-object Highlighter {
-  val highlighters: Map[String, Highlighter] = Map(
-    "scala"      -> new ScalaHighlighter,
-    "java"       -> new JavaHighlighter,
-    "php"        -> new PHPHighlighter,
-    "javascript" -> new JSHighlighter,
-    "c"          -> new CHighlighter
-  )
 
+class Highlighters(highlighters: Map[String, Highlighter]) {
   def highlight(source: String, lang: String): String =
     highlighters.get(lang) match {
       case Some(hl) => applyHighlights(source, hl(source))
@@ -37,6 +30,16 @@ object Highlighter {
     sb.toString
   }
 }
+
+
+
+object DefaultHighlighters extends Highlighters(Map(
+  "scala"      -> new ScalaHighlighter,
+  "java"       -> new JavaHighlighter,
+  "php"        -> new PHPHighlighter,
+  "javascript" -> new JSHighlighter,
+  "c"          -> new CHighlighter
+))
 
 
 case class Light(start: Int, length: Int, color: Int)
