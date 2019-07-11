@@ -2,7 +2,7 @@ name := "asciiblog"
 
 version := "0.1"
 
-scalaVersion := "2.13.0-RC1"
+scalaVersion := "2.13.0"
 
 assemblyJarName in assembly := "../../asciiblog.jar"
 
