@@ -35,10 +35,10 @@ trait LinkResolver {
 }
 
 object LinkResolver {
-  val fail = new LinkResolver {
-    def link(l: String): String = ???
-    def thumbnail(img: Image): String = ???
-    def bigThumbnail(img: Image, half: Boolean): String = ???
+  val identity = new LinkResolver {
+    def link(l: String): String = l
+    def thumbnail(img: Image): String = img.url
+    def bigThumbnail(img: Image, half: Boolean): String = img.url
     def tag(t: Tag): String = ???
   }
 }
