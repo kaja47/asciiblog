@@ -220,7 +220,7 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
         if (!omitEndPTag) sb.append("</p>")
       case Blockquote(sx)       => sb.append("<blockquote>"); _mkText(sx, aliases, relativize, sb); sb.append("</blockquote>")
       case Inline(txt)          => sb.append(mkParagraph(txt, aliases, relativize))
-      case ByLine(txt)          => sb.append("<div style='text-align:right'>").append(mkParagraph(txt, aliases, relativize)).append("</div>")
+      case ByLine(txt)          => sb.append("<div style=text-align:right>").append(mkParagraph(txt, aliases, relativize)).append("</div>")
       case SegmentSeq(sx)       => _mkText(sx, aliases, relativize, sb)
       case BulletList(items)    =>
         sb.append("<ul>")
@@ -281,7 +281,7 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
       Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
     }
 
-    val imgTag = s"""<img class=thz ${if (img.alt != null) s"title='${img.alt}' " else ""}src=${html.quoteAttribute(relativize(src))}>"""
+    val imgTag = s"""<img class=thz ${if (img.alt != null) "title="+html.quoteAttribute(img.alt)+" " else ""}src=${html.quoteAttribute(relativize(src))}>"""
     val a      = if (!img.zoomable) imgTag else "<a href="+html.quoteAttribute(href)+">"+imgTag+"</a>"
 
     s"""<span class=$cl>$a$desc</span>"""
