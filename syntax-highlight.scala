@@ -10,11 +10,11 @@ import FastHighlighter._
 
 object Highlighter {
   val highlighters: Map[String, Highlighter] = Map(
-    "scala"      -> new ScalaHighlighter2,
-    "java"       -> new JavaHighlighter2,
-    "php"        -> new PHPHighlighter2,
-    "javascript" -> new JSHighlighter2,
-    "c"          -> new CHighlighter2
+    "scala"      -> new ScalaHighlighter,
+    "java"       -> new JavaHighlighter,
+    "php"        -> new PHPHighlighter,
+    "javascript" -> new JSHighlighter,
+    "c"          -> new CHighlighter
   )
 
   def highlight(source: String, lang: String): String =
@@ -162,69 +162,47 @@ class FastHighlighter(patterns: (Int, FastPattern)*) extends Highlighter {
 }
 
 object FastHighlighter {
-  val blockComments = Gray -> RegexPattern("/",   """(?xs) /\* .* \*/ """ )
-  val lineComments  = Gray -> RegexPattern("/",   """(?xm) //.*$ """ )
+  val blockComments       = Gray   -> RegexPattern("/",   """(?xs) /\* .* \*/ """ )
+  val lineComments        = Gray   -> RegexPattern("/",   """(?xm) //.*$ """ )
+  val doubleQuotedString  = Yellow -> RegexPattern("\"",  """(?x)  " (?:\\"|[^"])* "  """ )
+  val singleQuotedString  = Yellow -> RegexPattern("'",   """(?x)  ' (?:\\'|[^'])* '  """ )
+  val javaChar            = Yellow -> RegexPattern("'",   """(?x)  ' (?:\\'|.) '      """ )
+  val javaNumber          = Purple -> RegexPattern("0-9", """(?x)  \d+ (?:\.\d+)? """ )
+  val javaHexNumber       = Purple -> RegexPattern("0",   """(?x)  0x[a-fA-F0-9]+[lL]? """ )
 }
 
+// ==========
 
-class ScalaHighlighter2 extends FastHighlighter(
+class ScalaHighlighter extends FastHighlighter(
+  blockComments,
+  lineComments,
   Red    -> Keywords("class trait object extends with var val def if else match case while do for type forSome try catch finally yield macro return"),
   Green  -> Keywords("null true false ne eq this super new override final private protected implicit import package sealed <- -> => require lazy"),
   Green  -> RegexPattern("@",   """(?x)  @\w+ """ ),                                // annotation
   Blue   -> RegexPattern("A-Z", """(?x)  [A-Z][\w$]* """ ),                         // type
-  Purple -> RegexPattern("0",   """(?x)  0x[a-fA-F0-9]+[lL]? """ ),                 // hex number
-  Purple -> RegexPattern("0-9", """(?x)  \d+ (?:\.\d+)? """ ),                   // number
+  javaHexNumber,
+  javaNumber,
   Yellow -> RegexPattern("\"",  """(?xs) \"\"\" .*? \"\"\" """ ),                   // string
-  Yellow -> RegexPattern("\"",  """(?x)  " (?:\\"|[^"])* "   """ ),                 // string
-  Yellow -> RegexPattern("'",   """(?x)  ' (?:\\'|.) ' """ ),                       // char
-  Green  -> RegexPattern("a-z", """(?x)  (?<=(?:val|var|def)\s{1,9}) [a-z][\w$]* """ ), // declaration
-  blockComments,
-  lineComments
+  doubleQuotedString,
+  javaChar,
+  Green  -> RegexPattern("a-z", """(?x)  (?<=(?:val|var|def)\s{1,9}) [a-z][\w$]* """ ) // declaration
 )
 
-
-class ScalaHighlighter extends ProtoHighlighter(Seq(
-  Red    -> tokens("class trait object extends with var val def if else match case while do for type forSome try catch finally yield macro return"),
-  Green  -> tokens("null true false ne eq this super new override final private protected implicit import package sealed <- -> => require lazy"),
-  Green  -> """(?x)  @\w+ """,                 // annotation
-  Blue   -> """(?x)  \b[A-Z][\w$]*\b """,      // type
-  Purple -> """(?x)  \b0x[a-fA-F0-9]+[lL]? """,// hex number
-  Purple -> """(?x)  -? \b\d+ (?:\.\d+)? """,  // number
-  Yellow -> """(?xs) \"\"\" .*? \"\"\" """,    // string
-  Yellow -> """(?x)  " (?:\\"|[^"])* "   """,  // string
-  Yellow -> """(?x)  ' (?:\\'|.) ' """,        // char
-  Green  -> """(?x)  (?<=(?:val|var|def)\s{1,9}) [a-z][\w$]* """ // declaration
-) ++ comments)
-
-
-class JavaHighlighter2 extends FastHighlighter(
+class JavaHighlighter extends FastHighlighter(
+  blockComments,
+  lineComments,
   Red    -> Keywords("class interface extends implements var if else case whitch while do for try catch finally return"),
   Green  -> Keywords("null true false this super new final private protected import package"),
   Blue   -> Keywords("int long double float boolean void byte char short"),
-  Green  -> RegexPattern("@",   """(?x)  @\w+ """ ),                 // annotation
-  Blue   -> RegexPattern("A-Z", """(?x)  [A-Z]\w*\b """ ),         // type
-  Purple -> RegexPattern("0",   """(?x)  0x[a-fA-F0-9]+[lL]? """ ),// hex number
-  Purple -> RegexPattern("0-9", """(?x)  \d+ (?:\.\d+)? """ ),     // number
-  Yellow -> RegexPattern("\"",  """(?x)  " (?:\\"|[^"])* "   """ ),  // string
-  Yellow -> RegexPattern("'",   """(?x)  ' (?:\\'|.) ' """ ),        // char
-  blockComments,
-  lineComments
+  Green  -> RegexPattern("@",   """(?x)  @\w+ """ ),                // annotation
+  Blue   -> RegexPattern("A-Z", """(?x)  [A-Z]\w*\b """ ),          // type
+  javaHexNumber,
+  javaNumber,
+  doubleQuotedString,
+  javaChar
 )
 
-class JavaHighlighter extends ProtoHighlighter(Seq(
-  Red    -> tokens("class interface extends implements var if else case whitch while do for try catch finally return"),
-  Green  -> tokens("null true false this super new final private protected import package"),
-  Blue   -> tokens("int long double float boolean void byte char short"),
-  Green  -> """(?x)  @\w+ """,                 // annotation
-  Blue   -> """(?x)  \b[A-Z]\w*\b """,         // type
-  Purple -> """(?x)  \b0x[a-fA-F0-9]+[lL]? """,// hex number
-  Purple -> """(?x)  \b\d+ (?:\.\d+)? """,  // number
-  Yellow -> """(?x)  " (?:\\"|[^"])* "   """,  // string
-  Yellow -> """(?x)  ' (?:\\'|.) ' """,        // char
-) ++ comments)
-
-
-class PHPHighlighter2 extends FastHighlighter(
+class PHPHighlighter extends FastHighlighter(
   blockComments,
   lineComments,
   Gray   -> Keywords("<?php ?>"),
@@ -235,45 +213,23 @@ class PHPHighlighter2 extends FastHighlighter(
   Green  -> Keywords("namespace use"),
   Orange -> RegexPattern("a-zA-Z", """(?x)  (?<=\$) \w+ """ ),        // variable
   Purple -> RegexPattern("0-9",    """(?x)  \d+ (?:\.\d+)? """ ),     // number
-  Yellow -> RegexPattern("\"",     """(?x)  " (?:\\"|[^"])* "  """ ), // string
-  Yellow -> RegexPattern("''",     """(?x)  ' (?:\\'|[^'])* '  """ ), // string
+  doubleQuotedString,
+  singleQuotedString
 )
 
-
-class PHPHighlighter extends ProtoHighlighter(comments ++ Seq(
-  Gray   -> tokens("<?php ?>"),
-  Red    -> tokens("class extends for if else elsif declare while foreach as function return yield from echo die isset unset <=> -> => $ !== != === == ... << >> < > <= >= ++ -- ** + - * / % ~ . ! && || & ^ | ?? ?:"),
-  Purple -> tokens("true false null new clone instanceof"),
-  Blue   -> tokens("private protected var const abstract array (bool) (float) (double) (string) (int) (void)"),
-  Green  -> tokens("namespace use"),
-  Orange -> """(?x)  (?<=\$) \w+ """,         // variable
-  Purple -> """(?x)  -? \b\d+ (?:\.\d+)? """, // number
-  Yellow -> """(?x)  " (?:\\"|[^"])* "  """,  // string
-  Yellow -> """(?x)  ' (?:\\'|[^'])* '  """   // string
-)) {
-}
-
-
-class JSHighlighter2 extends FastHighlighter(
+class JSHighlighter extends FastHighlighter(
   Red    -> Keywords("for while do if return let var const document function"),
   Green  -> Keywords("null true false undefined new this =>"),
   Purple -> RegexPattern("0-9", """(?x)  \d+ (?:\.\d+)? """), // number
-  Yellow -> RegexPattern("\"",  """(?x)  " (?:\\"|[^"])* "  """),  // string
-  Yellow -> RegexPattern("'",   """(?x)  ' (?:\\'|[^'])* '  """),   // string
+  singleQuotedString,
+  doubleQuotedString,
   blockComments,
   lineComments
 )
 
-class JSHighlighter extends ProtoHighlighter(Seq(
-  Red    -> tokens("for while do if return let var const document function"),
-  Green  -> tokens("null true false undefined new this =>"),
-  Purple -> """(?x)  -? \b\d+ (?:\.\d+)? """, // number
-  Yellow -> """(?x)  " (?:\\"|[^"])* "  """,  // string
-  Yellow -> """(?x)  ' (?:\\'|[^'])* '  """   // string
-) ++ comments)
-
-
-class CHighlighter2 extends FastHighlighter(
+class CHighlighter extends FastHighlighter(
+  blockComments,
+  lineComments,
   Red    -> Keywords("for return switch break continue"),
   Blue   -> Keywords("int long short char void signed unsigned float double size_t struct"),
   Orange -> Keywords("const"),
@@ -281,16 +237,6 @@ class CHighlighter2 extends FastHighlighter(
   Purple -> RegexPattern("0-9", """(?x)  \d+ (?:\.\d+)? """), // number
   Yellow -> RegexPattern("\"",  """(?x)  " (?:\\"|[^"])* "  """),  // string
   Yellow -> RegexPattern("'",   """(?x)  ' (?:\\'|[^'])* '  """),   // string
-  blockComments,
-  lineComments
+  doubleQuotedString,
+  javaChar
 )
-
-class CHighlighter extends ProtoHighlighter(Seq(
-  Red    -> tokens("for return switch break continue"),
-  Blue   -> tokens("int long short char void signed unsigned float double size_t struct"),
-  Orange -> tokens("const"),
-  Yellow -> tokens("case"),
-  Purple -> """(?x)  -? \b\d+ (?:\.\d+)? """, // number
-  Yellow -> """(?x)  " (?:\\"|[^"])* "  """,  // string
-  Yellow -> """(?x)  ' (?:\\'|[^'])* '  """   // string
-) ++ comments)
