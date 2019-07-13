@@ -26,18 +26,19 @@ class Similarities(_articles: Seq[Article], count: Int) {
   private[this] val reverseRels: Map[Slug, Seq[Slug]] =
     invert(_articles.collect { case a if a.rel.nonEmpty => (a.asSlug, a.rel.map(Slug)) })
 
-  private def dateDiff(a: Article, b: Article): Int = {
+  private def dayDiff(a: Article, b: Article): Int = {
     val ta = if (a.date == null) 0 else (a.date.toLocalDate.toEpochDay).toInt
     val tb = if (b.date == null) 0 else (b.date.toLocalDate.toEpochDay).toInt
     Math.abs(ta - tb)
   }
 
   private[this] val similarities: Array[Seq[Similar]] = {
-    val sims = arts.map {
+    val sims: Array[Seq[Similar]] = arts.map {
       case a if a.isTag => similarTags(a.asTag, count)
       case a            => similarArticles(a, count, a.backlinks)
     }
 
+    // for articles without tags add articles similar to its rel articles
     Array.tabulate(sims.length) { i =>
       arts(i) match {
         case a if !a.isTag && a.tags.isEmpty && a.rel.nonEmpty =>
@@ -59,27 +60,64 @@ class Similarities(_articles: Seq[Article], count: Int) {
     }
   }
 
+
+  private def detectSeries: Seq[Seq[Article]] = {
+    val regex = """^(\D*)(\d*).*$""".r
+    def extractPrefix(a: Article) = {
+      val regex(prefix, number) = a.title
+      (prefix.trim, if (number == "") 0 else number.toInt, a)
+    }
+
+    def isValidRange(xs: Seq[Int]) = {
+      val range = xs.max-xs.min
+      val coverage = range.toDouble / xs.length
+      range > 0 && coverage > 0.5 && coverage < 2
+    }
+
+    arts.toVector
+      .filter(!_.isTag)
+      .map(extractPrefix)
+      .groupBy(_._1)
+      .filter { case (prefix, articles) => prefix.nonEmpty && articles.size > 1 && !articles.forall(_._2 != 0) && isValidRange(articles.map(_._2)) }
+      .map { case (_, articles) => articles.map { case (_, _, a) => a } }
+      .toVector
+  }
+
+  private lazy val series: Map[Slug, Array[Slug]] =
+    detectSeries.flatMap { as =>
+      val set = as.map(_.asSlug).toArray
+      set.map(a => (a, set))
+    }.toMap
+
+
   def apply(a: Article): Seq[Similar] = similarities(slugMap(a.asSlug))
 
-  def similarArticles(a: Article, count: Int, without: Seq[Article]): Seq[Similar] = {
+
+  final val TagWeight = 2
+  final val RelWeight = 64
+  final val ReverseRelWeight = 2
+  final val SeriesWeight = 1 // this should only break ties
+  final val LinkHerePenalty = -1
+
+  private def similarArticles(a: Article, count: Int, without: Seq[Article]): Seq[Similar] = {
     if (a.tags.isEmpty && a.rel.isEmpty) return Seq()
     val arrs = (a.tags.visible ++ a.tags.hidden).map(tagMap)
 
     val freq = new Array[Int](arts.length) // article idx -> count
     for (arr <- arrs) {
       var i = 0; while (i < arr.length) {
-        freq(arr(i)) += 1
+        freq(arr(i)) += TagWeight
         i += 1
       }
     }
-
     for (id <- a.rel) {
-      val i = slugMap(Slug(id))
-      freq(i) += 64
+      freq(slugMap(Slug(id))) += RelWeight
     }
     for (id <- reverseRels.getOrElse(a.asSlug, Seq())) {
-      val i = slugMap(id)
-      freq(i) += 1
+      freq(slugMap(id)) += ReverseRelWeight
+    }
+    for (id <- series.getOrElse(a.asSlug, Array())) {
+      freq(slugMap(id)) += SeriesWeight
     }
 
     for (a <- without ; i <- slugMap.get(a.asSlug)) freq(i) = 0
@@ -88,23 +126,29 @@ class Similarities(_articles: Seq[Article], count: Int) {
     val topk = new LongTopK(count)
 
     def pack(commonTags: Int, dateDiff: Int, idx: Int): Long = {
-      require(commonTags < 128 && commonTags > 0) // 1B
-      require(dateDiff >= 0)                      // 4B
-      require(idx < (1<<24))                      // 3B
-      commonTags.toLong << 56 | ((~dateDiff).toLong & 0xffffffffL) << 24 | idx
+      require(commonTags < (1<<15) && commonTags >= 0) // 2B
+      require(dateDiff < (1<<23) && dateDiff >= 0)     // 3B
+      require(idx < (1<<24))                           // 3B
+      commonTags.toLong << 48 | ((~dateDiff).toLong & 0xffffffL) << 24 | idx
     }
-    def unpack(x: Long) = x.toInt & ((1 << 24) - 1)
-    def unpackCT(x: Long) = (x >> 56).toInt
-    def unpackDD(x: Long) = (~(x >> 24) & 0xffffffffL).toInt
+    def unpackIdx(x: Long): Int = x.toInt & ((1 << 24) - 1)
+    def unpackDD(x: Long): Int = (~(x >> 24) & 0xffffffL).toInt
+    def unpackCT(x: Long): Int = (x >> 48).toInt
 
     var i = 0; while (i < arts.length) {
       if (freq(i) >= 1) {
         // articles with most tags in common, published closest together
-        topk.add(pack(freq(i), dateDiff(a, arts(i)), i))
+        topk.add(pack(freq(i), dayDiff(a, arts(i)), i))
+//        val dd = dayDiff(a, arts(i))
+//        val f = freq(i)
+//        val p = pack(f, dd, i)
+//        require(unpackIdx(p) == i)
+//        require(unpackDD(p) == dd)
+//        require(unpackCT(p) == f)
       }
       i += 1
     }
-    topk.getAll.map { key => Similar(arts(unpack(key)), unpackCT(key), unpackDD(key)) }
+    topk.getAll.map { key => Similar(arts(unpackIdx(key)), unpackCT(key), unpackDD(key)) }
   }
 
 
