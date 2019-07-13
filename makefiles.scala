@@ -999,7 +999,7 @@ object MakeFiles {
     articles = articles ++ materializeNonexplicitTags(articles)
 
 
-    timer("append tagged images to tag pages") {
+    timer("append tagged images to tag pages", blog) {
       val imageTags: Map[Tag, Seq[Image]] = (for (a <- articles; i <- a.images; t <- i.tags.visible) yield (i.asSmallThumbnail, t)).groupMap(_._2)(_._1)
 
       articles = articles.map { a =>
