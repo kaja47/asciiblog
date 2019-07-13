@@ -1582,7 +1582,7 @@ object MakeFiles {
               val strength = if (s == "png" || s == "gif") 0f else sharpenStrength
               val resized = ImageTools.resizeImage(full, w, h, leeway, strength)
               if (s == "jpg" || s == "jpeg") {
-                ImageTools.saveJpg(thumbFile, resized, 0.85f)
+                ImageTools.saveJpg(thumbFile, resized, 0.80f)
               } else {
                 ImageIO.write(resized, s, thumbFile)
               }
