@@ -71,6 +71,18 @@ case class MarkupBlock(
 
 object MarkupParser {
   val blocks = Array(
+    new MarkupBlock("<", ">", "<",   ">",             recur = false, tight = false) {
+      override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, plaintext: Boolean) = sb.append(str, from, to)
+      override def checkStart(str: String, i: Int) = super.checkStart(str, i) && validTags.contains(detectTagName(str, i+1))
+
+      def detectTagName(str: String, from: Int) = {
+        var f = from
+        var i = from
+        if (i < str.length && str.charAt(i) == '/') { f += 1; i += 1 }
+        while (i < str.length && isLetterOrDigit(str.charAt(i))) i += 1
+        str.substring(f, i)
+      }
+    },
     new MarkupBlock("<!--", "-->", "",    "",        recur = false, tight = false) {
       override def appendBody(str: String, from: Int, to: Int, sb: StringBuilder, plaintext: Boolean) = sb
     },
@@ -91,7 +103,7 @@ object MarkupParser {
     new MarkupBlock("**", "**", "<b>",    "</b>",    recur = true, tight = true),
     new MarkupBlock("*",  "*",  "<i>",    "</i>",    recur = true, tight = true),
     new MarkupBlock("//", "//", "<i>",    "</i>",    recur = true, tight = true) {
-      override def checkStart(str: String, i: Int) = super.checkStart(str, i) && (i == 0 || str.charAt(i-1) != ':')
+      override def checkStart(str: String, i: Int) = super.checkStart(str, i) && (i == 0 || str.charAt(i-1) != ':') // check for https://
       override def checkEnd  (str: String, i: Int) = super.checkEnd  (str, i) && (i == 0 || str.charAt(i-1) != ':')
     },
     new MarkupBlock("\"", "\"", "",       "",        recur = true, tight = true, doubleQuotes = true),
@@ -164,6 +176,14 @@ object MarkupParser {
     (if (m.styles.nonEmpty) " style="+html.quoteAttribute(m.styles)                      else "")
   }
 
+  val validTags = html5Tags
+
+  def html5Tags = """a abbr acronym address applet area article aside audio b base basefont bdi bdo bgsound big blink blockquote body br button canvas caption center cite code col colgroup command content data datalist dd del details dfn dialog dir div dl dt element em embed fieldset figcaption figure font footer form frame frameset h1 h2 h3 h4 h5 h6 head header hgroup hr html i iframe image img input ins isindex kbd keygen label legend li link listing main map mark marquee menu menuitem meta meter multicol nav nextid nobr noembed noframes noscript object ol optgroup option output p param picture plaintext pre progress q rb rp rt rtc ruby s samp script section select shadow slot small source spacer span strike strong style sub summary sup table tbody td template textarea tfoot th thead time title tr track tt u ul var video wbr xmp""".split("\\s+").toSet
+
+  def mathMLTags = """annotation annotation-xml maction maligngroup malignmark math menclose merror mfenced mfrac mglyph mi mlabeledtr mlongdiv mmultiscripts mn mo mover mpadded mphantom mprescripts mroot mrow ms mscarries mscarry msgroup msline mspace msqrt msrow mstack mstyle msub msubsup msup mtable mtd mtext mtr munder munderover none semantics""".split("\\s+").toSet
+
+  def svgTags = """a animate animateMotion animateTransform circle clipPath color-profile defs desc discard ellipse feBlend feColorMatrix feComponentTransfer feComposite feConvolveMatrix feDiffuseLighting feDisplacementMap feDistantLight feDropShadow feFlood feFuncA feFuncB feFuncG feFuncR feGaussianBlur feImage feMerge feMergeNode feMorphology feOffset fePointLight feSpecularLighting feSpotLight feTile feTurbulence filter foreignObject g hatch hatchpath image line linearGradient marker mask mesh meshgradient meshpatch meshrow metadata mpath path pattern polygon polyline radialGradient rect script set solidcolor stop style svg switch symbol text textPath title tspan unknown use view""".split("\\s+").toSet
+
 }
 
 case class Mods(title: String = "", classes: String = "", styles: String = "") {
@@ -211,9 +231,8 @@ class MarkupParser(typography: Typography = NoTypography) {
     var i = pos
 
     def appendText(str: String, from: Int, to: Int, sb: StringBuilder) = {
-      var seg = str.substring(from, to)
-      seg = typography.apply(seg, plaintext)
-      sb.append(seg)
+      val seg = typography.apply(str.substring(from, to), plaintext)
+      sb.append(seg.replace("<", "&lt;").replace(">", "&gt;"))
     }
 
     var seenWhitespace = false
