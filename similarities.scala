@@ -35,13 +35,13 @@ class Similarities(_articles: Seq[Article], count: Int) {
   private[this] val similarities: Array[Seq[Similar]] = {
     val sims: Array[Seq[Similar]] = arts.map {
       case a if a.isTag => similarTags(a.asTag, count)
-      case a            => similarArticles(a, count, a.backlinks)
+      case a            => similarArticles(a, count)
     }
 
     // for articles without tags add articles similar to its rel articles
     Array.tabulate(sims.length) { i =>
       arts(i) match {
-        case a if !a.isTag && a.tags.isEmpty && a.rel.nonEmpty =>
+        case a if !a.isTag && sims(i).size < count && a.rel.nonEmpty =>
           // not terribly optimized, but it's called only few times
           val slugs = sims(i).map(_.article.slug).toSet
           val extraSims = sims(i)
@@ -97,9 +97,9 @@ class Similarities(_articles: Seq[Article], count: Int) {
   final val RelWeight = 64
   final val ReverseRelWeight = 2
   final val SeriesWeight = 1 // this should only break ties
-  final val LinkHerePenalty = -1
+  final val BacklinkWeight = -1
 
-  private def similarArticles(a: Article, count: Int, without: Seq[Article]): Seq[Similar] = {
+  private def similarArticles(a: Article, count: Int): Seq[Similar] = {
     if (a.tags.isEmpty && a.rel.isEmpty) return Seq()
     val arrs = (a.tags.visible ++ a.tags.hidden).map(tagMap)
 
@@ -120,7 +120,7 @@ class Similarities(_articles: Seq[Article], count: Int) {
       freq(slugMap(id)) += SeriesWeight
     }
 
-    for (a <- without ; i <- slugMap.get(a.asSlug)) freq(i) = 0
+    for (a <- a.backlinks ; i <- slugMap.get(a.asSlug)) freq(i) += BacklinkWeight
     for (i <- slugMap.get(a.asSlug)) freq(i) = 0
 
     val topk = new LongTopK(count)
