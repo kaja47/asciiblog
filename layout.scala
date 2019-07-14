@@ -233,6 +233,7 @@ case class FlowLayout(baseUrl: String, base: Base, blog: Blog, mill: FlowLayoutM
     ifs(title == null, "<br>\n")+
     a.text.render(rel)+
     renderParts(parts)+
+    ifs(a.isTag, a.taggedImages.map { img => imgLinkTag(img, blog.absUrl(img.localSource)) }.mkString(""))+
     ifs(!compact, blog.hooks.fullArticleBottom(base, blog, this, a))+
     "</article>"+
     ifs(!compact,

@@ -275,6 +275,7 @@ case class Article(
   pub: Seq[String] = Seq(),
   aliases: Seq[String] = Seq(),
   implies: Seq[Tag] = Seq(), // only for tags
+  taggedImages: Seq[Image] = Seq(), // only for tags
   imgtags: Seq[Tag] = Seq(),
   link: String = null,
   license: String = null,
@@ -1000,11 +1001,12 @@ object MakeFiles {
 
 
     timer("append tagged images to tag pages", blog) {
-      val imageTags: Map[Tag, Seq[Image]] = (for (a <- articles; i <- a.images; t <- i.tags.visible) yield (i.asSmallThumbnail, t)).groupMap(_._2)(_._1)
+      val imageTags: Map[Tag, Seq[Image]] =
+        (for (a <- articles; i <- a.images; t <- i.tags.visible) yield (t, i.asSmallThumbnail.copy(localSource = a))).groupMap(_._1)(_._2)
 
       articles = articles.map { a =>
         if (imageTags.contains(a.asTag)) {
-          a.copy(text = a.text.appendImages(imageTags(a.asTag)))
+          a.copy(taggedImages = imageTags(a.asTag))
         } else a
       }
     }
