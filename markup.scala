@@ -214,7 +214,7 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
       case Block("pre",  txt, mods) => sb.append("<pre").append(mkMods(mods)).append(">").append(html.escape(txt)).append("</pre>")
       case Block("comment", _, _)   =>
       case Block(tpe, _, _)        => sys.error(s"unknown block type '$tpe'")
-      case Images(images)       => images.foreach { img => sb.append(mkImgTag(img, aliases, relativize)).append(" ") }
+      case Images(images)       => images.foreach { img => sb.append(mkImgTag(img, aliases, relativize, self.images.head == img)).append(" ") }
       case Paragraph(txt, mods) =>
         sb.append("<p").append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize))
         if (!omitEndPTag) sb.append("</p>")
@@ -264,7 +264,7 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
     sb.toString
   }
 
-  private def mkImgTag(img: Image, aliases: Map[String, String], relativize: String => String) = {
+  private def mkImgTag(img: Image, aliases: Map[String, String], relativize: String => String, firstImage: Boolean) = {
     val (cl, src) = img match {
       case i if i.mods == "main" && i.align == ">" => ("fr",   resolver.bigThumbnail(img, true))
       case i if i.mods == "main" =>                   ("main", resolver.bigThumbnail(img, false))
@@ -281,7 +281,10 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
       Seq(title, tags, license, locSrc).mkString(" ").replaceAll(" +", " ").trim
     }
 
-    val imgTag = s"""<img class=thz ${if (img.alt != null) "title="+html.quoteAttribute(img.alt)+" " else ""}src=${html.quoteAttribute(relativize(src))}>"""
+    val _lzy = if (!firstImage && img.mods == "main") " loading=lazy" else ""
+    val _ttl = if (img.alt != null) " title="+html.quoteAttribute(img.alt) else ""
+    val _src = " src="+html.quoteAttribute(relativize(src))
+    val imgTag = s"""<img class=thz${_lzy}${_ttl}${_src}>"""
     val a      = if (!img.zoomable) imgTag else "<a href="+html.quoteAttribute(href)+">"+imgTag+"</a>"
 
     s"""<span class=$cl>$a$desc</span>"""
