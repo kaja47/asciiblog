@@ -436,10 +436,8 @@ object NoTypography extends Typography {
 class CzechTypography(hyphenator: Hyphenator = NoHyphenator) extends Typography {
   def apply(text: String, plaintext: Boolean) = {
     var t = text
-    if (!plaintext) {
-      t = handlePrepositions(handleHyphens(t))
-    }
-    for ((search, replace) <- replacements) { t = t.replace(search, replace) }
+    if (!plaintext) { t = handleHyphens(t) }
+    for ((search, replace) <- replacements) { t = T.t(t.replace(search, replace)) }
     t
   }
 
@@ -462,34 +460,18 @@ class CzechTypography(hyphenator: Hyphenator = NoHyphenator) extends Typography 
     " -\n"-> " – ", // &ndash;
   )
 
-  val preposCharsLen = 123
-  val preposChars = Array.tabulate[Boolean](preposCharsLen) { i => "ksvzouiaKSVZOUIA".indexOf(i) != -1 }
-  def isPreposChar(ch: Char) = ch < preposCharsLen && preposChars(ch)
-
-  def handlePrepositions(txt: String) =
-    if (txt.length < 2) txt else {
-      def ws(ch: Char) = (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')
-
-      val res = new StringBuilder(txt.length+128)
-      var pos = 0
-
-      var i = 2; while (i < txt.length) {
-        if (ws(txt.charAt(i)) && isPreposChar(txt.charAt(i-1)) && ws(txt.charAt(i-2))) {
-          res.append(txt, pos, i).append("\u00A0")
-          pos = i+1
-        }
-        i += 1
-      }
-      res.append(txt, pos, txt.length)
-      res.toString
-    }
-
+  val preposChars = "ksvzouiaKSVZOUIA"
+  val preposCharsMax = preposChars.max.toInt
+  val preposArr = Array.tabulate[Boolean](preposCharsMax+1) { i => preposChars.indexOf(i) != -1 }
+  def isPreposChar(ch: Char) = ch <= preposCharsMax && preposArr(ch)
+  def ws(ch: Char) = (ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t')
 
   def handleHyphens(txt: String) = {
     val sb = new StringBuilder
 
     var i = 0; while (i < txt.length) {
 
+      // non word
       val start = i
       while (i < txt.length && !isAlphabetic(txt.charAt(i))) {
         i += 1
@@ -497,20 +479,30 @@ class CzechTypography(hyphenator: Hyphenator = NoHyphenator) extends Typography 
 
       sb.append(txt, start, i)
 
-      val start2 = i
+      // word
+      val wordStart = i
       while (i < txt.length && isAlphabetic(txt.charAt(i))) {
         i += 1
       }
 
-      if (i - start2 < 7) { // short words, do not hyphenate
-        sb.append(txt, start2, i)
+      // at this point i points behind the word
+      val wordLen = i - wordStart
+
+      if (wordLen == 1) {
+        if (i == 1 || (i < txt.length && ws(txt.charAt(i-2)) && isPreposChar(txt.charAt(i-1)) && ws(txt.charAt(i)))) {
+          sb.append(txt, wordStart, i).append("\u00A0")
+          i += 1 // skip following space
+        } else {
+          sb.append(txt, wordStart, i)
+        }
+      } else if (wordLen < 7) { // short words, do not hyphenate
+        sb.append(txt, wordStart, i)
       } else {
-        sb.append(hyphenator(txt.substring(start2, i), "\u00AD", 2, 3))
+        sb.append(hyphenator(txt.substring(wordStart, i), "\u00AD", 2, 3))
       }
 
     }
 
     sb.toString
   }
-
 }
