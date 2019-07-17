@@ -437,7 +437,7 @@ class CzechTypography(hyphenator: Hyphenator = NoHyphenator) extends Typography 
   def apply(text: String, plaintext: Boolean) = {
     var t = text
     if (!plaintext) { t = handleHyphens(t) }
-    for ((search, replace) <- replacements) { t = T.t(t.replace(search, replace)) }
+    for ((search, replace) <- replacements) { t = t.replace(search, replace) }
     t
   }
 
