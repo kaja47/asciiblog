@@ -248,11 +248,10 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
         sb.append("<table>")
         rows.foreach { cols =>
           sb.append("<tr>")
-          cols.foreach { case Cell(txt, span, th) =>
+          cols.foreach { case Cell(txt, cols, rows, th) =>
             sb.append(if (th) "<th" else "<td")
-            if (span > 1) {
-              sb.append(" colspan=").append(span)
-            }
+            if (cols > 1) sb.append(" colspan=").append(cols)
+            if (rows > 1) sb.append(" rowspan=").append(rows)
             sb.append(">").append(mkParagraph(txt.trim, aliases, relativize))
           }
           sb.append("\n")
@@ -309,7 +308,7 @@ final case class BulletList(items: Seq[Segment]) extends Segment
 final case class NumberedList(items: Seq[(Int, Segment)]) extends Segment
 final case class Table(rows: Seq[Seq[Cell]]) extends Segment
 
-case class Cell(txt: String, span: Int = 1, th: Boolean)
+case class Cell(txt: String, cols: Int, rows: Int, th: Boolean)
 
 
 class AsciiMarkup(typography: Typography) extends Markup {
@@ -500,11 +499,23 @@ class AsciiMarkup(typography: Typography) extends Markup {
         case tableHeadingRegex() => // make cells of previous row <th>
           if (rows.isEmpty) rows else rows.init :+ rows.last.map { _.copy(th = true) }
         case line =>
-          rows :+ tableRowRegex.findAllMatchIn(line).map { m =>
-            val span = m.group(1).length
+          val row = tableRowRegex.findAllMatchIn(line).zipWithIndex.map { case (m, idx) =>
+            val cols = m.group(1).length
             val txt  = m.group(2)
-            Cell(txt.stripPrefix("*"), span, txt.startsWith("*"))
+            val rows = if (!txt.endsWith("^")) 1 else -1 // mark cell to be merged later
+            Cell(txt.stripPrefix("*").stripSuffix("^"), cols, rows, txt.startsWith("*"))
           }.toVector
+
+          if (rows.isEmpty) {
+            rows :+ row
+
+          } else {
+            val (prevRow, thisRow) = rows.last.zip(row).map { case (prevCell, thisCell) =>
+              if (thisCell.rows == -1) (prevCell.copy(txt = prevCell.txt + thisCell.txt, rows = prevCell.rows + 1), null)
+              else (prevCell, thisCell)
+            }.unzip
+            rows.init :+ prevRow :+ thisRow.filter(_ != null)
+          }
       }
     })
 
