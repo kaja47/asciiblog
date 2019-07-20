@@ -489,7 +489,11 @@ class CzechTypography(hyphenator: Hyphenator = NoHyphenator) extends Typography 
       val wordLen = i - wordStart
 
       if (wordLen == 1) {
-        if (i == 1 || (i < txt.length && ws(txt.charAt(i-2)) && isPreposChar(txt.charAt(i-1)) && ws(txt.charAt(i)))) {
+        if (txt.length > 1 && // do nothing for short strings
+          i < txt.length && ( // do nothing for the last word
+            (i == 1 &&                        isPreposChar(txt.charAt(i-1)) && ws(txt.charAt(i))) ||
+            (i >= 2 && ws(txt.charAt(i-2)) && isPreposChar(txt.charAt(i-1)) && ws(txt.charAt(i)))
+        )) {
           sb.append(txt, wordStart, i).append("\u00A0")
           i += 1 // skip following space
         } else {
