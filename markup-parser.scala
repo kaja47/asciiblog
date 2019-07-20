@@ -100,6 +100,7 @@ object MarkupParser {
         html.escape(str, from, to, sb)
     },
     new MarkupBlock("''", "''", "",       "",        recur = false, tight = false),
+    new MarkupBlock(">>", "<<", "<q>",    "</q>",    recur = true, tight = true),
     new MarkupBlock("**", "**", "<b>",    "</b>",    recur = true, tight = true),
     new MarkupBlock("*",  "*",  "<i>",    "</i>",    recur = true, tight = true),
     new MarkupBlock("//", "//", "<i>",    "</i>",    recur = true, tight = true) {
