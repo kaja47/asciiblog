@@ -197,23 +197,19 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
       case Hr()                 => sb.append("<hr>\n")
       case Linkref(_)           =>
       case Block("html", txt, _)    => sb.append(txt)
+      case Block("text", txt, _)    => sb.append(html.escape(txt))
       case Block("div",  txt, mods) => sb.append("<div").append(mkMods(mods)).append(">").append(txt).append("</div>")
-      case Block("code", txt, mods) =>
-        sb.append("<pre").append(mkMods(mods)).append(">")
-
-        val r = "brush:(\\w+)".r
-        r.findFirstMatchIn(mods.classes) match {
-          case Some(m) =>
-            sb.append(highlighter.highlight(txt, m.group(1)))
-          case None =>
-            sb.append(html.escape(txt))
-        }
-
-        sb.append("</pre>")
-
       case Block("pre",  txt, mods) => sb.append("<pre").append(mkMods(mods)).append(">").append(html.escape(txt)).append("</pre>")
       case Block("comment", _, _)   =>
       case Block(tpe, _, _)        => sys.error(s"unknown block type '$tpe'")
+      case Code(lang, txt, mods) =>
+        sb.append("<pre").append(mkMods(mods)).append(">")
+        if (lang.nonEmpty) {
+          sb.append(highlighter.highlight(txt, lang))
+        } else {
+          sb.append(html.escape(txt))
+        }
+        sb.append("</pre>")
       case Images(images)       => images.foreach { img => sb.append(mkImgTag(img, aliases, relativize, self.images.head == img)).append(" ") }
       case Paragraph(txt, mods) =>
         sb.append("<p").append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize))
@@ -302,6 +298,7 @@ final case class Hr() extends Segment
 final case class Linkref(linkMap: Seq[(String, String)]) extends Segment
 final case class Images(images: Seq[Image]) extends Segment
 final case class Block(tpe: String, txt: String, mods: Mods = Mods()) extends Segment
+final case class Code(language: String, txt: String, mods: Mods = Mods()) extends Segment
 final case class Blockquote(segments: Seq[Segment]) extends Segment
 final case class SegmentSeq(segments: Seq[Segment]) extends Segment
 final case class BulletList(items: Seq[Segment]) extends Segment
@@ -436,16 +433,18 @@ class AsciiMarkup(typography: Typography) extends Markup {
       if (open != -1) { emit = false }
     }
 
+    def mkBlockBody(lines: Seq[String]) = lines.drop(1).dropRight(1).mkString("\n")+"\n"
+    def mkBlockMods(mods: String) = findMods(mods).map(_._1).getOrElse(Mods())
+
     val segments: Seq[Segment] =
       util.splitByInterval[String](ls, (_: String).startsWith("/---"), (_: String).startsWith("\\---"))
         .flatMap { ls =>
-          if (ls.head.startsWith("/---")) {
+          if (ls.head.startsWith("/---code")) {
+            val Array(lang, mods) = ls.head.drop(8).trim.split(" ", 2).padTo(2, "")
+            Seq(Code(lang, mkBlockBody(ls), mkBlockMods(mods)))
+          } else if (ls.head.startsWith("/---")) {
             val Array(tpe, mods) = ls.head.drop(4).split(" ", 2).padTo(2, "")
-            Seq(Block(
-              tpe,
-              ls.drop(1).dropRight(1).mkString("\n")+"\n",
-              findMods(mods).map(_._1).getOrElse(Mods())
-            ))
+            Seq(Block(tpe, mkBlockBody(ls), mkBlockMods(mods)))
           } else {
             splitBlocks(ls)
           }
