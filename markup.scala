@@ -58,6 +58,7 @@ object AsciiPatterns {
 
   val linkRefRegex = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
   val hrRegex      = """(?xm) ---+|\*\*\*+ """.r
+  val definitionListRegex = """^\s++-\s++(.*+)$""".r
   val commentRegex = """(?xs) \<!--.*?--\>""".r
 
   val linkUntil = Slurp { _.until('"') }
@@ -131,6 +132,7 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
     case SegmentSeq(sx) => processTexts(sx, f)
     case BulletList(items)   => processTexts(items, f)
     case NumberedList(items) => processTexts(items.map(_._2), f)
+    case DefinitionList(items) => processTexts(items.flatMap { case (dt, dds) => dt +: dds }, f)
     case Table(rows)         => rows.iterator.flatten.flatMap(cell => f(cell.txt))
     case _ => Iterator()
   }
@@ -240,6 +242,19 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
         }
         sb.append("</ol>")
 
+      case DefinitionList(items) =>
+        sb.append("<dl>\n")
+        items.foreach { case (dt, dls) =>
+          sb.append("<dt>")
+          _mkText(Seq(dt), aliases, relativize, sb)
+          dls.foreach { dl =>
+            sb.append("<dd>")
+            _mkText(Seq(dl), aliases, relativize, sb)
+            sb.append("\n")
+          }
+        }
+        sb.append("</dl>")
+
       case Table(rows) =>
         sb.append("<table>")
         rows.foreach { cols =>
@@ -303,6 +318,7 @@ final case class Blockquote(segments: Seq[Segment]) extends Segment
 final case class SegmentSeq(segments: Seq[Segment]) extends Segment
 final case class BulletList(items: Seq[Segment]) extends Segment
 final case class NumberedList(items: Seq[(Int, Segment)]) extends Segment
+final case class DefinitionList(items: Seq[(Inline, Seq[Segment])]) extends Segment
 final case class Table(rows: Seq[Seq[Cell]]) extends Segment
 
 case class Cell(txt: String, cols: Int, rows: Int, th: Boolean)
@@ -347,6 +363,28 @@ class AsciiMarkup(typography: Typography) extends Markup {
 
       if (ls(0).charAt(0).isDigit && ls(0).matches("""^\d+\).*"""))
         return mkNumberedList(ls)
+
+      if (ls(0).endsWith(":") && ls.length > 1) {
+        def parseLine(l: String) = l match {
+          case definitionListRegex(t) => (0, t)
+          case l if l.endsWith(":")   => (1, l.init)
+          case _ => null
+        }
+
+        def loop(xs: Seq[(Int, String)]): List[(Inline, Seq[Inline])] = {
+          val dt = Inline(xs.head._2)
+          val (dds, rest) = xs.tail.span(_._1 == 0)
+          (dt, dds.map(p => Inline(p._2))) :: (if (rest.isEmpty) Nil else loop(rest))
+        }
+
+        val xs = ls.map(parseLine)
+        if (xs.forall(_ != null) && xs.exists(_._1 == 0)) {
+          println(111)
+          println(xs)
+          println()
+          return DefinitionList(loop(xs).toVector)
+        }
+      }
 
       None.orElse {
         matchAllLines(ls, "[*")(mkImage(imageRoot)).map(Images)
