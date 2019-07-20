@@ -400,7 +400,6 @@ class MarkupParser(typography: Typography = NoTypography) {
     } while (i < str.length)
 
     if (i < str.length) {
-      //println(str.substring(i, str.length))
       sb.append(str, i, str.length)
     }
 
