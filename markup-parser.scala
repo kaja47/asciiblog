@@ -130,7 +130,7 @@ object MarkupParser {
   // .(title)  .[class1 class2 #id]  .{color:blue}  .<  .>  .<>  .=
   def findMods(line: String, from: Int, to: Int): Option[(Mods, Int)] = {
     val s = new Slurp(line, from, to)
-    while (s.to('.').matches && !s.touchesEnd) {
+    while (s.toStr(" .").matches && !s.touchesEnd) {
       s.ignore()
       var mods = Mods()
       val start = s.pos
@@ -149,7 +149,7 @@ object MarkupParser {
           }
         }
       }
-      if (ok) return Some((mods, start-1))
+      if (ok) return Some((mods, start-2))
     }
     None
   }
