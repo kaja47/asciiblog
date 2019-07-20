@@ -9,6 +9,8 @@ object RunLispy extends App {
       new Repl().loop()
     case Array("t", rest @ _*) =>
       println(Lispy.tokenize(rest.mkString(" ")).mkString(" "))
+    case Array("p", rest @ _*) =>
+      println(Lispy.parse(rest.mkString(" ")))
     case Array("s", rest @ _*) =>
       new Repl().eval(rest.mkString(" "))
     case files =>
@@ -61,7 +63,9 @@ object Lispy {
     def apply(x: Int) = values(x)
     def length = values.length
   }
-  case class ASTSeq(asts: List[AST]) extends AST
+  case class ASTSeq(asts: List[AST]) extends AST {
+    override def toString = asts.mkString("ASTSeq(", ", ", ")")
+  }
 
   case class Func(f: PartialFunction[List[Any], Any]) extends (List[Any] => Any) with AST {
     def apply(args: List[Any]): Any = f(args)
@@ -124,13 +128,18 @@ object Lispy {
 
 
   def rewrite(ast: AST): AST = ast match {
-    //(.method obj arg) -> (javacall method obj arg)
-    case Lst(Sym(s) :: args) if s(0) == '.' =>
-      Lst(Sym("javacall") :: Str(s.tail) :: args.map(rewrite))
+    //(.method obj arg) -> (javacall obj method arg)
+    case Lst(Sym(s) :: obj :: args) if s(0) == '.' =>
+      Lst(Sym("javacall") :: rewrite(obj) :: Str(s.tail) :: args.map(rewrite))
 
     // .symbol by itself -> (fn (args...) (.symbol args...))
     case Sym(s) if s(0) == '.' =>
-      Func { case obj :: args => javacall(s.tail, obj, args) }
+      Func { case obj :: args => javacall(obj, s.tail, args) }
+
+    // (Classname/methodName args)
+    case Lst(Sym(s) :: args) if s.contains("/") =>
+      val Array(cls, meth) = s.split("/", 2)
+      Lst(Sym("javastatic") :: Str(cls) :: Str(meth) :: args.map(rewrite))
 
     //(new class args) -> (javanew class args)
     case Lst(Sym("new") :: Sym(cls) :: args)  =>
@@ -186,8 +195,9 @@ object Lispy {
     },
 
 
-    "javacall" -> Func { case (method: String) :: obj :: args => javacall(method, obj, args) },
-    "javanew"  -> Func { case (cls: String) :: args => javanew(cls, args) },
+    "javacall"   -> Func { case (meth: String) :: obj :: args           => javacall(obj, meth, args) },
+    "javanew"    -> Func { case (cls: String) :: args                   => javacall(Class.forName(cls), "new", args) },
+    "javastatic" -> Func { case (cls: String) :: (meth: String) :: args => javacall(Class.forName(cls), meth, args) },
 
     "true"  -> true,
     "false" -> false,
@@ -204,12 +214,9 @@ object Lispy {
   )
 
 
-  def javacall(method: String, obj: Any, args: Seq[Any]) =
+  def javacall(obj: Any, method: String, args: Seq[Any]): Any = {
     new java.beans.Expression(obj, method, args.toArray.asInstanceOf[Array[Object]]).getValue
-
-  def javanew(cls: String, args: Seq[Any]) =
-    new java.beans.Expression(Class.forName(cls), "new", args.toArray.asInstanceOf[Array[Object]]).getValue
-
+  }
 
   type Env = Map[String, Any]
 
