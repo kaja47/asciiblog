@@ -58,6 +58,7 @@ object AsciiPatterns {
 
   val linkRefRegex = """(?xm) ^\[(.*?)\]:\ +(.+)$""".r
   val hrRegex      = """(?xm) ---+|\*\*\*+ """.r
+  val headingRegex = """(?xm) ---+|\*\*\*+|===+|\#\#\#+ """.r
   val definitionListRegex = """^\s++-\s++(.*+)$""".r
   val commentRegex = """(?xs) \<!--.*?--\>""".r
 
@@ -190,12 +191,12 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
   private def _mkText(segments: Seq[Segment], aliases: Map[String, String], relativize: String => String, sb: StringBuilder): String = {
     for (i <- 0 until segments.length) {
       def omitEndPTag = if (i == segments.length-1) false else (segments(i+1) match {
-        case Paragraph(_, _) | Table(_) | Hr() | Blockquote(_) | Heading(_, _) | Block("pre", _, _) | Block("div", _, _) | BulletList(_) | NumberedList(_) => true
+        case Paragraph(_, _) | Table(_) | Hr() | Blockquote(_) | Heading(_, _, _) | Block("pre", _, _) | Block("div", _, _) | BulletList(_) | NumberedList(_) => true
         case _ => false
       })
 
       segments(i) match {
-      case Heading(txt, mods)   => sb.append("<h3").append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize)).append("</h3>")
+      case Heading(level, txt, mods)   => sb.append("<h").append(level).append(mkMods(mods)).append(">").append(mkParagraph(txt, aliases, relativize)).append("</h").append(level).append(">")
       case Hr()                 => sb.append("<hr>\n")
       case Linkref(_)           =>
       case Block("html", txt, _)    => sb.append(txt)
@@ -305,7 +306,7 @@ case class AsciiText(segments: Seq[Segment], parser: MarkupParser, highlighter: 
 
 sealed trait Segment
 sealed trait Textual extends Segment { def txt: String }
-final case class Heading(txt: String, mods: Mods) extends Segment with Textual
+final case class Heading(level: Int, txt: String, mods: Mods) extends Segment with Textual
 final case class Paragraph(txt: String, mods: Mods = Mods()) extends Segment with Textual
 final case class Inline(txt: String) extends Segment with Textual
 final case class ByLine(txt: String) extends Segment with Textual
@@ -346,13 +347,14 @@ class AsciiMarkup(typography: Typography) extends Markup {
       if (ls.length == 1 && hrRegex.pattern.matcher(ls(0)).matches())
         return Hr()
 
-      if (ls.length == 2 && hrRegex.pattern.matcher(ls(1)).matches()) {
+      if (ls.length == 2 && headingRegex.pattern.matcher(ls(1)).matches()) {
         val rawLine = ls(0)
         val (line, mods) = findMods(rawLine) match {
           case Some((mods, pos)) => (rawLine.substring(0, pos).trim, mods)
           case None =>              (rawLine, Mods())
         }
-        return Heading(line, mods)
+        val level = Map('#' -> 1, '*' -> 1, '=' -> 2, '-' -> 3)(ls(1).charAt(0))
+        return Heading(level, line, mods)
       }
 
       if (ls.length == 1 && ls(0).startsWith("---"))
