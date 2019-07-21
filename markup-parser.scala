@@ -291,7 +291,7 @@ class MarkupParser(typography: Typography = NoTypography) {
         if (outer != null && blockEnds(str, i, outer, seenWhitespace)) {
           findMods(str, mark, i) match {
             case Some((mods, modsStart)) =>
-              appendText(str, mark, modsStart-1, sb)
+              appendText(str, mark, modsStart, sb)
               return ParseResult(i+outer.endLen, mods)
             case None =>
               appendText(str, mark, i, sb)

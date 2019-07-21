@@ -379,9 +379,6 @@ class AsciiMarkup(typography: Typography) extends Markup {
 
         val xs = ls.map(parseLine)
         if (xs.forall(_ != null) && xs.exists(_._1 == 0)) {
-          println(111)
-          println(xs)
-          println()
           return DefinitionList(loop(xs).toVector)
         }
       }
