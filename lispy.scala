@@ -128,22 +128,30 @@ object Lispy {
 
 
   def rewrite(ast: AST): AST = ast match {
-    //(.method obj arg) -> (javacall obj method arg)
+    //(.method obj arg) -> (javaCall obj method arg)
     case Lst(Sym(s) :: obj :: args) if s(0) == '.' =>
-      Lst(Sym("javacall") :: rewrite(obj) :: Str(s.tail) :: args.map(rewrite))
+      Lst(Sym("javaCall") :: rewrite(obj) :: Str(s.tail) :: args.map(rewrite))
 
     // .symbol by itself -> (fn (args...) (.symbol args...))
     case Sym(s) if s(0) == '.' =>
-      Func { case obj :: args => javacall(obj, s.tail, args) }
+      Func { case obj :: args => javaCall(obj, s.tail, args) }
 
     // (Classname/methodName args)
     case Lst(Sym(s) :: args) if s.contains("/") =>
       val Array(cls, meth) = s.split("/", 2)
-      Lst(Sym("javastatic") :: Str(cls) :: Str(meth) :: args.map(rewrite))
+      Lst(Sym("javaStatic") :: Str(cls) :: Str(meth) :: args.map(rewrite))
 
-    //(new class args) -> (javanew class args)
+    // Classname/fieldName
+    case Sym(s) if s.contains("/") =>
+      val Array(cls, field) = s.split("/", 2)
+      Lst(Sym("javaStaticField") :: Str(cls) :: Str(field) :: Nil)
+
+    case Lst(Sym("object") :: Sym(cls) :: Nil) =>
+      Lst(Sym("javaStaticField") :: Str(cls+"$") :: Str("MODULE$") :: Nil)
+
+    //(new class args) -> (javaNew class args)
     case Lst(Sym("new") :: Sym(cls) :: args)  =>
-      Lst(Sym("javanew") :: Str(cls) :: args.map(rewrite))
+      Lst(Sym("javaNew") :: Str(cls) :: args.map(rewrite))
 
     case Lst(Sym("defn") :: name :: args :: body) =>
       Lst(Sym("def") :: name :: Lst(Sym("fn") :: args :: body.map(rewrite)) :: Nil)
@@ -195,9 +203,12 @@ object Lispy {
     },
 
 
-    "javacall"   -> Func { case (meth: String) :: obj :: args           => javacall(obj, meth, args) },
-    "javanew"    -> Func { case (cls: String) :: args                   => javacall(Class.forName(cls), "new", args) },
-    "javastatic" -> Func { case (cls: String) :: (meth: String) :: args => javacall(Class.forName(cls), meth, args) },
+    "javaCall"        -> Func { case (meth: String) :: obj :: args           => javaCall(obj, meth, args) },
+    "javaNew"         -> Func { case (cls: String) :: args                   => javaCall(Class.forName(cls), "new", args) },
+    "javaStatic"      -> Func { case (cls: String) :: (meth: String) :: args => javaCall(Class.forName(cls), meth, args) },
+    "javaStaticField" -> Func { case (cls: String) :: (field: String) :: Nil =>
+      Class.forName(cls).getField(field).get(null)
+    },
 
     "true"  -> true,
     "false" -> false,
@@ -214,9 +225,8 @@ object Lispy {
   )
 
 
-  def javacall(obj: Any, method: String, args: Seq[Any]): Any = {
+  def javaCall(obj: Any, method: String, args: Seq[Any]): Any =
     new java.beans.Expression(obj, method, args.toArray.asInstanceOf[Array[Object]]).getValue
-  }
 
   type Env = Map[String, Any]
 
