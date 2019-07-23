@@ -383,7 +383,7 @@ object util {
     else          (l, "")
   }
 
-  def splitByRepeating[T](xs: Seq[T], t: T): Seq[Seq[T]] = {
+  def splitByRepeating[T](xs: IndexedSeq[T], t: T): IndexedSeq[IndexedSeq[T]] = {
     var i = 0
 
     Iterator.continually {
@@ -397,7 +397,7 @@ object util {
           i += 1
         }
 
-        res.toSeq
+        res.toVector
       }
     }.takeWhile(_ != null).toVector
   }
@@ -405,7 +405,7 @@ object util {
   def splitByInterval[T](xs: Seq[T], begin: T, end: T): Iterator[Seq[T]] =
     splitByInterval(xs, (_: T) == begin, (_: T) == end)
 
-  def splitByInterval[T](xs: collection.Seq[T], begin: T => Boolean, end: T => Boolean): Iterator[Seq[T]] = {
+  def splitByInterval[T](xs: collection.Seq[T], begin: T => Boolean, end: T => Boolean): Iterator[IndexedSeq[T]] = {
     var i = 0
     var interval = false
 
@@ -417,14 +417,14 @@ object util {
         val res = mutable.ArrayBuffer[T]()
         while (i < xs.length && !begin(xs(i))) { res += xs(i); i += 1 }
         interval = true
-        res.toSeq
+        res.toVector
 
       } else {
         val res = mutable.ArrayBuffer[T]()
         while (i < xs.length && !end(xs(i))) { res += xs(i); i += 1 }
         if (i < xs.length && end(xs(i))) { res += xs(i); i += 1 }
         interval = false
-        res.toSeq
+        res.toVector
       }
 
     }.takeWhile(_ != null).filter(_.nonEmpty)

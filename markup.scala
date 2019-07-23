@@ -334,16 +334,16 @@ class AsciiMarkup(typography: Typography) extends Markup {
   def empty: AsciiText = AsciiText(Seq(), parser, highlighter, null)
 
   def process(lines: Seq[String], imageRoot: String): AsciiText = {
-    def matchAllLines[T](ls: Seq[String], prefix: String)(f: PartialFunction[String, T]): Option[Seq[T]] = {
+    def matchAllLines[T](ls: IndexedSeq[String], prefix: String)(f: PartialFunction[String, T]): Option[IndexedSeq[T]] = {
       if (!ls.forall(_.startsWith(prefix))) return None
       val ms = ls.collect(f)
       if (ms.size == ls.size) Some(ms) else None
     }
 
-    def splitBlocks(lines: Seq[String]): Seq[Segment] =
-      util.splitByRepeating(lines, "") map (ls => (identifySegment(ls)))
+    def splitBlocks(lines: IndexedSeq[String]): Seq[Segment] =
+      util.splitByRepeating(lines, "") map (ls => identifySegment(ls))
 
-    def identifySegment(ls: Seq[String]): Segment = {
+    def identifySegment(ls: IndexedSeq[String]): Segment = {
       if (ls.length == 1 && hrRegex.pattern.matcher(ls(0)).matches())
         return Hr()
 
