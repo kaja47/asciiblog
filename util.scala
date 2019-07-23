@@ -341,12 +341,19 @@ object util {
     size
   }
 
-  private val patternBracketRegex = """(?x) ^(.*?)\{(.*)\}$ """.r
   def newFile(name: String, base: File) = {
     val f = new File(name)
     if (f.isAbsolute) f else new File(base, name)
   }
 
+  private val patternBracketRegex = """(?x) ^ (.*?) \{ (.*) \} $ """.r
+
+  // directory*
+  // directory/file-prefix*
+  // directory{file1,file2}
+  // directory/prefix{file1,file2}
+  // directory
+  // file
   def globFiles(pattern: String, baseDir: File): Array[File] = (pattern match {
     case p if p.endsWith("*") =>
       val f = newFile(p.init, baseDir)
@@ -365,8 +372,8 @@ object util {
       } else {
         variants.split(",").map { v => new File(f.getParentFile, f.getName+v) }
       }
-    case _ =>
-      val f = newFile(pattern, baseDir)
+    case p =>
+      val f = newFile(p, baseDir)
       if (f.isDirectory) f.listFiles else Array(f)
     }).toArray[File].filterNot(_.getName.startsWith("."))
 
