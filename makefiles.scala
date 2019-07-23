@@ -16,29 +16,6 @@ import util._
 
 object T { val t = new Timer; def apply[T](f: => T) = t.apply(f) }
 
-object Make extends App {
-  val timer = new Timer()
-  timer.start()
-
-  if (args.length < 1) {
-    println("config file not specified")
-    sys.exit()
-  }
-
-  try {
-    val (blog, base, resolver, changed) = MakeFiles.init(args)
-    MakeFiles.makeFiles(blog, base, resolver, changed)
-
-    timer.end()
-    println("total: "+timer.ms)
-
-    blog.hooks.afterGenerate(base, blog)
-  } catch {
-    case e: ConfigurationException =>
-      println("configuration error: "+e.message)
-  }
-}
-
 
 class ConfigurationException(val message: String, val valueGiven: String = null) extends Exception(message)
 

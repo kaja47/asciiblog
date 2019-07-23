@@ -468,15 +468,17 @@ class Timer {
     r
   }
 
-  def start(): Unit = {
+  def start(): this.type = {
     if (_start != 0L) sys.error("what not yet ended cannot start again")
     _start = System.nanoTime
+    this
   }
 
-  def end(): Unit = {
+  def end(): this.type = {
     if (_start == 0L) sys.error("what never started cannot end")
     t.add(System.nanoTime - _start)
     _start = 0L
+    this
   }
 
   def ms = (t.sum/1e6)+"ms"
